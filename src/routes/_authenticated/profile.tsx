@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Suspense, useState } from "react";
-import { getMyResult } from "@/lib/musicdna.functions";
+import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { Suspense, useEffect, useState } from "react";
+import { getMyResult, recordEvent, submitFeedback, getMyFeedback } from "@/lib/musicdna.functions";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from "recharts";
