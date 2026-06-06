@@ -20,15 +20,17 @@ const LANE_LABEL: Record<string, string> = {
   general: "General",
 };
 
-// Short, momentum-building prompts. The first one carries the weight,
-// the rest get tighter as the conversation finds its rhythm.
-const PROMPTS: string[] = [
-  "What song would you genuinely mourn?",
+// Short, momentum-building prompts. Song #1 is decade-specific (loaded from
+// the decade_opening_prompts table, admin-editable). #2–#5 stay constant.
+// MVP decade = 80s. Other decades will plug in via subdomains later.
+const ONBOARDING_DECADE = "80s" as const;
+const FOLLOWUP_PROMPTS: string[] = [
   "What song never gets old?",
   "What one feels bigger than itself?",
   "What's your sleeper pick?",
   "What song explains you best?",
 ];
+const FALLBACK_OPENER = "What song still sounds like the future?";
 
 const PLACEHOLDERS: string[] = [
   "Ceremony — New Order",
