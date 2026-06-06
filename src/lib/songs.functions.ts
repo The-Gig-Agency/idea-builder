@@ -12,7 +12,7 @@ export const searchSongs = createServerFn({ method: "POST" })
     const q = data.q.replace(/[%_]/g, "");
     const { data: rows, error } = await supabase
       .from("songs")
-      .select("id,title,artist,year,primary_lane,lane")
+      .select("id,title,artist,year,lane")
       .or(`title.ilike.%${q}%,artist.ilike.%${q}%`)
       .eq("active", true)
       .order("diagnostic_power", { ascending: false })
