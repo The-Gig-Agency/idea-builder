@@ -1583,12 +1583,13 @@ export const finalSynthesis = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const sessionRes = await supabase
       .from("sessions")
-      .select("user_id")
+      .select("user_id, vector")
       .eq("id", data.sessionId)
       .single();
-    const session = sessionRes.data as { user_id: string } | null;
+    const session = sessionRes.data as { user_id: string; vector: Record<string, number> | null } | null;
     const empty: SynthPayload = { synthesis: "", kept_choosing: [], counter_reads: [] };
     if (!session || session.user_id !== userId) return empty;
+    const derivedMoods = deriveDescriptors(session.vector ?? {});
 
     // Pull the Analyst's stored reasoning — that's the evidence. Don't re-derive.
     const reasoningRes = await supabase
