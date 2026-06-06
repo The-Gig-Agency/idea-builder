@@ -26,8 +26,9 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
 });
 
-type Entity = "songs" | "pairings" | "archetypes" | "decade_prompts";
-const ENTITIES: { key: Entity; label: string }[] = [
+type Entity = "songs" | "pairings" | "archetypes";
+type Tab = Entity | "decade_prompts";
+const ENTITIES: { key: Tab; label: string }[] = [
   { key: "songs", label: "Songs" },
   { key: "pairings", label: "Pairings" },
   { key: "archetypes", label: "Archetypes" },
