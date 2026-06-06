@@ -73,7 +73,9 @@ function Hero() {
           Why do you love the songs you love?
         </h1>
         <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-          Twenty choices. Three minutes. One surprisingly accurate answer.
+          The songs you choose tell a story.
+          <br />
+          We're just here to read it.
         </p>
         <div className="mt-10 flex flex-col items-start gap-4">
           <Link
