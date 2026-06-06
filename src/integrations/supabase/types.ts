@@ -177,6 +177,45 @@ export type Database = {
           },
         ]
       }
+      critic_profile: {
+        Row: {
+          bluntness: number
+          created_at: string
+          forbidden_moves: string[]
+          move_tally: Json
+          patience: number
+          playfulness: number
+          provocation_appetite: number
+          turns_observed: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bluntness?: number
+          created_at?: string
+          forbidden_moves?: string[]
+          move_tally?: Json
+          patience?: number
+          playfulness?: number
+          provocation_appetite?: number
+          turns_observed?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bluntness?: number
+          created_at?: string
+          forbidden_moves?: string[]
+          move_tally?: Json
+          patience?: number
+          playfulness?: number
+          provocation_appetite?: number
+          turns_observed?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       decade_opening_prompts: {
         Row: {
           created_at: string
