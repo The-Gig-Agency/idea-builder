@@ -1955,7 +1955,7 @@ export const chatTurn = createServerFn({ method: "POST" })
       .slice(-8)
       .map((m) => `${m.role}: ${m.content}`)
       .join("\n");
-    const extractorVoice = `You read a listener's chat reply and score it along 15 taste dimensions: ${(DIMS as readonly string[]).join(", ")}.
+    const extractorVoice = `You read a listener's chat reply and score it along 10 taste dimensions: ${(DIMS as readonly string[]).join(", ")}.
 Return STRICT JSON: {"deltas": {"<dimension>": <integer between -10 and 10>, ...}}.
 Only include dimensions the message clearly speaks to. Positive = high pole, negative = low pole, using these poles:
 ${(DIMS as readonly string[]).map((d) => `- ${d}: +${DIM_LABEL[d]?.hi} / -${DIM_LABEL[d]?.lo}`).join("\n")}
