@@ -319,32 +319,11 @@ export const nextPairing = createServerFn({ method: "POST" })
       return { pairing: null, round, confidence, done: true as const };
     }
 
-    // -------- Probe injection (silent) --------
-    // At scheduled rounds, try a pairing from a candidate lane the user hasn't
-    // been tested on yet. Skip lanes we already probed.
-    const probedLanes = new Set(probeState.probes_shown.map((p) => p.lane));
-    const probeLane = PROBE_ROUNDS.has(round)
-      ? probeCandidates.find((l) => !probedLanes.has(l) && l !== sessionLane)
-      : undefined;
+    // Cross-lane probes intentionally disabled: pairings stay within the user's
+    // lane. Dimensions are read inside the lane, not across lanes. See
+    // mem://product/within-lane-only.md.
+    void probeCandidates; void probeState; void PROBE_ROUNDS;
 
-    if (probeLane) {
-      const probeRes = await supabase
-        .from("pairings")
-        .select(pairingSelect)
-        .eq("active", true)
-        .eq("lane", probeLane)
-        .order("diagnostic_weight", { ascending: false })
-        .limit(20);
-      if (!probeRes.error) {
-        const probePool = (probeRes.data ?? []).filter((p) => !usedIds.has(p.id));
-        if (probePool.length) {
-          const pick = probePool[Math.floor(Math.random() * Math.min(3, probePool.length))];
-          probeState.pending[pick.id] = probeLane;
-          await supabase.from("sessions").update({ probe_state: probeState as never }).eq("id", data.sessionId);
-          return { pairing: pick, round: round + 1, confidence, done: false as const };
-        }
-      }
-    }
 
     // -------- Normal lane-scoped fetch --------
     let pairingsRes = sessionLane === "general"
