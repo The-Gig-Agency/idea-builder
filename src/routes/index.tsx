@@ -166,12 +166,9 @@ function HowItWorks() {
               key={s.n}
               className="flex flex-col gap-6 bg-surface p-8 md:p-10"
             >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs text-muted-foreground">
-                  {s.n}
-                </span>
-                {s.kicker && <span className="eyebrow">{s.kicker}</span>}
-              </div>
+              <span className="font-mono text-xs text-muted-foreground">
+                {s.n}
+              </span>
               <h3 className="display text-2xl text-foreground md:text-[1.75rem]">
                 {s.title}
               </h3>
