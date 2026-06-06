@@ -154,6 +154,46 @@ where p.lane <> sa.primary_lane
 
 Do not validate `pairings.lane = songs.lane`; that will falsely reject useful cross-sub-lane diagnostic pairings.
 
+### Diagnostic Power Scoring
+
+Add curator-scored song fields:
+
+```sql
+canon_score int not null default 50 check (canon_score between 0 and 100);
+polarization int not null default 0 check (polarization between 0 and 25);
+tradeoff_richness int not null default 0 check (tradeoff_richness between 0 and 20);
+pairing_density int not null default 0 check (pairing_density between 0 and 15);
+identity_signaling int not null default 0 check (identity_signaling between 0 and 15);
+longevity int not null default 0 check (longevity between 0 and 10);
+cross_genre_mapping int not null default 0 check (cross_genre_mapping between 0 and 15);
+```
+
+Keep existing `diagnostic_power`, but calculate it from the component fields:
+
+```text
+diagnostic_power =
+  polarization
++ tradeoff_richness
++ pairing_density
++ identity_signaling
++ longevity
++ cross_genre_mapping
+```
+
+`diagnostic_power` is not song greatness. It answers:
+
+> If somebody puts this in their Top 5, what do we learn?
+
+`canon_score` is separate and should capture influence, popularity, critical recognition, and longevity.
+
+Admin UI requirements:
+
+- Show the six DPS component fields.
+- Show calculated `diagnostic_power`.
+- Show editable `canon_score`.
+- Make it obvious that high canon score and high diagnostic power are different concepts.
+- Do not ask curators "is this a great song?" Ask "what does choosing this song teach us?"
+
 ## Server Function Changes
 
 ### Replace/Extend Opening Hypothesis
