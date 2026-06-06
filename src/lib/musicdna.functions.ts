@@ -1818,8 +1818,12 @@ No prose, no markdown fences.`;
     }
     const contextBlock = ctxLines.length ? `Listener context:\n${ctxLines.join("\n\n")}` : "No prior context yet.";
 
+    const criticProfile = await loadCriticProfile(supabase as never, userId);
+    const voiceMod = buildVoiceModulation(criticProfile);
+
     const messages: Array<{ role: string; content: string }> = [
       { role: "system", content: CHAT_VOICE },
+      ...(voiceMod ? [{ role: "system" as const, content: voiceMod }] : []),
       { role: "system", content: contextBlock },
     ];
     for (const m of history ?? []) {
@@ -1843,6 +1847,22 @@ No prose, no markdown fences.`;
       role: "assistant",
       content: reply,
     });
+
+    // -------- Update critic profile from this exchange --------
+    // The user's reply is feedback on the critic's PRIOR assistant turn (the
+    // one before this new reply). Use that pair to extract tone/move signals.
+    try {
+      const priorAssistant = [...(history ?? [])]
+        .reverse()
+        .find((m) => m.role === "assistant")?.content as string | undefined;
+      const signals = await extractToneSignals(priorAssistant ?? null, data.message);
+      if (signals) {
+        const next = applyToneSignals(criticProfile, signals);
+        await persistCriticProfile(supabase as never, userId, next);
+      }
+    } catch {
+      // Profile update is best-effort.
+    }
 
     return { reply, sessionId };
   });
