@@ -7,9 +7,12 @@ import type { Database } from './types';
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  // Supabase renamed service_role to "secret key" — accept either name.
+  // Supabase renamed service_role to "secret key". The SUPABASE_ prefix is
+  // reserved by Lovable, so we also accept SB_SECRET_KEY as a project secret.
   const SUPABASE_SERVICE_ROLE_KEY =
-    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SB_SECRET_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     const missing = [
