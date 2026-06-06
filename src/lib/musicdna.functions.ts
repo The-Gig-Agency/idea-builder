@@ -538,6 +538,10 @@ export const recordChoice = createServerFn({ method: "POST" })
     if (sessionRes.error || !session) throw new Error(sessionRes.error?.message ?? "session not found");
     if (session.user_id !== userId) throw new Error("forbidden");
 
+    // Reject choices that don't actually correspond to one of this pairing's songs.
+    if (data.chosenSongId !== pairing.song_a_id && data.chosenSongId !== pairing.song_b_id) {
+      throw new Error("invalid choice: chosenSongId is not part of this pairing");
+    }
     const chosenIsA = data.chosenSongId === pairing.song_a_id;
     const winner = chosenIsA ? pairing.song_a : pairing.song_b;
     const loser = chosenIsA ? pairing.song_b : pairing.song_a;
