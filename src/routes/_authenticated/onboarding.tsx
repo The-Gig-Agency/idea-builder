@@ -67,7 +67,122 @@ function Onboarding() {
   const [history, setHistory] = useState<Exchange[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [reactingTo, setReactingTo] = useState<string | null>(null); // shown live above input while LLM responds
+
+  // After a submit we enter a multi-beat REVEAL phase. The question is hidden;
+  // we show ✓ song → "Interesting…" → the observation → a Next button.
+  // The eye stays put. The reaction IS the reward.
+  type RevealStage = "thinking" | "preamble" | "observation";
+  type Pending = {
+    prompt: string;
+    song: string;
+    reaction?: string;
+    hypothesis?: string;
+    stage: RevealStage;
+    // If this submit closes the run, we hold the final payload until user clicks "See it".
+    final?: { lane: string; confidence: number; hypothesis: string; reaction?: string };
+  };
+  const [pending, setPending] = useState<Pending | null>(null);
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const idx = history.length; // 0..5 — which song we're collecting next
+
+  // keep input focused when a question is showing
+  useEffect(() => {
+    if (!busy && !pending) inputRef.current?.focus();
+  }, [busy, pending, idx]);
+
+  // Reveal choreography: once the reaction is in, walk through preamble → observation
+  useEffect(() => {
+    if (!pending) return;
+    if (pending.stage === "thinking" && pending.reaction) {
+      const t1 = setTimeout(() => setPending((p) => (p ? { ...p, stage: "preamble" } : p)), 350);
+      return () => clearTimeout(t1);
+    }
+    if (pending.stage === "preamble") {
+      const t2 = setTimeout(() => setPending((p) => (p ? { ...p, stage: "observation" } : p)), 750);
+      return () => clearTimeout(t2);
+    }
+  }, [pending]);
+
+  async function handleSubmit() {
+    const value = input.trim();
+    if (value.length < 2 || busy || pending) return;
+
+    const currentIdx = idx;
+    const currentPrompt = PROMPTS[currentIdx];
+    setBusy(true);
+    setInput("");
+    // immediately enter reveal — show ✓ song while we wait on the LLM
+    setPending({ prompt: currentPrompt, song: value, stage: "thinking" });
+
+    try {
+      if (currentIdx < 2) {
+        const r = await reactOneFn({
+          data: { song: value, index: currentIdx, priorSongs: history.map((h) => h.song) },
+        });
+        setPending((p) => (p ? { ...p, reaction: r.text } : p));
+      } else if (currentIdx === 2) {
+        const songs = [...history.map((h) => h.song), value] as [string, string, string];
+        const r = await reactThreeFn({ data: { songs } });
+        setPending((p) => (p ? { ...p, reaction: r.reaction, hypothesis: r.hypothesis_v1 } : p));
+      } else if (currentIdx === 3) {
+        const r = await reactOneFn({
+          data: { song: value, index: 3, priorSongs: history.map((h) => h.song) },
+        });
+        setPending((p) => (p ? { ...p, reaction: r.text } : p));
+      } else {
+        // final — refine + lock
+        const allSongs = [...history.map((h) => h.song), value];
+        const r = (await refineFn({
+          data: {
+            firstThree: allSongs.slice(0, 3),
+            twoMore: allSongs.slice(3, 5),
+          },
+        } as never)) as { reaction?: string; hypothesis: string; lane: string; confidence: number };
+        const reaction = r.reaction ?? "That's enough. I've got a read.";
+        setPending((p) =>
+          p ? { ...p, reaction, final: { lane: r.lane, confidence: r.confidence, hypothesis: r.hypothesis, reaction: r.reaction } } : p,
+        );
+        logEvent({
+          data: {
+            event_type: "onboarding_classified",
+            props: { lane: r.lane, confidence: r.confidence, song_count: 5 },
+          },
+        } as never).catch(() => {});
+      }
+    } catch (e) {
+      setPending(null);
+      setInput(value);
+      toast.error(e instanceof Error ? e.message : "Couldn't read that one.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function commitAndAdvance() {
+    if (!pending || !pending.reaction) return;
+    if (pending.final) {
+      // last beat — push to history then show payoff
+      setHistory((h) => [
+        ...h,
+        { prompt: pending.prompt, song: pending.song, reaction: pending.reaction },
+      ]);
+      setDone(pending.final);
+      setPending(null);
+      return;
+    }
+    setHistory((h) => [
+      ...h,
+      {
+        prompt: pending.prompt,
+        song: pending.song,
+        reaction: pending.reaction,
+        hypothesis: pending.hypothesis,
+      },
+    ]);
+    setPending(null);
+  }
+
   const [done, setDone] = useState<{
     lane: string;
     confidence: number;
@@ -75,105 +190,19 @@ function Onboarding() {
     reaction?: string;
   } | null>(null);
 
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const idx = history.length; // 0..5 — which song we're collecting next
-
-  // keep input focused
-  useEffect(() => {
-    if (!busy && !done) inputRef.current?.focus();
-  }, [busy, done, idx]);
-
-  async function handleSubmit() {
-    const value = input.trim();
-    if (value.length < 2 || busy || done) return;
-
-    const currentIdx = idx;
-    const currentPrompt = PROMPTS[currentIdx];
-    setBusy(true);
-    setReactingTo(value);
-    setInput("");
-
-    try {
-      let reaction = "";
-      let hypothesis: string | undefined;
-
-      if (currentIdx < 2) {
-        const r = await reactOneFn({
-          data: {
-            song: value,
-            index: currentIdx,
-            priorSongs: history.map((h) => h.song),
-          },
-        });
-        reaction = r.text;
-      } else if (currentIdx === 2) {
-        // first big beat — react to all 3 and form working hypothesis
-        const songs = [...history.map((h) => h.song), value] as [string, string, string];
-        const r = await reactThreeFn({ data: { songs } });
-        reaction = r.reaction;
-        hypothesis = r.hypothesis_v1;
-      } else if (currentIdx === 3) {
-        const r = await reactOneFn({
-          data: { song: value, index: 3, priorSongs: history.map((h) => h.song) },
-        });
-        reaction = r.text;
-      } else {
-        // currentIdx === 4 — final refine, lock in
-        const allSongs = [...history.map((h) => h.song), value];
-        const r = await refineFn({
-          data: {
-            firstThree: allSongs.slice(0, 3),
-            twoMore: allSongs.slice(3, 5),
-          },
-        } as never);
-        const refined = r as {
-          reaction?: string;
-          hypothesis: string;
-          lane: string;
-          confidence: number;
-        };
-        reaction = refined.reaction ?? "That's enough. I've got a read.";
-
-        setHistory((h) => [...h, { prompt: currentPrompt, song: value, reaction }]);
-        setReactingTo(null);
-        setDone({
-          lane: refined.lane,
-          confidence: refined.confidence,
-          hypothesis: refined.hypothesis,
-          reaction: refined.reaction,
-        });
-        logEvent({
-          data: {
-            event_type: "onboarding_classified",
-            props: { lane: refined.lane, confidence: refined.confidence, song_count: 5 },
-          },
-        } as never).catch(() => {});
-        return;
-      }
-
-      setHistory((h) => [...h, { prompt: currentPrompt, song: value, reaction, hypothesis }]);
-      setReactingTo(null);
-    } catch (e) {
-      setReactingTo(null);
-      setInput(value); // put it back so the user doesn't lose it
-      toast.error(e instanceof Error ? e.message : "Couldn't read that one.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   // ──────────────────────────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────────────────────────
-  // Top of the page = the live moment (current question + input + reaction-in-flight).
-  // Below = the conversation log, most-recent-first, fading as it ages.
 
-  const activePrompt = done ? null : PROMPTS[idx];
+  const showingQuestion = !done && !pending;
+  const activePrompt = showingQuestion ? PROMPTS[idx] : null;
   const counter = `${String(Math.min(idx + 1, 5)).padStart(2, "0")} / 05`;
+  const isFinalPending = pending?.final != null;
+  const nextLabel = isFinalPending ? "See what I think →" : idx + 1 >= 5 ? "Finish →" : "Next question →";
 
   return (
     <main className="mx-auto max-w-2xl px-6 pt-16 pb-24 min-h-screen flex flex-col">
-      {/* ACTIVE MOMENT — pinned at the top of the visual field */}
+      {/* ACTIVE QUESTION */}
       {activePrompt && (
         <section className="space-y-6 animate-in fade-in duration-700">
           <div className="flex items-baseline justify-between">
@@ -183,7 +212,6 @@ function Onboarding() {
             )}
           </div>
 
-          {/* The question — big, serif, no avatar, no header. It's just there. */}
           <h1
             key={idx}
             className="display text-4xl md:text-5xl leading-[1.05] tracking-tight animate-in fade-in slide-in-from-bottom-1 duration-500"
@@ -191,7 +219,6 @@ function Onboarding() {
             {activePrompt}
           </h1>
 
-          {/* Input directly under the question — short trip for the eye */}
           <div className="border-b-2 hairline-strong focus-within:border-primary transition-colors pb-1">
             <input
               ref={inputRef}
@@ -210,35 +237,72 @@ function Onboarding() {
             />
           </div>
 
-          <div className="flex items-center justify-between text-xs">
-            <p className="font-mono uppercase tracking-[0.22em] text-muted-foreground">
-              {busy
-                ? "thinking…"
-                : input.trim().length >= 2
-                  ? "press enter"
-                  : idx === 0
-                    ? "start anywhere"
-                    : "keep going"}
-            </p>
-            {busy && (
+          <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">
+            {input.trim().length >= 2 ? "press enter" : idx === 0 ? "start anywhere" : "keep going"}
+          </p>
+        </section>
+      )}
+
+      {/* REVEAL — replaces the question while the AI reacts */}
+      {pending && (
+        <section className="space-y-8 animate-in fade-in duration-500">
+          <p className="eyebrow">{counter}</p>
+
+          {/* ✓ song — appears instantly */}
+          <p className="font-mono text-lg md:text-xl text-foreground animate-in fade-in slide-in-from-bottom-1 duration-300">
+            ✓ {pending.song}
+          </p>
+
+          {/* thinking dots while we wait */}
+          {pending.stage === "thinking" && (
+            <p className="font-mono text-sm uppercase tracking-[0.22em] text-muted-foreground inline-flex items-center gap-2">
+              listening
               <span className="inline-flex gap-1 text-primary">
                 <span className="animate-bounce" style={{ animationDelay: "0ms" }}>·</span>
                 <span className="animate-bounce" style={{ animationDelay: "120ms" }}>·</span>
                 <span className="animate-bounce" style={{ animationDelay: "240ms" }}>·</span>
               </span>
-            )}
-          </div>
+            </p>
+          )}
 
-          {/* Reaction-in-flight: the song the user just submitted, with thinking dots */}
-          {reactingTo && (
-            <div className="pt-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
-              <p className="font-mono text-sm text-foreground/70">✓ {reactingTo}</p>
+          {/* preamble — "Interesting…" lands first, alone */}
+          {(pending.stage === "preamble" || pending.stage === "observation") && (
+            <p className="font-serif italic text-3xl md:text-4xl text-primary animate-in fade-in slide-in-from-bottom-2 duration-500">
+              Interesting…
+            </p>
+          )}
+
+          {/* the observation — the reward */}
+          {pending.stage === "observation" && pending.reaction && (
+            <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground animate-in fade-in slide-in-from-bottom-2 duration-700">
+              {pending.reaction}
+            </p>
+          )}
+
+          {/* working hypothesis after song #3 */}
+          {pending.stage === "observation" && pending.hypothesis && (
+            <div className="border-l-2 border-primary/60 pl-4 py-1 animate-in fade-in duration-700">
+              <p className="eyebrow mb-1">working hypothesis</p>
+              <p className="font-serif text-lg italic">"{pending.hypothesis}"</p>
+            </div>
+          )}
+
+          {/* Next */}
+          {pending.stage === "observation" && (
+            <div className="pt-4 animate-in fade-in duration-500">
+              <button
+                onClick={commitAndAdvance}
+                className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
+                autoFocus
+              >
+                {nextLabel}
+              </button>
             </div>
           )}
         </section>
       )}
 
-      {/* FINAL BEAT */}
+      {/* FINAL PAYOFF */}
       {done && (
         <section className="space-y-8 animate-in fade-in duration-700">
           <p className="eyebrow">that's enough</p>
@@ -271,11 +335,10 @@ function Onboarding() {
       )}
 
       {/* CONVERSATION LOG — newest first, fading as it ages */}
-      {history.length > 0 && (
+      {history.length > 0 && !done && (
         <section className="mt-16 pt-10 border-t hairline space-y-10">
           {[...history].reverse().map((h, revIdx) => {
-            const age = revIdx; // 0 = most recent
-            // fade older entries so the eye stays at the top
+            const age = revIdx;
             const opacity = Math.max(0.35, 1 - age * 0.18);
             return (
               <article
