@@ -361,7 +361,20 @@ export const nextPairing = createServerFn({ method: "POST" })
     const total = scored.reduce((s, x) => s + x.w, 0);
     let r = Math.random() * total;
     const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
+    const pickedLane = (pick.p as { lane?: string | null }).lane ?? null;
+    if (
+      sessionLane !== "general" &&
+      pickedLane &&
+      pickedLane !== sessionLane &&
+      pickedLane !== "general"
+    ) {
+      throw new Error(
+        `within-lane invariant violated: nextPairing picked lane="${pickedLane}" for session lane="${sessionLane}". ` +
+          `See mem://product/within-lane-only.md.`,
+      );
+    }
     return { pairing: pick.p, round: round + 1, confidence, done: false as const };
+
   });
 
 
