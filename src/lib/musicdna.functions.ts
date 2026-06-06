@@ -264,5 +264,25 @@ export const getMyResult = createServerFn({ method: "GET" })
         .order("started_at", { ascending: false })
         .limit(20),
     ]);
-    return { profile, sessions: sessions ?? [] };
+    const latest = sessions?.[0];
+    let definingChoices: Array<{ chosen: string; chosenArtist: string; rejected: string; rejectedArtist: string }> = [];
+    if (latest) {
+      const { data: choices } = await supabase
+        .from("choices")
+        .select("created_at, ms_to_decide, chosen:chosen_song_id(title,artist), rejected:rejected_song_id(title,artist)")
+        .eq("session_id", latest.id)
+        .order("ms_to_decide", { ascending: true, nullsFirst: false })
+        .limit(5);
+      definingChoices = ((choices ?? []) as unknown as Array<{
+        chosen: { title: string; artist: string } | null;
+        rejected: { title: string; artist: string } | null;
+      }>)
+        .filter((c) => c.chosen && c.rejected)
+        .map((c) => ({
+          chosen: c.chosen!.title, chosenArtist: c.chosen!.artist,
+          rejected: c.rejected!.title, rejectedArtist: c.rejected!.artist,
+        }));
+    }
+    return { profile, sessions: sessions ?? [], definingChoices };
   });
+
