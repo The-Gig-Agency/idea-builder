@@ -606,6 +606,20 @@ export const finalizeSession = createServerFn({ method: "POST" })
       if (score > best.score) best = { id: a.id, name: a.name, score };
     }
 
+    // -------- Log Analyst (deterministic, no model call) --------
+    await supabase.from("llm_calls").insert({
+      user_id: userId,
+      session_id: data.sessionId,
+      role: "analyst",
+      model: "deterministic",
+      prompt_version: "analyst.v1",
+      status: "ok",
+      latency_ms: 0,
+      input_summary: { choices: choices.length, archetypes: archetypes.length },
+      output: { patterns, counterarguments, allowed_claims, blocked_claims } as never,
+      confidence: allowed_claims[0]?.confidence ?? null,
+    });
+
     // -------- Layer 5: Critic (AI narrative, constrained) --------
     const evidenceBlock = allowed_claims.length
       ? allowed_claims.map((c) =>
@@ -615,11 +629,8 @@ export const finalizeSession = createServerFn({ method: "POST" })
     const counterBlock = counterarguments.length
       ? counterarguments.map((c) => `- ${c.claim} (${c.impact} impact — ${c.notes})`).join("\n")
       : "- (none)";
-    const narrative = await ai([
-      { role: "system", content: CRITIC_VOICE },
-      {
-        role: "user",
-        content: `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
+
+    const criticPrompt = `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
 Cite the evidence inline (e.g. "across 7 of 12 matchups"). If a strong counter-hypothesis exists, name it. \
 If no claims cleared the threshold, say so plainly — do not invent.
 
@@ -629,9 +640,44 @@ ${evidenceBlock}
 COUNTER-HYPOTHESES TO ACKNOWLEDGE:
 ${counterBlock}
 
-Archetype assigned by cosine match: ${best.name || "Unassigned"}.`,
+Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
+
+    const criticStart = Date.now();
+    let narrative = "";
+    let criticStatus: "ok" | "error" = "ok";
+    let criticError: string | null = null;
+    try {
+      narrative = await ai([
+        { role: "system", content: CRITIC_VOICE },
+        { role: "user", content: criticPrompt },
+      ]);
+    } catch (e) {
+      criticStatus = "error";
+      criticError = e instanceof Error ? e.message : String(e);
+    }
+    const criticLatency = Date.now() - criticStart;
+
+    await supabase.from("llm_calls").insert({
+      user_id: userId,
+      session_id: data.sessionId,
+      role: "critic",
+      model: MODEL,
+      prompt_version: "critic.v1",
+      status: criticStatus,
+      latency_ms: criticLatency,
+      error_message: criticError,
+      input_summary: {
+        allowed_claims: allowed_claims.length,
+        counterarguments: counterarguments.length,
+        archetype: best.name,
       },
-    ]);
+      output: { length: narrative.length } as never,
+      narrative: narrative || null,
+    });
+
+    if (criticStatus === "error") {
+      throw new Error(criticError ?? "Critic failed");
+    }
 
     // -------- Persist --------
     const reasoningRow = {
@@ -725,4 +771,106 @@ export const getMyResult = createServerFn({ method: "GET" })
     return { profile, sessions: sessions ?? [], definingChoices, reasoning };
   });
 
+
+// ============ Instrumentation: events + feedback ============
+
+const EVENT_TYPES = [
+  "onboarding_classified",
+  "pairing_shown",
+  "choice_made",
+  "reveal_shown",
+  "reveal_continued",
+  "session_completed",
+  "result_viewed",
+  "result_shared",
+  "session_quit",
+] as const;
+
+export const recordEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      event_type: z.enum(EVENT_TYPES),
+      session_id: z.string().uuid().nullable().optional(),
+      pairing_id: z.string().uuid().nullable().optional(),
+      choice_id: z.string().uuid().nullable().optional(),
+      response_time_ms: z.number().int().nonnegative().max(600000).nullable().optional(),
+      variant: z.string().max(80).nullable().optional(),
+      experiment_key: z.string().max(80).nullable().optional(),
+      props: z.record(z.unknown()).optional(),
+      client: z.string().max(40).nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase.from("event_log").insert({
+      user_id: userId,
+      event_type: data.event_type,
+      session_id: data.session_id ?? null,
+      pairing_id: data.pairing_id ?? null,
+      choice_id: data.choice_id ?? null,
+      response_time_ms: data.response_time_ms ?? null,
+      variant: data.variant ?? null,
+      experiment_key: data.experiment_key ?? null,
+      props: (data.props ?? {}) as never,
+      client: data.client ?? "web",
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const submitFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      session_id: z.string().uuid(),
+      accuracy: z.enum(["accurate", "not_accurate", "mixed"]).nullable().optional(),
+      rating: z.number().int().min(-1).max(1).nullable().optional(),
+      comment: z.string().max(2000).nullable().optional(),
+      target: z.string().max(120).nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const row = {
+      user_id: userId,
+      session_id: data.session_id,
+      accuracy: data.accuracy ?? null,
+      rating: data.rating ?? null,
+      comment: data.comment ?? null,
+      target: data.target ?? null,
+    };
+    // One feedback row per (user, session, target)
+    const q = supabase
+      .from("result_feedback")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("session_id", data.session_id);
+    const { data: existing } = await (data.target
+      ? q.eq("target", data.target)
+      : q.is("target", null)
+    ).maybeSingle();
+    if (existing?.id) {
+      const { error } = await supabase.from("result_feedback").update(row).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { id: existing.id, updated: true as const };
+    }
+    const { data: inserted, error } = await supabase
+      .from("result_feedback").insert(row).select("id").single();
+    if (error) throw new Error(error.message);
+    return { id: inserted.id, updated: false as const };
+  });
+
+export const getMyFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ session_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: rows } = await supabase
+      .from("result_feedback")
+      .select("accuracy, rating, comment, target")
+      .eq("user_id", userId)
+      .eq("session_id", data.session_id);
+    return { feedback: rows ?? [] };
+  });
 

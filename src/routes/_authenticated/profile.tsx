@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Suspense, useState } from "react";
-import { getMyResult } from "@/lib/musicdna.functions";
+import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { Suspense, useEffect, useState } from "react";
+import { getMyResult, recordEvent, submitFeedback, getMyFeedback } from "@/lib/musicdna.functions";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from "recharts";
@@ -41,6 +41,9 @@ type Reasoning = { allowed_claims: Claim[]; blocked_claims: Claim[]; counterargu
 
 function ProfilePage() {
   const fn = useServerFn(getMyResult);
+  const logEvent = useServerFn(recordEvent);
+  const sendFeedback = useServerFn(submitFeedback);
+  const fetchFeedback = useServerFn(getMyFeedback);
   const { data } = useSuspenseQuery(
     queryOptions({ queryKey: ["myResult"], queryFn: () => fn({}) }),
   );
@@ -55,6 +58,51 @@ function ProfilePage() {
     value: ((vector[d] ?? 0) + max) / (2 * max) * 100,
   }));
 
+  // Fire result_viewed once per session view
+  useEffect(() => {
+    if (!latest?.id) return;
+    logEvent({
+      data: { event_type: "result_viewed", session_id: latest.id, props: { archetype: latest.archetype?.name ?? null } },
+    } as never).catch(() => { /* swallow */ });
+  }, [latest?.id, latest?.archetype?.name, logEvent]);
+
+  // Existing feedback for this session
+  const feedbackQ = useQuery({
+    queryKey: ["feedback", latest?.id],
+    queryFn: () => fetchFeedback({ data: { session_id: latest!.id } }),
+    enabled: !!latest?.id,
+  });
+  const existing = (feedbackQ.data?.feedback ?? []).find((f) => f.target == null);
+  const [accuracy, setAccuracy] = useState<"accurate" | "not_accurate" | "mixed" | null>(null);
+  const [rating, setRating] = useState<-1 | 1 | null>(null);
+  const [comment, setComment] = useState("");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  useEffect(() => {
+    if (!existing) return;
+    setAccuracy((existing.accuracy as "accurate" | "not_accurate" | "mixed" | null) ?? null);
+    setRating(((existing.rating as -1 | 1 | null) ?? null));
+    setComment(existing.comment ?? "");
+  }, [existing]);
+
+  async function saveFeedback(next: { accuracy?: typeof accuracy; rating?: typeof rating; comment?: string }) {
+    if (!latest?.id) return;
+    const payload = {
+      accuracy: next.accuracy !== undefined ? next.accuracy : accuracy,
+      rating: next.rating !== undefined ? next.rating : rating,
+      comment: next.comment !== undefined ? next.comment : comment,
+    };
+    setFeedbackSaving(true);
+    try {
+      await sendFeedback({ data: { session_id: latest.id, ...payload } });
+      feedbackQ.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save feedback");
+    } finally {
+      setFeedbackSaving(false);
+    }
+  }
+
   async function share() {
     if (!latest) return;
     const lines = [
@@ -67,6 +115,9 @@ function ProfilePage() {
         (c) => `→ ${c.chosen} over ${c.rejected}`,
       ) ?? []),
     ].filter(Boolean).join("\n");
+    logEvent({
+      data: { event_type: "result_shared", session_id: latest.id, props: { has_native_share: !!navigator.share } },
+    } as never).catch(() => { /* swallow */ });
     try {
       if (navigator.share) {
         await navigator.share({ title: "My MusicDNA", text: lines });
@@ -119,6 +170,69 @@ function ProfilePage() {
               <p className="font-serif text-2xl leading-snug text-foreground">{latest.interpretation}</p>
             </blockquote>
           )}
+
+          {/* ---- Feedback strip ---- */}
+          <section className="mt-6 mb-12 border hairline-strong rounded-sm bg-surface px-5 py-4 max-w-2xl">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <p className="eyebrow">Was this accurate?</p>
+              <div className="flex items-center gap-2">
+                {(["accurate", "mixed", "not_accurate"] as const).map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => { setAccuracy(a); saveFeedback({ accuracy: a }); }}
+                    disabled={feedbackSaving}
+                    className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
+                      accuracy === a
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hairline-strong hover:bg-background"
+                    }`}
+                  >
+                    {a === "accurate" ? "Nailed it" : a === "mixed" ? "Mixed" : "Way off"}
+                  </button>
+                ))}
+                <div className="w-px h-5 bg-border mx-1" />
+                <button
+                  onClick={() => { const v = rating === 1 ? null : 1; setRating(v); saveFeedback({ rating: v }); }}
+                  disabled={feedbackSaving}
+                  className={`text-xs px-2.5 py-1.5 rounded-sm border transition-colors ${
+                    rating === 1 ? "border-primary bg-primary text-primary-foreground" : "hairline-strong hover:bg-background"
+                  }`}
+                  aria-label="Thumbs up"
+                >👍</button>
+                <button
+                  onClick={() => { const v = rating === -1 ? null : -1; setRating(v); saveFeedback({ rating: v }); }}
+                  disabled={feedbackSaving}
+                  className={`text-xs px-2.5 py-1.5 rounded-sm border transition-colors ${
+                    rating === -1 ? "border-primary bg-primary text-primary-foreground" : "hairline-strong hover:bg-background"
+                  }`}
+                  aria-label="Thumbs down"
+                >👎</button>
+                <button
+                  onClick={() => setFeedbackOpen((v) => !v)}
+                  className="text-xs px-3 py-1.5 rounded-sm border hairline-strong hover:bg-background"
+                >
+                  {feedbackOpen ? "Close" : "Note"}
+                </button>
+              </div>
+            </div>
+            {feedbackOpen && (
+              <div className="mt-3 flex flex-col gap-2">
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  onBlur={() => saveFeedback({ comment })}
+                  placeholder="What did we miss? What landed?"
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full bg-background border hairline rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                />
+                <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-muted-foreground">
+                  {feedbackSaving ? "Saving…" : existing ? "Saved" : "Autosaves on blur"}
+                </p>
+              </div>
+            )}
+          </section>
+
 
           {data.definingChoices?.length ? (
             <section className="mt-12 mb-12">
