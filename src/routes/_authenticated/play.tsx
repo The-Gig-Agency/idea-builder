@@ -192,22 +192,70 @@ function Play() {
 
   if (done) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-24">
-        <p className="eyebrow mb-8">The payoff</p>
-        <h1 className="display text-3xl md:text-4xl mb-10">Here's what I think.</h1>
-        {synthesis ? (
-          <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground mb-12 border-l-2 border-primary/40 pl-6 italic">
-            {synthesis}
-          </p>
+      <main className="mx-auto max-w-2xl px-6 py-20 space-y-14">
+        <header className="space-y-3">
+          <p className="eyebrow">the read</p>
+          <h1 className="display text-3xl md:text-4xl leading-tight">
+            What you kept choosing.
+          </h1>
+        </header>
+
+        {kept.length > 0 ? (
+          <section className="space-y-5">
+            <p className="eyebrow">evidence</p>
+            <ul className="space-y-4">
+              {kept.map((k, i) => (
+                <li key={i} className="border-l-2 border-primary/40 pl-5 space-y-2">
+                  <p className="font-serif text-xl md:text-2xl leading-snug">
+                    You repeatedly favored <span className="italic">{k.tradeoff}</span>.
+                  </p>
+                  {k.examples.length > 0 && (
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                      {k.examples.join(" · ")}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : (
-          <p className="text-muted-foreground mb-12">Reading complete.</p>
+          <section className="space-y-3">
+            <p className="eyebrow">the finding</p>
+            <p className="font-serif text-xl md:text-2xl italic text-muted-foreground leading-snug">
+              You refused to collapse into a single pattern. Every time a clear read started to form, another pick complicated it. Broad ear — not random.
+            </p>
+          </section>
         )}
-        <div className="flex flex-col sm:flex-row gap-3">
+
+        {synthesis && (
+          <section className="space-y-3">
+            <p className="eyebrow">what this might mean</p>
+            <p className="font-serif text-2xl md:text-3xl leading-snug border-l-2 border-primary pl-6 italic">
+              {synthesis}
+            </p>
+          </section>
+        )}
+
+        {counters.length > 0 && (
+          <section className="space-y-3">
+            <p className="eyebrow">other possible explanations</p>
+            <ul className="space-y-2">
+              {counters.map((c, i) => (
+                <li key={i} className="text-sm md:text-base text-muted-foreground">
+                  <span className="font-serif italic text-foreground">{c.claim}</span>
+                  {c.notes && <span className="block font-mono text-[11px] uppercase tracking-[0.22em] mt-1">{c.notes}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
           <button
             onClick={() => navigate({ to: "/me" })}
             className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
           >
-            Keep talking to me →
+            Push back on this →
           </button>
           <button
             onClick={() => navigate({ to: "/profile" })}
@@ -216,7 +264,6 @@ function Play() {
             See your full reading
           </button>
         </div>
-
       </main>
     );
   }
