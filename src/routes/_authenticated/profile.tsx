@@ -105,36 +105,33 @@ function ProfilePage() {
 
   async function share() {
     if (!latest) return;
-    const lines = [
-      `My MusicDNA: ${latest.archetype?.name ?? "Unassigned"}`,
-      latest.archetype?.tagline ? `— ${latest.archetype.tagline}` : "",
-      "",
-      latest.interpretation ?? "",
-      "",
-      ...(data.definingChoices?.slice(0, 3).map(
-        (c) => `→ ${c.chosen} over ${c.rejected}`,
-      ) ?? []),
-    ].filter(Boolean).join("\n");
+    const url = `${window.location.origin}/s/${latest.id}`;
+    const title = `MusicDNA: ${latest.archetype?.name ?? "A reading"}`;
+    const text = latest.archetype?.tagline
+      ? `${title} — ${latest.archetype.tagline}`
+      : title;
     logEvent({
       data: { event_type: "result_shared", session_id: latest.id, props: { has_native_share: !!navigator.share } },
     } as never).catch(() => { /* swallow */ });
     try {
       if (navigator.share) {
-        await navigator.share({ title: "My MusicDNA", text: lines });
+        await navigator.share({ title, text, url });
       } else {
-        await navigator.clipboard.writeText(lines);
+        await navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 1800);
+        toast.success("Share link copied");
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(lines);
-        toast.success("Copied to clipboard");
+        await navigator.clipboard.writeText(url);
+        toast.success("Share link copied");
       } catch {
         toast.error("Could not copy");
       }
     }
   }
+
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
@@ -157,12 +154,23 @@ function ProfilePage() {
                 </>
               )}
             </div>
-            <button
-              onClick={share}
-              className="shrink-0 border hairline-strong rounded-sm px-4 py-2 text-xs font-medium hover:bg-surface"
-            >
-              {copied ? "Copied" : "Share"}
-            </button>
+            <div className="shrink-0 flex flex-col items-end gap-2">
+              <button
+                onClick={share}
+                className="border hairline-strong rounded-sm px-4 py-2 text-xs font-medium hover:bg-surface"
+              >
+                {copied ? "Copied" : "Share / challenge a friend"}
+              </button>
+              <a
+                href={`/s/${latest.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+              >
+                Preview share card →
+              </a>
+            </div>
+
           </div>
 
           {latest.interpretation && (
@@ -365,24 +373,38 @@ function ProfilePage() {
             </div>
           </div>
 
-          {data.sessions.length > 1 && (
-            <section className="mt-16">
-              <p className="eyebrow mb-4">Past readings</p>
-              <ul className="space-y-3">
-                {data.sessions.slice(1).map((s) => (
-                  <li key={s.id} className="border hairline rounded-sm bg-surface px-5 py-4 flex justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="font-serif text-lg truncate">{s.archetype?.name ?? "Incomplete"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{s.interpretation ?? "—"}</p>
-                    </div>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
-                      {new Date(s.started_at).toLocaleDateString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {(() => {
+            const past = data.sessions.slice(1).filter((s) => s.completed_at);
+            if (!past.length) return null;
+            return (
+              <section className="mt-16">
+                <p className="eyebrow mb-4">Past readings · {past.length}</p>
+                <ul className="space-y-3">
+                  {past.map((s) => (
+                    <li key={s.id} className="border hairline rounded-sm bg-surface px-5 py-4 flex items-center justify-between gap-4 hover:border-primary/40 transition-colors">
+                      <a href={`/s/${s.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 group">
+                        <div className="flex items-baseline gap-3 mb-1">
+                          <p className="font-serif text-lg truncate group-hover:underline">
+                            {s.archetype?.name ?? "Unassigned"}
+                          </p>
+                          {"lane" in s && (s as { lane?: string }).lane && (
+                            <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
+                              {String((s as { lane?: string }).lane).replace(/_/g, " ")}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{s.interpretation ?? "—"}</p>
+                      </a>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
+                        {new Date(s.completed_at ?? s.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()}
+
         </>
       )}
     </main>
