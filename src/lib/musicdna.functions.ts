@@ -453,14 +453,14 @@ export const recordChoice = createServerFn({ method: "POST" })
         .from("pairings")
         .select(`tests, diagnostic_weight, song_a_id, song_b_id, song_a:songs!pairings_song_a_id_fkey(${songCols}), song_b:songs!pairings_song_b_id_fkey(${songCols})`)
         .eq("id", data.pairingId).single(),
-      supabase.from("sessions").select("vector,user_id").eq("id", data.sessionId).single(),
+      supabase.from("sessions").select("vector,user_id,lane,probe_state").eq("id", data.sessionId).single(),
     ]);
     const pairing = pairingRes.data as unknown as {
       tests: string[] | null; diagnostic_weight: number; song_a_id: string; song_b_id: string;
       song_a: Record<string, number> & { id: string; title: string; artist: string };
       song_b: Record<string, number> & { id: string; title: string; artist: string };
     } | null;
-    const session = sessionRes.data;
+    const session = sessionRes.data as { vector: Record<string, number>; user_id: string; lane: Lane; probe_state: ProbeState | null } | null;
     if (pairingRes.error || !pairing) throw new Error(pairingRes.error?.message ?? "pairing not found");
     if (sessionRes.error || !session) throw new Error(sessionRes.error?.message ?? "session not found");
     if (session.user_id !== userId) throw new Error("forbidden");
@@ -470,14 +470,17 @@ export const recordChoice = createServerFn({ method: "POST" })
     const loser = chosenIsA ? pairing.song_b : pairing.song_a;
     const rejectedSongId = chosenIsA ? pairing.song_b_id : pairing.song_a_id;
     const w = (pairing.diagnostic_weight || 50) / 100;
-    const vec: Record<string, number> = { ...(session.vector as Record<string, number>) };
+    const priorVec: Record<string, number> = { ...(session.vector as Record<string, number>) };
+    const vec: Record<string, number> = { ...priorVec };
     const tests: string[] = pairing.tests?.length ? pairing.tests : (DIMS as readonly string[]).slice();
     let topDim = tests[0] ?? "movement";
     let topDelta = 0;
+    const deltaVec: Record<string, number> = {};
     for (const dim of tests) {
       const a = (winner as Record<string, number>)?.[dim] ?? 50;
       const b = (loser as Record<string, number>)?.[dim] ?? 50;
       const delta = a - b;
+      deltaVec[dim] = delta;
       vec[dim] = (vec[dim] ?? 0) + delta * w;
       if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
@@ -500,10 +503,83 @@ export const recordChoice = createServerFn({ method: "POST" })
       ms_to_decide: data.msToDecide ?? null,
     });
     if (cErr) throw new Error(cErr.message);
-    const { error: uErr } = await supabase.from("sessions").update({ vector: vec }).eq("id", data.sessionId);
+
+    // -------- Probe scoring & silent lane flip --------
+    const probeState: ProbeState = {
+      probes_shown: session.probe_state?.probes_shown ?? [],
+      pending: session.probe_state?.pending ?? {},
+      lane_alignment: session.probe_state?.lane_alignment ?? {},
+      flips: session.probe_state?.flips ?? [],
+    };
+    let nextLane: Lane = session.lane;
+    const probeLane = probeState.pending[data.pairingId];
+    if (probeLane) {
+      // Cosine alignment between this choice's delta and the user's running vector.
+      // High positive cosine = the probe lane "rewards what you already reward".
+      const keys = Object.keys(deltaVec);
+      let dot = 0, magD = 0, magV = 0;
+      for (const k of keys) {
+        const d = deltaVec[k] ?? 0;
+        const v = priorVec[k] ?? 0;
+        dot += d * v; magD += d * d; magV += v * v;
+      }
+      const cosine = magD > 0 && magV > 0 ? dot / (Math.sqrt(magD) * Math.sqrt(magV)) : 0;
+      const magnitude = tests.reduce((s, dim) => s + Math.abs(deltaVec[dim] ?? 0), 0);
+      const win = cosine >= 0.2 ? 1 : 0;
+
+      const prev = probeState.lane_alignment[probeLane] ?? { wins: 0, total: 0, magnitude: 0, cosine_sum: 0 };
+      probeState.lane_alignment[probeLane] = {
+        wins: prev.wins + win,
+        total: prev.total + 1,
+        magnitude: prev.magnitude + magnitude,
+        cosine_sum: prev.cosine_sum + cosine,
+      };
+      probeState.probes_shown.push({ round: probeState.probes_shown.length + 1, pairing_id: data.pairingId, lane: probeLane });
+      delete probeState.pending[data.pairingId];
+
+      // Flip rule: ≥2 probes in this lane, win rate ≥ 0.75, avg cosine ≥ 0.3,
+      // and current lane confidence isn't already overwhelming.
+      const tally = probeState.lane_alignment[probeLane];
+      const winRate = tally.total ? tally.wins / tally.total : 0;
+      const avgCos = tally.total ? tally.cosine_sum / tally.total : 0;
+      if (tally.total >= 2 && winRate >= 0.75 && avgCos >= 0.3 && !probeState.flips.find((f) => f.to === probeLane)) {
+        const reason = `probe lane ${probeLane}: ${tally.wins}/${tally.total} wins, avg cosine ${avgCos.toFixed(2)}`;
+        probeState.flips.push({
+          round: probeState.probes_shown.length,
+          from: session.lane,
+          to: probeLane,
+          reason,
+        });
+        nextLane = probeLane;
+        // Fire-and-forget event log; never block the response.
+        supabase.from("event_log").insert({
+          user_id: userId,
+          session_id: data.sessionId,
+          event_type: "lane_flipped",
+          pairing_id: data.pairingId,
+          props: { from: session.lane, to: probeLane, win_rate: winRate, avg_cosine: avgCos } as never,
+          client: "server",
+        }).then(() => undefined, () => undefined);
+      } else {
+        supabase.from("event_log").insert({
+          user_id: userId,
+          session_id: data.sessionId,
+          event_type: "lane_probed",
+          pairing_id: data.pairingId,
+          props: { lane: probeLane, cosine, magnitude, win } as never,
+          client: "server",
+        }).then(() => undefined, () => undefined);
+      }
+    }
+
+    const { error: uErr } = await supabase
+      .from("sessions")
+      .update({ vector: vec, lane: nextLane, probe_state: probeState as never })
+      .eq("id", data.sessionId);
     if (uErr) throw new Error(uErr.message);
     return { vector: vec, verdict, why, hesitation, dim: topDim, delta: topDelta };
   });
+
 
 
 
