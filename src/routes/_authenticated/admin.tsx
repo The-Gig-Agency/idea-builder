@@ -48,7 +48,7 @@ function AdminPage() {
     retryDelay: 250,
     staleTime: 60_000,
   });
-  const [tab, setTab] = useState<Entity>("songs");
+  const [tab, setTab] = useState<Tab>("songs");
   const [editing, setEditing] = useState<{ row: Row | null } | null>(null);
 
   if (gate.isLoading) {
