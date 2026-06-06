@@ -261,6 +261,7 @@ export type Database = {
           active: boolean
           created_at: string
           diagnostic_weight: number
+          difficulty: number | null
           hypothesis: string | null
           id: string
           lane: string
@@ -268,12 +269,14 @@ export type Database = {
           song_b_id: string
           tests: string[]
           updated_at: string
+          user_facing_tradeoff: string | null
           why_good: string | null
         }
         Insert: {
           active?: boolean
           created_at?: string
           diagnostic_weight?: number
+          difficulty?: number | null
           hypothesis?: string | null
           id?: string
           lane?: string
@@ -281,12 +284,14 @@ export type Database = {
           song_b_id: string
           tests?: string[]
           updated_at?: string
+          user_facing_tradeoff?: string | null
           why_good?: string | null
         }
         Update: {
           active?: boolean
           created_at?: string
           diagnostic_weight?: number
+          difficulty?: number | null
           hypothesis?: string | null
           id?: string
           lane?: string
@@ -294,6 +299,7 @@ export type Database = {
           song_b_id?: string
           tests?: string[]
           updated_at?: string
+          user_facing_tradeoff?: string | null
           why_good?: string | null
         }
         Relationships: [
