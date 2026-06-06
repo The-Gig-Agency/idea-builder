@@ -25,15 +25,16 @@ async function assertAdminAndGetClient(userId: string) {
 export const adminCheck = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ isAdmin: boolean; userId: string; reason?: string }> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
+    // Use the authed client — RLS lets users read their own user_roles rows.
+    // Avoids requiring SUPABASE_SERVICE_ROLE_KEY just to render the nav.
+    const { data, error } = await context.supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", context.userId)
       .eq("role", "admin")
       .maybeSingle();
     if (error) return { isAdmin: false, userId: context.userId, reason: `db: ${error.message}` };
-    if (!data) return { isAdmin: false, userId: context.userId, reason: "no admin row for this user_id" };
+    if (!data) return { isAdmin: false, userId: context.userId };
     return { isAdmin: true, userId: context.userId };
   });
 
