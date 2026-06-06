@@ -1035,8 +1035,81 @@ export const submitFeedback = createServerFn({ method: "POST" })
     const { data: inserted, error } = await supabase
       .from("result_feedback").insert(row).select("id").single();
     if (error) throw new Error(error.message);
+    // Nudge the per-user critic profile from explicit feedback.
+    // Defined later in this file; safe to call via hoisted function declarations.
+    try { await nudgeCriticFromFeedback(supabase as never, userId, data); } catch { /* best-effort */ }
     return { id: inserted.id, updated: false as const };
   });
+
+// Apply explicit thumb/accuracy/comment to the per-user critic_profile.
+async function nudgeCriticFromFeedback(
+  supabase: { from: (t: string) => any },
+  userId: string,
+  fb: { accuracy?: string | null; rating?: number | null; comment?: string | null; target?: string | null },
+): Promise<void> {
+  const { data: existing } = await supabase
+    .from("critic_profile")
+    .select("bluntness, playfulness, patience, provocation_appetite, move_tally, forbidden_moves, turns_observed")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const p = {
+    bluntness: existing?.bluntness ?? 0,
+    playfulness: existing?.playfulness ?? 0,
+    patience: existing?.patience ?? 0,
+    provocation_appetite: existing?.provocation_appetite ?? 0,
+    move_tally: (existing?.move_tally ?? {}) as Record<string, { landed?: number; ignored?: number; pushed_back?: number }>,
+    forbidden_moves: (existing?.forbidden_moves ?? []) as string[],
+    turns_observed: existing?.turns_observed ?? 0,
+  };
+  const clamp = (n: number) => Math.max(-3, Math.min(3, Math.round(n)));
+  // Thumb / accuracy nudges:
+  //   thumb-down or "not_accurate" → push back signal: ease provocation, add patience.
+  //   thumb-up or "accurate"        → reinforce: tiny bluntness bump, the user can take it.
+  if (fb.rating === -1 || fb.accuracy === "not_accurate") {
+    p.provocation_appetite = clamp(p.provocation_appetite - 1);
+    p.patience = clamp(p.patience + 1);
+  } else if (fb.rating === 1 || fb.accuracy === "accurate") {
+    p.bluntness = clamp(p.bluntness + 1);
+  }
+  // Tally the synthesis move outcome so we know how often the final read landed.
+  const move = "counter_hypothesis"; // synthesis is a counter-hypothesis-class move
+  const outcome: "landed" | "pushed_back" | "ignored" =
+    fb.rating === 1 || fb.accuracy === "accurate" ? "landed" :
+    fb.rating === -1 || fb.accuracy === "not_accurate" ? "pushed_back" : "ignored";
+  const bucket = { ...(p.move_tally[move] ?? {}) };
+  bucket[outcome] = (bucket[outcome] ?? 0) + 1;
+  p.move_tally[move] = bucket;
+  // Comments can contain explicit "stop doing X" — extract conservatively via LLM.
+  if (fb.comment && fb.comment.trim().length > 4) {
+    try {
+      const sys = `Extract explicit instructions the listener is telling a music critic to stop doing. Return STRICT JSON, no fences: {"forbid": ["short phrase", ...]}. Empty array if none. Only include things the user EXPLICITLY asks to stop. Be conservative.`;
+      const raw = await ai([
+        { role: "system", content: sys },
+        { role: "user", content: `Listener comment:\n"${fb.comment}"\n\nReturn the JSON.` },
+      ]);
+      const cleaned = raw.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { forbid?: string[] };
+      for (const phrase of parsed.forbid ?? []) {
+        const trimmed = String(phrase ?? "").trim().slice(0, 120);
+        if (!trimmed) continue;
+        if (!p.forbidden_moves.some((f) => f.toLowerCase() === trimmed.toLowerCase())) {
+          p.forbidden_moves.push(trimmed);
+        }
+      }
+    } catch { /* best-effort */ }
+  }
+  await supabase.from("critic_profile").upsert({
+    user_id: userId,
+    bluntness: p.bluntness,
+    playfulness: p.playfulness,
+    patience: p.patience,
+    provocation_appetite: p.provocation_appetite,
+    move_tally: p.move_tally,
+    forbidden_moves: p.forbidden_moves.slice(0, 8),
+    turns_observed: p.turns_observed,
+  }, { onConflict: "user_id" });
+}
+
 
 export const getMyFeedback = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
