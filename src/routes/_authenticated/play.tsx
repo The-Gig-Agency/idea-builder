@@ -302,16 +302,21 @@ function Play() {
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                 Round {String(e.round).padStart(2, "0")} · {chosen.title} vs. {rejected.title} — you picked <span className="text-foreground">{chosen.title}</span>
               </p>
-              <p className="font-serif text-lg md:text-xl leading-snug text-foreground">
+              <p className="font-serif text-lg md:text-xl leading-snug text-foreground whitespace-pre-line">
                 {e.reaction}
               </p>
-              <div className="border-l-2 border-primary/40 pl-4 py-1 space-y-1">
+              <div className="border-l-2 border-primary/40 pl-4 py-1 space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                   my read so far · {DIR_LABEL[e.direction]} {DIR_GLYPH[e.direction]}
                 </p>
-                <p className="font-serif italic text-base md:text-lg text-foreground/90 leading-snug">
+                <p className="font-serif italic text-base md:text-lg text-foreground/90 leading-snug whitespace-pre-line">
                   {e.thesis}
                 </p>
+                {e.hook && (
+                  <p className="font-serif text-sm md:text-base text-muted-foreground leading-snug pt-1">
+                    {e.hook}
+                  </p>
+                )}
               </div>
             </article>
           );
