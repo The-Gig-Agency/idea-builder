@@ -22,7 +22,13 @@ function Play() {
   const next = useServerFn(nextPairing);
   const choose = useServerFn(recordChoice);
   const finalize = useServerFn(finalizeSession);
+  const logEvent = useServerFn(recordEvent);
   const navigate = useNavigate();
+
+  // Fire-and-forget logger — never blocks UX
+  const track = (event: Parameters<typeof logEvent>[0]["data"]) => {
+    logEvent({ data: event }).catch(() => { /* swallow */ });
+  };
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pairing, setPairing] = useState<Pairing | null>(null);
@@ -33,6 +39,7 @@ function Play() {
   const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
+  const shownAt = useRef<number>(Date.now());
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -45,24 +52,41 @@ function Play() {
         setPairing(pairing as unknown as Pairing | null);
         setRound(round);
         startedAt.current = Date.now();
+        shownAt.current = Date.now();
+        if (pairing) {
+          track({
+            event_type: "pairing_shown",
+            session_id: sessionId,
+            pairing_id: (pairing as unknown as Pairing).id,
+            props: { round, tests: (pairing as unknown as Pairing).tests },
+          });
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not start.");
       }
     })();
-  }, [start, next]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function pick(songId: string) {
     if (!pairing || !sessionId || busy) return;
     setBusy(true);
+    const ms = Math.min(600000, Date.now() - startedAt.current);
     try {
-      const { verdict, why, hesitation } = await choose({
-        data: {
-          sessionId, pairingId: pairing.id, chosenSongId: songId,
-          msToDecide: Math.min(600000, Date.now() - startedAt.current),
-        },
+      const { verdict, why, hesitation, dim, delta } = await choose({
+        data: { sessionId, pairingId: pairing.id, chosenSongId: songId, msToDecide: ms },
+      });
+      const rejectedSongId = songId === pairing.song_a.id ? pairing.song_b.id : pairing.song_a.id;
+      track({
+        event_type: "choice_made",
+        session_id: sessionId,
+        pairing_id: pairing.id,
+        response_time_ms: ms,
+        props: { chosen_song_id: songId, rejected_song_id: rejectedSongId, top_dim: dim, delta, tests: pairing.tests },
       });
       setReveal({ verdict, why, hesitation });
-
+      shownAt.current = Date.now();
+      track({ event_type: "reveal_shown", session_id: sessionId, pairing_id: pairing.id, props: { dim, delta } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Choice failed.");
       setBusy(false);
@@ -72,10 +96,18 @@ function Play() {
   async function advance() {
     if (!sessionId || finishing) return;
     setFinishing(true);
+    const dwellMs = Date.now() - shownAt.current;
+    track({
+      event_type: "reveal_continued",
+      session_id: sessionId,
+      pairing_id: pairing?.id ?? null,
+      response_time_ms: dwellMs,
+    });
     try {
       const { pairing: nxt, round: nr, done } = await next({ data: { sessionId } });
       if (done || !nxt || nr > MAX_ROUNDS) {
         await finalize({ data: { sessionId } });
+        track({ event_type: "session_completed", session_id: sessionId, props: { rounds: nr } });
         setDone(true);
         return;
       }
@@ -83,6 +115,13 @@ function Play() {
       setRound(nr);
       setReveal(null);
       startedAt.current = Date.now();
+      shownAt.current = Date.now();
+      track({
+        event_type: "pairing_shown",
+        session_id: sessionId,
+        pairing_id: (nxt as unknown as Pairing).id,
+        props: { round: nr, tests: (nxt as unknown as Pairing).tests },
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load next.");
     } finally {
