@@ -1455,3 +1455,207 @@ export const finalSynthesis = createServerFn({ method: "POST" })
       return fallback;
     }
   });
+
+
+// ============================================================
+// Chat — free-form conversation that continues the interview.
+// Persists to chat_messages. Auto-creates a session anchored to
+// the user's opener songs/hypothesis if none exists yet.
+// ============================================================
+
+const CHAT_VOICE = `${PERSONA}
+Mode: ongoing critic-interview. You already know this listener: their opener songs, your working hypothesis, and the dimensions they've leaned into. Your job now is to keep digging — observations, challenges, counter-hypotheses, the occasional pointed question. Never play DJ. Never recommend songs unless they ask. Stay in critic-of-the-listener mode.
+
+Hard rules: 1–4 sentences per turn. No bullet lists. No headers. No emoji. No therapy-speak. No "great question". When you ask something, ask ONE thing and make it sharp. Reference their actual choices by name when relevant. If they push back, take it seriously — refine or break your own read out loud.`;
+
+type ChatRole = "user" | "assistant" | "system";
+
+async function ensureChatSessionForUser(
+  supabase: { from: (t: string) => any },
+  userId: string,
+): Promise<{ sessionId: string; profile: any } | null> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("opening_songs, opening_hypothesis, opening_lane, opening_lane_confidence, opening_analysis_json")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  // Reuse the most recent session if one exists.
+  const { data: existing } = await supabase
+    .from("sessions")
+    .select("id")
+    .eq("user_id", userId)
+    .order("started_at", { ascending: false })
+    .limit(1);
+  if (existing && existing.length) return { sessionId: existing[0].id, profile };
+
+  // Create a session from the opener so chat has somewhere to live.
+  if (!profile?.opening_songs) return null;
+  const lane = (profile.opening_lane as string | null) ?? "general";
+  const conf = Number(profile.opening_lane_confidence ?? 0);
+  const dims = (profile.opening_analysis_json?.candidate_dimensions ?? {}) as Record<string, number>;
+  const vector: Record<string, number> = {};
+  for (const [k, v] of Object.entries(dims)) {
+    if (typeof v === "number" && Number.isFinite(v)) vector[k] = Math.round(v);
+  }
+  const { data: created, error } = await supabase
+    .from("sessions")
+    .insert({
+      user_id: userId,
+      vector,
+      lane,
+      lane_confidence: conf,
+      probe_candidate_lanes: [],
+      probe_state: { probes_shown: [], pending: {}, lane_alignment: {}, flips: [] },
+    })
+    .select("id")
+    .single();
+  if (error || !created) return null;
+  return { sessionId: created.id, profile };
+}
+
+export const chatTurn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      message: z.string().trim().min(1).max(2000),
+      sessionId: z.string().uuid().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<{ reply: string; sessionId: string }> => {
+    const { supabase, userId } = context;
+
+    let sessionId = data.sessionId ?? null;
+    let profile: any = null;
+    if (!sessionId) {
+      const anchor = await ensureChatSessionForUser(supabase as never, userId);
+      if (!anchor) {
+        return {
+          reply: "Name three songs first — I need somewhere to start.",
+          sessionId: "",
+        };
+      }
+      sessionId = anchor.sessionId;
+      profile = anchor.profile;
+    } else {
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("opening_songs, opening_hypothesis, opening_lane, opening_analysis_json")
+        .eq("user_id", userId)
+        .maybeSingle();
+      profile = p;
+    }
+
+    // Save the user turn first so it shows up even if AI fails.
+    await supabase.from("chat_messages").insert({
+      session_id: sessionId,
+      user_id: userId,
+      role: "user",
+      content: data.message,
+    });
+
+    // Pull recent history (last 20 messages) for context.
+    const { data: history } = await supabase
+      .from("chat_messages")
+      .select("role, content, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true })
+      .limit(40);
+
+    // Pull session vector for current lean.
+    const { data: sessionRow } = await supabase
+      .from("sessions")
+      .select("vector, lane")
+      .eq("id", sessionId)
+      .maybeSingle();
+    const vector = (sessionRow?.vector ?? {}) as Record<string, number>;
+    const topAxes = (DIMS as readonly string[])
+      .map((d) => ({ d, v: vector[d] ?? 0 }))
+      .filter((x) => Math.abs(x.v) >= 8)
+      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
+      .slice(0, 5);
+
+    const ctxLines: string[] = [];
+    if (profile?.opening_songs?.length) {
+      ctxLines.push(`Opener songs (ranked):\n${(profile.opening_songs as string[]).map((s, i) => `${i + 1}. ${s}`).join("\n")}`);
+    }
+    if (profile?.opening_hypothesis) {
+      ctxLines.push(`Working hypothesis: "${profile.opening_hypothesis}"`);
+    }
+    if (profile?.opening_lane) {
+      ctxLines.push(`Lane: ${profile.opening_lane}`);
+    }
+    if (topAxes.length) {
+      ctxLines.push(
+        `Strongest leans so far:\n${topAxes
+          .map(({ d, v }) => {
+            const lbl = DIM_LABEL[d];
+            return `- ${d}: ${v >= 0 ? "+" : ""}${Math.round(v)} (${v >= 0 ? lbl?.hi : lbl?.lo})`;
+          })
+          .join("\n")}`,
+      );
+    }
+    const contextBlock = ctxLines.length ? `Listener context:\n${ctxLines.join("\n\n")}` : "No prior context yet.";
+
+    const messages: Array<{ role: string; content: string }> = [
+      { role: "system", content: CHAT_VOICE },
+      { role: "system", content: contextBlock },
+    ];
+    for (const m of history ?? []) {
+      if (m.role === "user" || m.role === "assistant") {
+        messages.push({ role: m.role, content: m.content });
+      }
+    }
+
+    let reply = "";
+    try {
+      reply = await ai(messages);
+    } catch {
+      reply = "I lost the thread for a second. Say that again?";
+    }
+    reply = (reply || "").trim() || "Mm. Keep going.";
+    if (reply.length > 1200) reply = reply.slice(0, 1197) + "…";
+
+    await supabase.from("chat_messages").insert({
+      session_id: sessionId,
+      user_id: userId,
+      role: "assistant",
+      content: reply,
+    });
+
+    return { reply, sessionId };
+  });
+
+export const listChat = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ sessionId: z.string().uuid().optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    let sessionId = data.sessionId ?? null;
+    if (!sessionId) {
+      const { data: existing } = await supabase
+        .from("sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .order("started_at", { ascending: false })
+        .limit(1);
+      sessionId = existing?.[0]?.id ?? null;
+    }
+    if (!sessionId) return { sessionId: null, messages: [] as Array<{ role: ChatRole; content: string; created_at: string }> };
+    const { data: rows } = await supabase
+      .from("chat_messages")
+      .select("role, content, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true })
+      .limit(200);
+    return {
+      sessionId,
+      messages: ((rows ?? []) as Array<{ role: string; content: string; created_at: string }>).map((r) => ({
+        role: r.role as ChatRole,
+        content: r.content,
+        created_at: r.created_at,
+      })),
+    };
+  });

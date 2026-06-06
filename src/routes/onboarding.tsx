@@ -289,18 +289,24 @@ function Onboarding() {
                   {Math.round(done.confidence * 100)}% confidence
                 </span>
               </div>
-              <div className="pt-4 animate-in fade-in duration-500">
+              <div className="pt-4 flex flex-col sm:flex-row gap-3 animate-in fade-in duration-500">
                 <button
                   onClick={() => navigate({ to: "/play" })}
                   className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
                   autoFocus
                 >
-                  Let's test that →
+                  Test it with side-by-sides →
                 </button>
-                <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  Side-by-sides next. Chat after that.
-                </p>
+                <button
+                  onClick={() => navigate({ to: "/me" })}
+                  className="border hairline-strong rounded-sm px-6 py-3 text-sm font-medium hover:bg-muted/40"
+                >
+                  Or just talk to me →
+                </button>
               </div>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                You're never really done. Save this read when you're ready.
+              </p>
             </>
           )}
         </section>
