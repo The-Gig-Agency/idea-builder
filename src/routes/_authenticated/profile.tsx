@@ -41,6 +41,9 @@ type Reasoning = { allowed_claims: Claim[]; blocked_claims: Claim[]; counterargu
 
 function ProfilePage() {
   const fn = useServerFn(getMyResult);
+  const logEvent = useServerFn(recordEvent);
+  const sendFeedback = useServerFn(submitFeedback);
+  const fetchFeedback = useServerFn(getMyFeedback);
   const { data } = useSuspenseQuery(
     queryOptions({ queryKey: ["myResult"], queryFn: () => fn({}) }),
   );
@@ -55,6 +58,51 @@ function ProfilePage() {
     value: ((vector[d] ?? 0) + max) / (2 * max) * 100,
   }));
 
+  // Fire result_viewed once per session view
+  useEffect(() => {
+    if (!latest?.id) return;
+    logEvent({
+      data: { event_type: "result_viewed", session_id: latest.id, props: { archetype: latest.archetype?.name ?? null } },
+    } as never).catch(() => { /* swallow */ });
+  }, [latest?.id, latest?.archetype?.name, logEvent]);
+
+  // Existing feedback for this session
+  const feedbackQ = useQuery({
+    queryKey: ["feedback", latest?.id],
+    queryFn: () => fetchFeedback({ data: { session_id: latest!.id } }),
+    enabled: !!latest?.id,
+  });
+  const existing = (feedbackQ.data?.feedback ?? []).find((f) => f.target == null);
+  const [accuracy, setAccuracy] = useState<"accurate" | "not_accurate" | "mixed" | null>(null);
+  const [rating, setRating] = useState<-1 | 1 | null>(null);
+  const [comment, setComment] = useState("");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  useEffect(() => {
+    if (!existing) return;
+    setAccuracy((existing.accuracy as "accurate" | "not_accurate" | "mixed" | null) ?? null);
+    setRating(((existing.rating as -1 | 1 | null) ?? null));
+    setComment(existing.comment ?? "");
+  }, [existing]);
+
+  async function saveFeedback(next: { accuracy?: typeof accuracy; rating?: typeof rating; comment?: string }) {
+    if (!latest?.id) return;
+    const payload = {
+      accuracy: next.accuracy !== undefined ? next.accuracy : accuracy,
+      rating: next.rating !== undefined ? next.rating : rating,
+      comment: next.comment !== undefined ? next.comment : comment,
+    };
+    setFeedbackSaving(true);
+    try {
+      await sendFeedback({ data: { session_id: latest.id, ...payload } });
+      feedbackQ.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save feedback");
+    } finally {
+      setFeedbackSaving(false);
+    }
+  }
+
   async function share() {
     if (!latest) return;
     const lines = [
@@ -67,6 +115,9 @@ function ProfilePage() {
         (c) => `→ ${c.chosen} over ${c.rejected}`,
       ) ?? []),
     ].filter(Boolean).join("\n");
+    logEvent({
+      data: { event_type: "result_shared", session_id: latest.id, props: { has_native_share: !!navigator.share } },
+    } as never).catch(() => { /* swallow */ });
     try {
       if (navigator.share) {
         await navigator.share({ title: "My MusicDNA", text: lines });
