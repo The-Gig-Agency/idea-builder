@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { generateOpeningHypothesis } from "@/lib/musicdna.functions";
+import { analyzeOpeningSongs } from "@/lib/musicdna.functions";
 import { searchSongs } from "@/lib/songs.functions";
 import { toast } from "sonner";
 
@@ -11,9 +11,25 @@ export const Route = createFileRoute("/_authenticated/onboarding")({
 });
 
 type Song = { id: string; title: string; artist: string; year: number | null };
+type Analysis = {
+  lane: string;
+  confidence: number;
+  secondary_lanes: string[];
+  reasoning: string[];
+  hypothesis: string;
+};
+
+const LANE_LABEL: Record<string, string> = {
+  alternative: "Alternative",
+  pop: "Pop",
+  hip_hop: "Hip-Hop",
+  electronic: "Electronic",
+  classic_rock: "Classic Rock",
+  general: "General",
+};
 
 function Onboarding() {
-  const fn = useServerFn(generateOpeningHypothesis);
+  const fn = useServerFn(analyzeOpeningSongs);
   const navigate = useNavigate();
   const [picks, setPicks] = useState<Array<Song | null>>([null, null, null, null, null]);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
@@ -21,7 +37,7 @@ function Onboarding() {
   const [results, setResults] = useState<Song[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [hypothesis, setHypothesis] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const search = useServerFn(searchSongs);
   const debounceRef = useRef<number | null>(null);
 
@@ -54,18 +70,30 @@ function Onboarding() {
     setBusy(true);
     try {
       const labels = picks.map((p) => `${p!.title} — ${p!.artist}`);
-      const { hypothesis } = await fn({ data: { songs: labels } });
-      setHypothesis(hypothesis);
+      const result = await fn({ data: { songs: labels } });
+      setAnalysis(result as Analysis);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to read your songs.");
     } finally { setBusy(false); }
   }
 
-  if (hypothesis) {
+  if (analysis) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-20">
         <p className="eyebrow mb-8">Opening hypothesis</p>
-        <p className="font-serif text-3xl md:text-4xl leading-snug text-foreground">"{hypothesis}"</p>
+        <p className="font-serif text-3xl md:text-4xl leading-snug text-foreground">"{analysis.hypothesis}"</p>
+        <div className="mt-10 flex flex-wrap items-center gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Lane</span>
+          <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">{LANE_LABEL[analysis.lane] ?? analysis.lane}</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+            {Math.round(analysis.confidence * 100)}% confidence
+          </span>
+        </div>
+        {analysis.reasoning.length > 0 && (
+          <ul className="mt-6 text-sm text-muted-foreground space-y-1 max-w-xl">
+            {analysis.reasoning.map((r, i) => <li key={i}>— {r}</li>)}
+          </ul>
+        )}
         <p className="mt-10 text-sm text-muted-foreground max-w-xl">
           That's a guess from five songs. The matchups will test it.
         </p>
