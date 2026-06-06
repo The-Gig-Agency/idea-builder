@@ -26,8 +26,16 @@ function Play() {
   const navigate = useNavigate();
 
   // Fire-and-forget logger — never blocks UX
-  const track = (event: Parameters<typeof logEvent>[0]["data"]) => {
-    logEvent({ data: event }).catch(() => { /* swallow */ });
+  type EventInput = {
+    event_type: "onboarding_classified" | "pairing_shown" | "choice_made" | "reveal_shown" | "reveal_continued" | "session_completed" | "result_viewed" | "result_shared" | "session_quit";
+    session_id?: string | null;
+    pairing_id?: string | null;
+    choice_id?: string | null;
+    response_time_ms?: number | null;
+    props?: Record<string, unknown>;
+  };
+  const track = (event: EventInput) => {
+    logEvent({ data: event } as never).catch(() => { /* swallow */ });
   };
 
   const [sessionId, setSessionId] = useState<string | null>(null);
