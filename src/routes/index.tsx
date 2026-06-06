@@ -54,7 +54,7 @@ function Nav() {
             How it works
           </Link>
           <Link
-            to="/auth"
+            to="/onboarding"
             className="inline-flex items-center gap-2 rounded-sm border hairline-strong px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-secondary"
           >
             Start
@@ -80,7 +80,7 @@ function Hero() {
         </p>
         <div className="mt-10 flex flex-col items-start gap-4">
           <Link
-            to="/auth"
+            to="/onboarding"
             className="group inline-flex items-center gap-3 rounded-sm bg-primary px-6 py-4 text-base font-medium text-primary-foreground transition-all hover:opacity-90"
           >
             Start your MusicDNA
@@ -231,7 +231,7 @@ function CTA() {
           </div>
           <div className="md:col-span-4 md:text-right">
             <Link
-              to="/auth"
+              to="/onboarding"
               className="inline-flex items-center gap-3 rounded-sm bg-primary px-6 py-4 text-base font-medium text-primary-foreground transition-all hover:opacity-90"
             >
               Start
