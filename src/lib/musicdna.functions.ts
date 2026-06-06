@@ -1478,6 +1478,166 @@ Mode: ongoing critic-interview. You already know this listener: their opener son
 
 Hard rules: 1–4 sentences per turn. No bullet lists. No headers. No emoji. No therapy-speak. No "great question". When you ask something, ask ONE thing and make it sharp. Reference their actual choices by name when relevant. If they push back, take it seriously — refine or break your own read out loud.`;
 
+// ---------- Per-user critic profile (tone + tactic memory) ----------
+type CriticProfileRow = {
+  bluntness: number;
+  playfulness: number;
+  patience: number;
+  provocation_appetite: number;
+  move_tally: Record<string, { landed?: number; ignored?: number; pushed_back?: number }>;
+  forbidden_moves: string[];
+  turns_observed: number;
+};
+
+const DIAL_BOUND = 3;
+const MOVE_KEYS = ["observation", "challenge", "counter_hypothesis", "question"] as const;
+type MoveKey = (typeof MOVE_KEYS)[number];
+type Outcome = "landed" | "ignored" | "pushed_back";
+
+const clampDial = (n: number) => Math.max(-DIAL_BOUND, Math.min(DIAL_BOUND, Math.round(n)));
+
+async function loadCriticProfile(
+  supabase: { from: (t: string) => any },
+  userId: string,
+): Promise<CriticProfileRow> {
+  const { data } = await supabase
+    .from("critic_profile")
+    .select("bluntness, playfulness, patience, provocation_appetite, move_tally, forbidden_moves, turns_observed")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return {
+    bluntness: data?.bluntness ?? 0,
+    playfulness: data?.playfulness ?? 0,
+    patience: data?.patience ?? 0,
+    provocation_appetite: data?.provocation_appetite ?? 0,
+    move_tally: (data?.move_tally ?? {}) as CriticProfileRow["move_tally"],
+    forbidden_moves: (data?.forbidden_moves ?? []) as string[],
+    turns_observed: data?.turns_observed ?? 0,
+  };
+}
+
+function buildVoiceModulation(p: CriticProfileRow): string | null {
+  // Only emit modulation after at least 2 turns of evidence — otherwise we're
+  // just biasing the critic on noise.
+  if (p.turns_observed < 2) return null;
+  const lines: string[] = [];
+  const dial = (name: string, v: number, hi: string, lo: string) => {
+    if (v >= 2) lines.push(`- ${hi} (strong).`);
+    else if (v === 1) lines.push(`- ${hi}.`);
+    else if (v <= -2) lines.push(`- ${lo} (strong).`);
+    else if (v === -1) lines.push(`- ${lo}.`);
+  };
+  dial("bluntness", p.bluntness, "Lean blunter, less hedging", "Soften delivery, drop snarl");
+  dial("playfulness", p.playfulness, "More wit and wordplay", "Keep it dry, fewer jokes");
+  dial("patience", p.patience, "Slow down, let them finish", "Move faster, cut filler");
+  dial("provocation_appetite", p.provocation_appetite, "Push harder, provoke a reaction", "Ease off on provocation");
+  // Surface top-landing move so the critic favors what's been working.
+  let bestMove: MoveKey | null = null;
+  let bestScore = 0;
+  for (const m of MOVE_KEYS) {
+    const t = p.move_tally[m] ?? {};
+    const landed = t.landed ?? 0;
+    const total = landed + (t.ignored ?? 0) + (t.pushed_back ?? 0);
+    if (total < 2) continue;
+    const score = landed / total;
+    if (score > bestScore) { bestScore = score; bestMove = m; }
+  }
+  if (bestMove && bestScore >= 0.6) {
+    lines.push(`- Your ${bestMove.replace("_", "-")} moves land best with this listener — favor them.`);
+  }
+  if (p.forbidden_moves.length) {
+    lines.push(`- Do not: ${p.forbidden_moves.slice(0, 5).join("; ")}.`);
+  }
+  if (!lines.length) return null;
+  return `Per-listener voice calibration (apply quietly, don't break the persona):\n${lines.join("\n")}`;
+}
+
+async function persistCriticProfile(
+  supabase: { from: (t: string) => any },
+  userId: string,
+  next: CriticProfileRow,
+): Promise<void> {
+  await supabase
+    .from("critic_profile")
+    .upsert({
+      user_id: userId,
+      bluntness: clampDial(next.bluntness),
+      playfulness: clampDial(next.playfulness),
+      patience: clampDial(next.patience),
+      provocation_appetite: clampDial(next.provocation_appetite),
+      move_tally: next.move_tally,
+      forbidden_moves: next.forbidden_moves.slice(0, 8),
+      turns_observed: next.turns_observed,
+    }, { onConflict: "user_id" });
+}
+
+type ToneSignals = {
+  tone: Partial<Record<"bluntness" | "playfulness" | "patience" | "provocation_appetite", number>>;
+  last_move: MoveKey | "none";
+  outcome: Outcome | "none";
+  forbid: string[];
+};
+
+async function extractToneSignals(
+  priorAssistant: string | null,
+  userReply: string,
+): Promise<ToneSignals | null> {
+  if (!priorAssistant) return null;
+  const sys = `You evaluate one exchange between a music critic and a listener. Return STRICT JSON, no prose, no fences:
+{
+  "tone": {"bluntness": -1..1, "playfulness": -1..1, "patience": -1..1, "provocation_appetite": -1..1},
+  "last_move": "observation"|"challenge"|"counter_hypothesis"|"question"|"none",
+  "outcome": "landed"|"ignored"|"pushed_back"|"none",
+  "forbid": ["short phrase user told the critic to stop doing", ...]
+}
+Tone deltas are NUDGES (integers -1, 0, or 1) to apply to the critic for this user:
+- bluntness: +1 if user wants more direct/sharp; -1 if user wants softer.
+- playfulness: +1 if user enjoys wit; -1 if user finds jokes annoying.
+- patience: +1 if user wants more space/time; -1 if user wants critic to move faster.
+- provocation_appetite: +1 if user engaged with pushback; -1 if user shut down or asked to be gentler.
+Outcome: did the user accept the critic's last move (landed), brush past it (ignored), or push back / refine it (pushed_back)?
+forbid: only when user EXPLICITLY tells the critic to stop something. Empty array otherwise.
+Most fields should be 0 / "none" / []. Be conservative.`;
+  try {
+    const raw = await ai([
+      { role: "system", content: sys },
+      { role: "user", content: `Critic last said:\n"${priorAssistant}"\n\nListener replied:\n"${userReply}"\n\nReturn the JSON.` },
+    ]);
+    const cleaned = raw.replace(/```json\s*|```/g, "").trim();
+    const parsed = JSON.parse(cleaned) as ToneSignals;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function applyToneSignals(p: CriticProfileRow, s: ToneSignals): CriticProfileRow {
+  const next: CriticProfileRow = {
+    bluntness: clampDial(p.bluntness + (s.tone?.bluntness ?? 0)),
+    playfulness: clampDial(p.playfulness + (s.tone?.playfulness ?? 0)),
+    patience: clampDial(p.patience + (s.tone?.patience ?? 0)),
+    provocation_appetite: clampDial(p.provocation_appetite + (s.tone?.provocation_appetite ?? 0)),
+    move_tally: { ...p.move_tally },
+    forbidden_moves: [...p.forbidden_moves],
+    turns_observed: p.turns_observed + 1,
+  };
+  if (s.last_move && s.last_move !== "none" && s.outcome && s.outcome !== "none") {
+    const bucket = { ...(next.move_tally[s.last_move] ?? {}) };
+    bucket[s.outcome] = (bucket[s.outcome] ?? 0) + 1;
+    next.move_tally[s.last_move] = bucket;
+  }
+  if (Array.isArray(s.forbid)) {
+    for (const phrase of s.forbid) {
+      const trimmed = String(phrase ?? "").trim().slice(0, 120);
+      if (!trimmed) continue;
+      if (!next.forbidden_moves.some((f) => f.toLowerCase() === trimmed.toLowerCase())) {
+        next.forbidden_moves.push(trimmed);
+      }
+    }
+  }
+  return next;
+}
+
 type ChatRole = "user" | "assistant" | "system";
 
 async function ensureChatSessionForUser(
