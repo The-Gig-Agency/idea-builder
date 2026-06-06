@@ -741,37 +741,32 @@ export type Database = {
           archetype_signals: string[]
           artist: string
           atmosphere: number
-          authenticity: number
           canon_score: number | null
           community: number
-          complexity: number
+          confidence: number | null
           created_at: string
           cross_genre_mapping: number | null
           curator_count: number
-          darkness: number
           diagnostic_power: number
           diagnostic_power_confidence: number
-          dreaminess: number
-          energy: number
-          groove: number
-          hope: number
           id: string
           identity_signaling: number | null
+          immersion: number | null
           lane: string
           longevity: number | null
-          melody: number
           movement: number
-          nostalgia: number
           pairing_density: number | null
+          perspective: number | null
           polarization: number | null
           primary_dimensions: string[]
           primary_lane: string
-          romanticism: number
+          scale: number | null
+          tension: number | null
+          texture: number | null
           title: string
           tradeoff_richness: number | null
           transformation: number
           updated_at: string
-          verbal_cleverness: number
           year: number | null
         }
         Insert: {
@@ -779,37 +774,32 @@ export type Database = {
           archetype_signals?: string[]
           artist: string
           atmosphere?: number
-          authenticity?: number
           canon_score?: number | null
           community?: number
-          complexity?: number
+          confidence?: number | null
           created_at?: string
           cross_genre_mapping?: number | null
           curator_count?: number
-          darkness?: number
           diagnostic_power?: number
           diagnostic_power_confidence?: number
-          dreaminess?: number
-          energy?: number
-          groove?: number
-          hope?: number
           id?: string
           identity_signaling?: number | null
+          immersion?: number | null
           lane: string
           longevity?: number | null
-          melody?: number
           movement?: number
-          nostalgia?: number
           pairing_density?: number | null
+          perspective?: number | null
           polarization?: number | null
           primary_dimensions?: string[]
           primary_lane?: string
-          romanticism?: number
+          scale?: number | null
+          tension?: number | null
+          texture?: number | null
           title: string
           tradeoff_richness?: number | null
           transformation?: number
           updated_at?: string
-          verbal_cleverness?: number
           year?: number | null
         }
         Update: {
@@ -817,37 +807,32 @@ export type Database = {
           archetype_signals?: string[]
           artist?: string
           atmosphere?: number
-          authenticity?: number
           canon_score?: number | null
           community?: number
-          complexity?: number
+          confidence?: number | null
           created_at?: string
           cross_genre_mapping?: number | null
           curator_count?: number
-          darkness?: number
           diagnostic_power?: number
           diagnostic_power_confidence?: number
-          dreaminess?: number
-          energy?: number
-          groove?: number
-          hope?: number
           id?: string
           identity_signaling?: number | null
+          immersion?: number | null
           lane?: string
           longevity?: number | null
-          melody?: number
           movement?: number
-          nostalgia?: number
           pairing_density?: number | null
+          perspective?: number | null
           polarization?: number | null
           primary_dimensions?: string[]
           primary_lane?: string
-          romanticism?: number
+          scale?: number | null
+          tension?: number | null
+          texture?: number | null
           title?: string
           tradeoff_richness?: number | null
           transformation?: number
           updated_at?: string
-          verbal_cleverness?: number
           year?: number | null
         }
         Relationships: []
