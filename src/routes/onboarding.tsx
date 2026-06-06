@@ -109,6 +109,12 @@ function Onboarding() {
       setThree(cleaned);
       setThreeRead(r);
       setStage("reveal3");
+      logEvent({
+        data: {
+          event_type: "onboarding_three_submitted",
+          variant: opener?.variant_key ?? "fallback",
+        },
+      } as never).catch(() => {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't read those.");
     } finally {
@@ -160,14 +166,20 @@ function Onboarding() {
       {stage === "rank3" && (
         <section className="space-y-10 animate-in fade-in duration-500">
           <header className="space-y-3">
-            <p className="eyebrow">three songs · ranked</p>
-            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight">
-              Name three songs you love.
-              <br />
-              <span className="italic text-muted-foreground">Rank them.</span>
+            <p className="eyebrow">{opener?.eyebrow ?? "three songs · ranked"}</p>
+            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight whitespace-pre-line">
+              {opener
+                ? renderHeadline(opener.headline)
+                : (
+                  <>
+                    Name three songs you love.
+                    <br />
+                    <span className="italic text-muted-foreground">Rank them.</span>
+                  </>
+                )}
             </h1>
             <p className="text-sm text-muted-foreground max-w-md">
-              The order matters. Your #1 says more than you think.
+              {opener?.sub ?? "The order matters. Your #1 says more than you think."}
             </p>
           </header>
 
@@ -176,7 +188,7 @@ function Onboarding() {
               <RankedInput
                 key={i}
                 rank={i + 1}
-                label={SLOT1_LABELS[i]}
+                label={(opener?.slot_labels?.[i]) ?? SLOT1_LABELS[i]}
                 value={three[i]}
                 placeholder={PLACEHOLDERS[i]}
                 onChange={(v) => {
@@ -196,7 +208,7 @@ function Onboarding() {
               disabled={busy || three.some((s) => s.trim().length < 2)}
               className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
             >
-              {busy ? "Reading…" : "See what I think →"}
+              {busy ? "Reading…" : (opener?.cta ?? "See what I think →")}
             </button>
           </div>
         </section>
