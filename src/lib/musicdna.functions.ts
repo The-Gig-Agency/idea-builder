@@ -71,14 +71,36 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
   return null;
 }
 
-const CLASSIFIER_VOICE = `You are a music librarian routing songs to one of these lanes: \
-alternative, pop, hip_hop, electronic, classic_rock. \
-"alternative" = post-punk, indie, shoegaze, britpop, grunge, goth, college rock. \
-"pop" = mainstream pop, contemporary chart pop, pop-rock (Swift, Eilish, Beyoncé pop work). \
-"hip_hop" = rap, hip-hop, trap. \
-"electronic" = techno, house, IDM, drum'n'bass, EDM. \
-"classic_rock" = 60s-70s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac). \
-Respond ONLY with valid JSON, no prose.`;
+const CLASSIFIER_VOICE = `You are MusicDNA's taste-reader. You read five songs a user named as ones they love and produce a structured taste sketch.
+
+You return a JSON object with this exact shape:
+{
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "confidence": 0.0-1.0,
+  "secondary_lanes": [lane, ...],
+  "candidate_dimensions": {
+    "movement": -100..100, "atmosphere": -100..100, "groove": -100..100,
+    "darkness": -100..100, "hope": -100..100, "nostalgia": -100..100,
+    "transformation": -100..100, "complexity": -100..100, "melody": -100..100,
+    "verbal_cleverness": -100..100, "authenticity": -100..100, "romanticism": -100..100,
+    "energy": -100..100, "dreaminess": -100..100, "community": -100..100
+  },
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
+  "reasoning": ["one short observation", "..."],
+  "hypothesis": "ONE sentence, max 30 words, Rolling Stone voice. Name what these choices reveal — specific dimensions like movement, atmosphere, transformation, melody. End with 'Let's see if that holds.' or similar half-promise."
+}
+
+Lane rules: alternative = post-punk, indie, shoegaze, britpop, grunge, goth, college rock. pop = mainstream chart pop, pop-rock (Swift, Eilish, Beyoncé pop work). hip_hop = rap, trap. electronic = techno, house, IDM, drum'n'bass, EDM. classic_rock = 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac). Use "general" only when the five songs genuinely scatter across lanes with no center of gravity.
+
+Confidence: 1.0 = all five point to one lane. 0.7-0.9 = strong majority. 0.4-0.6 = mixed but a leaning. <0.4 = scattered, use "general".
+
+candidate_dimensions: read what the five songs collectively reward. Negative = the low pole (stillness, statement, light, etc.), positive = the high pole. Be opinionated — leave dimensions at 0 only when the songs are genuinely silent on that axis.
+
+Voice for hypothesis: specific, restrained, slightly uncomfortable. No platitudes. No genre labels. Use "you reward", "you choose", "you trust" — never "you like".
+
+Respond ONLY with valid JSON. No prose, no markdown fences.`;
+
+type LlmDimensions = Partial<Record<(typeof DIMS)[number], number>>;
 
 type OpeningAnalysis = {
   lane: Lane;
@@ -86,96 +108,98 @@ type OpeningAnalysis = {
   secondary_lanes: Lane[];
   reasoning: string[];
   hypothesis: string;
-  per_song: Array<{ input: string; lane: Lane | "unknown"; source: "catalog" | "llm" }>;
+  candidate_dimensions: LlmDimensions;
+  per_song: Array<{ input: string; lane: Lane | "unknown"; source: "llm" | "catalog"; canon_id?: string }>;
+  canon_matches: Array<{ input: string; song_id: string; title: string; artist: string; primary_lane: string }>;
+};
+
+const FALLBACK: OpeningAnalysis = {
+  lane: "general",
+  confidence: 0,
+  secondary_lanes: [],
+  reasoning: ["Couldn't read those five clearly. The matchups will do the work."],
+  hypothesis: "Five songs is a sketch, not a portrait. Let's see if the matchups hold.",
+  candidate_dimensions: {},
+  per_song: [],
+  canon_matches: [],
 };
 
 async function classifyLane(
   songs: string[],
-  supabase: { from: (t: string) => { select: (c: string) => { ilike: (col: string, v: string) => { limit: (n: number) => Promise<{ data: Array<{ primary_lane?: string | null; lane: string; title: string; artist: string }> | null }> } } } },
+  supabase: { from: (t: string) => { select: (c: string) => { ilike: (col: string, v: string) => { limit: (n: number) => Promise<{ data: Array<{ id: string; primary_lane?: string | null; lane: string; title: string; artist: string }> | null }> } } } },
 ): Promise<OpeningAnalysis> {
-  const perSong: OpeningAnalysis["per_song"] = [];
-  const votes: Record<string, number> = {};
-  const unresolved: string[] = [];
-
-  for (const raw of songs) {
-    const [titlePart, artistPart] = raw.split("—").map((s) => s.trim());
-    const title = titlePart || raw;
-    let matchedLane: Lane | null = null;
-    if (title) {
-      try {
-        const { data } = await supabase.from("songs").select("primary_lane,lane,title,artist").ilike("title", title).limit(5);
-        if (data && data.length) {
-          const best = artistPart
-            ? data.find((r) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? data[0]
-            : data[0];
-          matchedLane = catalogLaneToTopLane(best.primary_lane ?? best.lane);
-        }
-      } catch { /* ignore catalog miss */ }
-    }
-    if (matchedLane) {
-      perSong.push({ input: raw, lane: matchedLane, source: "catalog" });
-      votes[matchedLane] = (votes[matchedLane] ?? 0) + 1;
-    } else {
-      unresolved.push(raw);
-      perSong.push({ input: raw, lane: "unknown", source: "catalog" });
-    }
-  }
-
-  if (unresolved.length) {
-    try {
-      const txt = await ai([
-        { role: "system", content: CLASSIFIER_VOICE },
-        {
-          role: "user",
-          content: `Classify each song into one lane. Return JSON: {"results":[{"input":"...","lane":"..."}]}.\n\nSongs:\n${unresolved.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
-        },
-      ]);
-      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
-      const parsed = JSON.parse(cleaned) as { results?: Array<{ input: string; lane: string }> };
-      for (const r of parsed.results ?? []) {
-        const lane = (LANES as readonly string[]).includes(r.lane) && r.lane !== "general"
-          ? (r.lane as Lane)
-          : null;
-        const idx = perSong.findIndex((p) => p.input === r.input && p.lane === "unknown");
-        if (idx >= 0) {
-          perSong[idx] = { input: r.input, lane: lane ?? "unknown", source: "llm" };
-          if (lane) votes[lane] = (votes[lane] ?? 0) + 1;
-        }
-      }
-    } catch { /* swallow — falls through to general */ }
-  }
-
-  const sorted = Object.entries(votes).sort((a, b) => b[1] - a[1]);
-  const topVotes = sorted[0]?.[1] ?? 0;
-  const lane: Lane = topVotes > 0 ? (sorted[0][0] as Lane) : "general";
-  const confidence = Math.max(0, Math.min(1, topVotes / songs.length));
-  const secondary = sorted.slice(1).filter((s) => s[1] >= 2).map((s) => s[0] as Lane);
-  const finalLane: Lane = confidence < 0.6 ? "general" : lane;
-
-  const reasoning: string[] = [];
-  if (topVotes > 0) reasoning.push(`${topVotes} of ${songs.length} opening songs read as ${lane}.`);
-  if (secondary.length) reasoning.push(`Secondary signal: ${secondary.join(", ")}.`);
-  if (finalLane === "general" && lane !== "general") reasoning.push(`Low confidence (${confidence.toFixed(2)}); routing to general.`);
-  if (finalLane === "general" && lane === "general") reasoning.push("No clear lane signal from the five songs.");
-
-  let hypothesis = "Five songs is a sketch, not a portrait. Let's see if the matchups hold.";
+  // Step 1: LLM reads all five at once — lane, confidence, dimensions, hypothesis.
+  let llm: OpeningAnalysis = { ...FALLBACK, per_song: songs.map((s) => ({ input: s, lane: "unknown", source: "llm" })) };
   try {
-    hypothesis = await ai([
-      { role: "system", content: VOICE },
-      {
-        role: "user",
-        content: `Five songs the user named as ones they love:\n${songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nWrite ONE sentence (max 30 words) that names what these choices reveal about their taste — specific dimensions like movement, atmosphere, transformation, melody, verbal cleverness. End with a half-promise: "Let's see if that holds."`,
-      },
+    const txt = await ai([
+      { role: "system", content: CLASSIFIER_VOICE },
+      { role: "user", content: `The user named these five songs as ones they love:\n${songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON object now.` },
     ]);
-  } catch { /* keep fallback */ }
+    const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+    const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis>;
+    const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
+    const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+    const secondary = Array.isArray(parsed.secondary_lanes)
+      ? parsed.secondary_lanes.filter((l): l is Lane => (LANES as readonly string[]).includes(l as string) && l !== lane && l !== "general")
+      : [];
+    const dims: LlmDimensions = {};
+    if (parsed.candidate_dimensions && typeof parsed.candidate_dimensions === "object") {
+      for (const d of DIMS) {
+        const v = (parsed.candidate_dimensions as Record<string, unknown>)[d];
+        if (typeof v === "number" && Number.isFinite(v)) dims[d] = Math.max(-100, Math.min(100, Math.round(v)));
+      }
+    }
+    const perSong = songs.map((input) => {
+      const match = Array.isArray(parsed.per_song) ? parsed.per_song.find((p) => p?.input === input) : null;
+      const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
+      return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
+    });
+    llm = {
+      lane: confidence < 0.4 ? "general" : lane,
+      confidence,
+      secondary_lanes: secondary,
+      reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
+      hypothesis: typeof parsed.hypothesis === "string" && parsed.hypothesis.trim() ? parsed.hypothesis.trim() : FALLBACK.hypothesis,
+      candidate_dimensions: dims,
+      per_song: perSong,
+      canon_matches: [],
+    };
+  } catch { /* keep FALLBACK */ }
 
-  return { lane: finalLane, confidence, secondary_lanes: secondary, reasoning, hypothesis, per_song: perSong };
+  // Step 2: Hidden canon enrichment — try to map each entry to a catalog song.
+  // This is a free signal, never shown to the user. Failures are silent.
+  for (let i = 0; i < songs.length; i++) {
+    const raw = songs[i];
+    const [titlePart, artistPart] = raw.split(/—|–|-/).map((s) => s.trim());
+    const title = titlePart || raw;
+    if (!title) continue;
+    try {
+      const { data } = await supabase.from("songs").select("id,primary_lane,lane,title,artist").ilike("title", title).limit(5);
+      if (!data?.length) continue;
+      const best = artistPart
+        ? data.find((r) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? data[0]
+        : data[0];
+      const topLane = catalogLaneToTopLane(best.primary_lane ?? best.lane);
+      llm.canon_matches.push({
+        input: raw,
+        song_id: best.id,
+        title: best.title,
+        artist: best.artist,
+        primary_lane: best.primary_lane ?? best.lane,
+      });
+      if (llm.per_song[i]) {
+        llm.per_song[i] = { ...llm.per_song[i], source: "catalog", canon_id: best.id, lane: topLane ?? llm.per_song[i].lane };
+      }
+    } catch { /* swallow */ }
+  }
+
+  return llm;
 }
 
 export const analyzeOpeningSongs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ songs: z.array(z.string().min(1).max(160)).length(5) }).parse(d),
+    z.object({ songs: z.array(z.string().trim().min(1).max(200)).length(5) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
