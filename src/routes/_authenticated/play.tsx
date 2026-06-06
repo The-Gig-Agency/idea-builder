@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { startSession, nextPairing, recordChoice, finalizeSession, recordEvent } from "@/lib/musicdna.functions";
+import { startSession, nextPairing, recordChoice, finalizeSession, recordEvent, roundInsight, finalSynthesis } from "@/lib/musicdna.functions";
 import { toast } from "sonner";
 
-const MAX_ROUNDS = 20;
+const MAX_ROUNDS = 12;
 
 export const Route = createFileRoute("/_authenticated/play")({
   head: () => ({ meta: [{ title: "Choose one — MusicDNA" }] }),
@@ -16,16 +16,24 @@ type Pairing = {
   id: string; tests: string[]; hypothesis: string | null; why_good: string | null;
   diagnostic_weight: number; song_a: Song; song_b: Song;
 };
+type Insight = { kind: "observation" | "challenge" | "refinement"; text: string };
+
+const INSIGHT_LABEL: Record<Insight["kind"], string> = {
+  observation: "Observation",
+  challenge: "Let's test that",
+  refinement: "Refinement",
+};
 
 function Play() {
   const start = useServerFn(startSession);
   const next = useServerFn(nextPairing);
   const choose = useServerFn(recordChoice);
   const finalize = useServerFn(finalizeSession);
+  const insightFn = useServerFn(roundInsight);
+  const synthFn = useServerFn(finalSynthesis);
   const logEvent = useServerFn(recordEvent);
   const navigate = useNavigate();
 
-  // Fire-and-forget logger — never blocks UX
   type EventInput = {
     event_type: "onboarding_classified" | "pairing_shown" | "choice_made" | "reveal_shown" | "reveal_continued" | "session_completed" | "result_viewed" | "result_shared" | "session_quit";
     session_id?: string | null;
@@ -35,7 +43,7 @@ function Play() {
     props?: Record<string, unknown>;
   };
   const track = (event: EventInput) => {
-    logEvent({ data: event } as never).catch(() => { /* swallow */ });
+    logEvent({ data: event } as never).catch(() => {});
   };
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -44,6 +52,8 @@ function Play() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [reveal, setReveal] = useState<{ verdict: string; why: string; hesitation: string | null } | null>(null);
+  const [insight, setInsight] = useState<Insight | null>(null);
+  const [synthesis, setSynthesis] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
@@ -112,27 +122,61 @@ function Play() {
       response_time_ms: dwellMs,
     });
     try {
-      const { pairing: nxt, round: nr, done } = await next({ data: { sessionId } });
-      if (done || !nxt || nr > MAX_ROUNDS) {
-        await finalize({ data: { sessionId } });
-        track({ event_type: "session_completed", session_id: sessionId, props: { rounds: nr } });
-        setDone(true);
-        return;
+      // After rounds 3, 6, 9 — try for an insight before the next pairing.
+      if ([3, 6, 9].includes(round)) {
+        try {
+          const ins = await insightFn({ data: { sessionId, round } });
+          if (ins) {
+            setInsight(ins as Insight);
+            setReveal(null);
+            setFinishing(false);
+            return;
+          }
+        } catch { /* silent */ }
       }
-      setPairing(nxt as unknown as Pairing);
-      setRound(nr);
-      setReveal(null);
-      startedAt.current = Date.now();
-      shownAt.current = Date.now();
-      track({
-        event_type: "pairing_shown",
-        session_id: sessionId,
-        pairing_id: (nxt as unknown as Pairing).id,
-        props: { round: nr, tests: (nxt as unknown as Pairing).tests },
-      });
+      await loadNextPairing();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load next.");
-    } finally {
+      setBusy(false);
+      setFinishing(false);
+    }
+  }
+
+  async function loadNextPairing() {
+    if (!sessionId) return;
+    const { pairing: nxt, round: nr, done } = await next({ data: { sessionId } });
+    if (done || !nxt || nr > MAX_ROUNDS) {
+      await finalize({ data: { sessionId } });
+      track({ event_type: "session_completed", session_id: sessionId, props: { rounds: nr } });
+      try {
+        const { synthesis } = await synthFn({ data: { sessionId } });
+        setSynthesis(synthesis);
+      } catch { /* fall through */ }
+      setDone(true);
+      setBusy(false);
+      setFinishing(false);
+      return;
+    }
+    setPairing(nxt as unknown as Pairing);
+    setRound(nr);
+    setReveal(null);
+    setInsight(null);
+    startedAt.current = Date.now();
+    shownAt.current = Date.now();
+    track({
+      event_type: "pairing_shown",
+      session_id: sessionId,
+      pairing_id: (nxt as unknown as Pairing).id,
+      props: { round: nr, tests: (nxt as unknown as Pairing).tests },
+    });
+    setBusy(false);
+    setFinishing(false);
+  }
+
+  async function dismissInsight() {
+    setInsight(null);
+    try { await loadNextPairing(); } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load next.");
       setBusy(false);
       setFinishing(false);
     }
@@ -140,14 +184,38 @@ function Play() {
 
   if (done) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-32 text-center">
-        <p className="eyebrow mb-8">Reading complete</p>
-        <h1 className="display text-4xl md:text-5xl mb-10">Your MusicDNA is ready.</h1>
+      <main className="mx-auto max-w-2xl px-6 py-24">
+        <p className="eyebrow mb-8">The payoff</p>
+        <h1 className="display text-3xl md:text-4xl mb-10">Here's what I think.</h1>
+        {synthesis ? (
+          <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground mb-12 border-l-2 border-primary/40 pl-6 italic">
+            {synthesis}
+          </p>
+        ) : (
+          <p className="text-muted-foreground mb-12">Reading complete.</p>
+        )}
         <button
           onClick={() => navigate({ to: "/profile" })}
           className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
         >
-          See your reading →
+          See your full reading →
+        </button>
+      </main>
+    );
+  }
+
+  if (insight) {
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-32">
+        <p className="eyebrow mb-8">{INSIGHT_LABEL[insight.kind]}</p>
+        <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground mb-12 border-l-2 border-primary/40 pl-6 italic">
+          {insight.text}
+        </p>
+        <button
+          onClick={dismissInsight}
+          className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
+        >
+          Keep going →
         </button>
       </main>
     );
@@ -181,7 +249,6 @@ function Play() {
     );
   }
 
-
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <div className="flex items-center justify-between mb-10">
@@ -209,4 +276,3 @@ function Play() {
     </main>
   );
 }
-
