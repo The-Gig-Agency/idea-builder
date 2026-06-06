@@ -367,7 +367,7 @@ function NineteenEighty() {
           </div>
           <div className="pt-4">
             <button
-              onClick={() => navigate({ to: "/play" })}
+              onClick={() => navigate({ to: "/onboarding" })}
               className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
             >
               Let's test that →

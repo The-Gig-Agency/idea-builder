@@ -142,7 +142,7 @@ function Me() {
                   </span>
                 )}
                 <Link
-                  to="/play"
+                  to="/onboarding"
                   className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary underline-offset-4 hover:underline"
                 >
                   Sharpen it with side-by-sides →

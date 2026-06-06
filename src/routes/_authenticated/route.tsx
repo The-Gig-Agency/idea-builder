@@ -32,7 +32,6 @@ function AuthedLayout() {
           <nav className="flex items-center gap-6 text-sm">
             <Link to="/onboarding" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Interview</Link>
             <Link to="/me" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Me</Link>
-            <Link to="/play" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Play</Link>
             <Link to="/profile" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Profile</Link>
             {adminQ.data?.isAdmin && (
               <Link to="/admin" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Admin</Link>
