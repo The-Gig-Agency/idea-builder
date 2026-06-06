@@ -106,11 +106,10 @@ You return a JSON object with this exact shape:
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": {
-    "movement": -100..100, "atmosphere": -100..100, "groove": -100..100,
-    "darkness": -100..100, "hope": -100..100, "nostalgia": -100..100,
-    "transformation": -100..100, "complexity": -100..100, "melody": -100..100,
-    "verbal_cleverness": -100..100, "authenticity": -100..100, "romanticism": -100..100,
-    "energy": -100..100, "dreaminess": -100..100, "community": -100..100
+    "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100,
+    "scale": -100..100, "community": -100..100, "perspective": -100..100,
+    "confidence": -100..100, "tension": -100..100, "texture": -100..100,
+    "transformation": -100..100
   },
   "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
   "reasoning": ["one short observation", "..."],
