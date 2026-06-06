@@ -322,7 +322,17 @@ export const nextPairing = createServerFn({ method: "POST" })
     // Cross-lane probes intentionally disabled: pairings stay within the user's
     // lane. Dimensions are read inside the lane, not across lanes. See
     // mem://product/within-lane-only.md.
-    void probeCandidates; void probeState; void PROBE_ROUNDS;
+    void probeCandidates; void PROBE_ROUNDS;
+
+    // Invariant: nothing should ever queue a cross-lane probe. If a regression
+    // re-enables it, fail loud here instead of silently shipping the wrong UX.
+    if (Object.keys(probeState.pending).length > 0) {
+      throw new Error(
+        `within-lane invariant violated: probe_state.pending is non-empty (${JSON.stringify(probeState.pending)}). ` +
+          `Cross-lane probes are disabled — see mem://product/within-lane-only.md.`,
+      );
+    }
+
 
 
     // -------- Normal lane-scoped fetch --------
