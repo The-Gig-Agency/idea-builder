@@ -187,6 +187,59 @@ export type Database = {
         }
         Relationships: []
       }
+      session_reasoning: {
+        Row: {
+          allowed_claims: Json
+          blocked_claims: Json
+          counterarguments: Json
+          created_at: string
+          evidence_thresholds: Json
+          id: string
+          narrative: string | null
+          observations: Json
+          patterns: Json
+          session_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allowed_claims?: Json
+          blocked_claims?: Json
+          counterarguments?: Json
+          created_at?: string
+          evidence_thresholds?: Json
+          id?: string
+          narrative?: string | null
+          observations?: Json
+          patterns?: Json
+          session_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allowed_claims?: Json
+          blocked_claims?: Json
+          counterarguments?: Json
+          created_at?: string
+          evidence_thresholds?: Json
+          id?: string
+          narrative?: string | null
+          observations?: Json
+          patterns?: Json
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_reasoning_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sessions: {
         Row: {
           archetype_id: string | null

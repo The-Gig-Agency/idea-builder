@@ -11,6 +11,25 @@ const DIMS = [
   "dreaminess","community",
 ] as const;
 
+const DIM_LABEL: Record<string, { hi: string; lo: string }> = {
+  movement: { hi: "movement", lo: "stillness" },
+  atmosphere: { hi: "atmosphere", lo: "statement" },
+  groove: { hi: "groove", lo: "arrangement" },
+  darkness: { hi: "darkness", lo: "light" },
+  hope: { hi: "hope", lo: "resignation" },
+  nostalgia: { hi: "nostalgia", lo: "the present" },
+  transformation: { hi: "transformation", lo: "arrival" },
+  complexity: { hi: "complexity", lo: "directness" },
+  melody: { hi: "melody", lo: "texture" },
+  verbal_cleverness: { hi: "language", lo: "feeling" },
+  authenticity: { hi: "rawness", lo: "polish" },
+  romanticism: { hi: "romanticism", lo: "cool" },
+  energy: { hi: "energy", lo: "restraint" },
+  dreaminess: { hi: "dreaminess", lo: "clarity" },
+  community: { hi: "communion", lo: "solitude" },
+};
+
+
 const VOICE = `You are MusicDNA's writer. Tone: specific, restrained, slightly uncomfortable. \
 No platitudes. No genre labels. No "you like" — use "you reward", "you choose", "you trust". \
 Editorial brevity. One observation per sentence. Never flatter.`;
