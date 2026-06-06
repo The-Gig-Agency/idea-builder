@@ -1,5 +1,8 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { adminCheck } from "@/lib/admin.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -14,6 +17,8 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthedLayout() {
   const navigate = useNavigate();
+  const check = useServerFn(adminCheck);
+  const adminQ = useQuery({ queryKey: ["adminCheck"], queryFn: () => check(), staleTime: 5 * 60_000 });
   async function signOut() {
     await supabase.auth.signOut();
     toast.success("Signed out.");
@@ -28,6 +33,9 @@ function AuthedLayout() {
             <Link to="/onboarding" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Onboarding</Link>
             <Link to="/play" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Play</Link>
             <Link to="/profile" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Profile</Link>
+            {adminQ.data?.isAdmin && (
+              <Link to="/admin" className="text-muted-foreground hover:text-foreground" activeProps={{ className: "text-foreground" }}>Admin</Link>
+            )}
             <button onClick={signOut} className="text-muted-foreground hover:text-foreground">Sign out</button>
           </nav>
         </div>
