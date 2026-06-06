@@ -73,30 +73,37 @@ export const nextPairing = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const { data: used } = await supabase
-      .from("choices")
-      .select("pairing_id")
-      .eq("session_id", data.sessionId);
-    const usedIds = new Set((used ?? []).map((c) => c.pairing_id));
+    const [usedRes, sessionRes, pairingsRes] = await Promise.all([
+      supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
+      supabase.from("sessions").select("vector").eq("id", data.sessionId).single(),
+      supabase
+        .from("pairings")
+        .select(`
+          id, tests, hypothesis, why_good, diagnostic_weight,
+          song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
+          song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
+        `)
+        .eq("active", true),
+    ]);
+    if (pairingsRes.error) throw new Error(pairingsRes.error.message);
+    const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
+    const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
 
-    const { data: pairings, error } = await supabase
-      .from("pairings")
-      .select(`
-        id, tests, hypothesis, why_good, diagnostic_weight,
-        song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
-        song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
-      `)
-      .eq("active", true);
-    if (error) throw new Error(error.message);
-
-    const pool = (pairings ?? []).filter((p) => !usedIds.has(p.id));
+    const pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
     if (!pool.length) return { pairing: null, round: usedIds.size };
 
-    // weighted random by diagnostic_weight
-    const total = pool.reduce((s, p) => s + (p.diagnostic_weight || 1), 0);
+    // axis-aware: boost pairings testing axes with little signal so far.
+    const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
+    const scored = pool.map((p) => {
+      const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
+      const axisNeed = tests.reduce((s, d) => s + need(d), 0) / Math.max(1, tests.length);
+      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed);
+      return { p, w };
+    });
+    const total = scored.reduce((s, x) => s + x.w, 0);
     let r = Math.random() * total;
-    const pick = pool.find((p) => (r -= p.diagnostic_weight || 1) <= 0) ?? pool[0];
-    return { pairing: pick, round: usedIds.size + 1 };
+    const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
+    return { pairing: pick.p, round: usedIds.size + 1 };
   });
 
 // ============ Record choice ============
