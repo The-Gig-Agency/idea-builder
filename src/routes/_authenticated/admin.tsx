@@ -221,7 +221,7 @@ function EntityTable({ entity, onEdit }: { entity: Entity; onEdit: (row: Row) =>
 }
 
 function columnsFor(e: Entity): string[] {
-  if (e === "songs") return ["title", "artist", "year", "primary_lane", "lane"];
+  if (e === "songs") return ["title", "artist", "year", "lane"];
   if (e === "pairings") return ["hypothesis", "song_a_id", "song_b_id", "lane", "diagnostic_weight", "active"];
   return ["name", "tagline", "description"];
 }
@@ -361,8 +361,7 @@ function fieldsFor(e: Entity): Field[] {
       { key: "title", type: "text" },
       { key: "artist", type: "text" },
       { key: "year", type: "number", optional: true },
-      { key: "primary_lane", type: "text", hint: "alternative · pop · hip_hop · electronic · classic_rock · general" },
-      { key: "lane", type: "text", hint: "granular sub-lane, e.g. post_punk_new_wave" },
+      { key: "lane", type: "text", hint: "alternative · pop · hip_hop · electronic · classic_rock · general · or sub-lane" },
       ...dims.map((d) => ({ key: d, type: "number" as const, optional: true, hint: "-10 to +10" })),
     ];
   }
