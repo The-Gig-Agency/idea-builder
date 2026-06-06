@@ -106,6 +106,156 @@ export type Database = {
           },
         ]
       }
+      event_log: {
+        Row: {
+          choice_id: string | null
+          client: string | null
+          created_at: string
+          event_type: string
+          experiment_key: string | null
+          id: string
+          pairing_id: string | null
+          props: Json
+          response_time_ms: number | null
+          session_id: string | null
+          user_id: string | null
+          variant: string | null
+        }
+        Insert: {
+          choice_id?: string | null
+          client?: string | null
+          created_at?: string
+          event_type: string
+          experiment_key?: string | null
+          id?: string
+          pairing_id?: string | null
+          props?: Json
+          response_time_ms?: number | null
+          session_id?: string | null
+          user_id?: string | null
+          variant?: string | null
+        }
+        Update: {
+          choice_id?: string | null
+          client?: string | null
+          created_at?: string
+          event_type?: string
+          experiment_key?: string | null
+          id?: string
+          pairing_id?: string | null
+          props?: Json
+          response_time_ms?: number | null
+          session_id?: string | null
+          user_id?: string | null
+          variant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_log_choice_id_fkey"
+            columns: ["choice_id"]
+            isOneToOne: false
+            referencedRelation: "choices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_log_pairing_id_fkey"
+            columns: ["pairing_id"]
+            isOneToOne: false
+            referencedRelation: "pairings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_log_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiment_assignments: {
+        Row: {
+          assigned_at: string
+          experiment_key: string
+          id: string
+          user_id: string
+          variant: string
+        }
+        Insert: {
+          assigned_at?: string
+          experiment_key: string
+          id?: string
+          user_id: string
+          variant: string
+        }
+        Update: {
+          assigned_at?: string
+          experiment_key?: string
+          id?: string
+          user_id?: string
+          variant?: string
+        }
+        Relationships: []
+      }
+      llm_calls: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          input_summary: Json | null
+          latency_ms: number | null
+          model: string
+          narrative: string | null
+          output: Json | null
+          prompt_version: string
+          role: string
+          session_id: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_summary?: Json | null
+          latency_ms?: number | null
+          model: string
+          narrative?: string | null
+          output?: Json | null
+          prompt_version: string
+          role: string
+          session_id?: string | null
+          status: string
+          user_id?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          input_summary?: Json | null
+          latency_ms?: number | null
+          model?: string
+          narrative?: string | null
+          output?: Json | null
+          prompt_version?: string
+          role?: string
+          session_id?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_calls_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pairings: {
         Row: {
           active: boolean
@@ -186,6 +336,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      result_feedback: {
+        Row: {
+          accuracy: string | null
+          comment: string | null
+          created_at: string
+          id: string
+          rating: number | null
+          session_id: string
+          target: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accuracy?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number | null
+          session_id: string
+          target?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accuracy?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number | null
+          session_id?: string
+          target?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "result_feedback_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       session_reasoning: {
         Row: {
