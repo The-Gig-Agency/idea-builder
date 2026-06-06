@@ -1578,12 +1578,63 @@ export const chatTurn = createServerFn({ method: "POST" })
       .select("vector, lane")
       .eq("id", sessionId)
       .maybeSingle();
-    const vector = (sessionRow?.vector ?? {}) as Record<string, number>;
+    let vector = (sessionRow?.vector ?? {}) as Record<string, number>;
+
+    // -------- Chat-driven dimension extraction --------
+    // The user's reply is evidence too. Run a tight LLM pass to pull signed
+    // deltas per dimension from the latest user turn (with brief recent
+    // history for context). Cap per-turn movement so pairings stay primary.
+    const PER_TURN_CAP = 10;          // max |delta| applied to any one axis per turn
+    const VECTOR_BOUND = 200;         // overall clamp on |vector[axis]|
+    const recentTurns = (history ?? [])
+      .slice(-8)
+      .map((m) => `${m.role}: ${m.content}`)
+      .join("\n");
+    const extractorVoice = `You read a listener's chat reply and score it along 15 taste dimensions: ${(DIMS as readonly string[]).join(", ")}.
+Return STRICT JSON: {"deltas": {"<dimension>": <integer between -10 and 10>, ...}}.
+Only include dimensions the message clearly speaks to. Positive = high pole, negative = low pole, using these poles:
+${(DIMS as readonly string[]).map((d) => `- ${d}: +${DIM_LABEL[d]?.hi} / -${DIM_LABEL[d]?.lo}`).join("\n")}
+Rules: at most 5 dimensions per reply. Skip dimensions the reply doesn't actually address. If the reply is empty, hostile filler, or off-topic, return {"deltas": {}}.
+No prose, no markdown fences.`;
+    try {
+      const extractTxt = await ai([
+        { role: "system", content: extractorVoice },
+        { role: "user", content: `Recent turns:\n${recentTurns || "(none)"}\n\nLatest user reply:\n${data.message}\n\nReturn the JSON now.` },
+      ]);
+      const cleaned = extractTxt.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { deltas?: Record<string, unknown> };
+      const deltas = parsed?.deltas ?? {};
+      const applied: Record<string, number> = {};
+      for (const dim of DIMS as readonly string[]) {
+        const raw = deltas[dim];
+        if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+        const capped = Math.max(-PER_TURN_CAP, Math.min(PER_TURN_CAP, Math.round(raw)));
+        if (capped === 0) continue;
+        const next = Math.max(-VECTOR_BOUND, Math.min(VECTOR_BOUND, (vector[dim] ?? 0) + capped));
+        if (next !== (vector[dim] ?? 0)) applied[dim] = capped;
+        vector[dim] = next;
+      }
+      if (Object.keys(applied).length) {
+        await supabase.from("sessions").update({ vector }).eq("id", sessionId);
+        // Fire-and-forget event log; never block the reply.
+        supabase.from("event_log").insert({
+          user_id: userId,
+          session_id: sessionId,
+          event_type: "chat_vector_update",
+          props: { deltas: applied } as never,
+          client: "server",
+        }).then(() => undefined, () => undefined);
+      }
+    } catch {
+      // Extraction is best-effort; chat continues with the prior vector.
+    }
+
     const topAxes = (DIMS as readonly string[])
       .map((d) => ({ d, v: vector[d] ?? 0 }))
       .filter((x) => Math.abs(x.v) >= 8)
       .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
       .slice(0, 5);
+
 
     const ctxLines: string[] = [];
     if (profile?.opening_songs?.length) {
