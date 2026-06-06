@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { getMyResult } from "@/lib/musicdna.functions";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from "recharts";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({ meta: [{ title: "Your reading — MusicDNA" }] }),
@@ -30,6 +31,7 @@ function ProfilePage() {
   const { data } = useSuspenseQuery(
     queryOptions({ queryKey: ["myResult"], queryFn: () => fn({}) }),
   );
+  const [copied, setCopied] = useState(false);
   const latest = data.sessions[0];
   const vector = (latest?.vector ?? {}) as Record<string, number>;
   const max = Math.max(20, ...DIMS.map((d) => Math.abs(vector[d] ?? 0)));
@@ -37,6 +39,36 @@ function ProfilePage() {
     dim: d.replace(/_/g, " "),
     value: ((vector[d] ?? 0) + max) / (2 * max) * 100,
   }));
+
+  async function share() {
+    if (!latest) return;
+    const lines = [
+      `My MusicDNA: ${latest.archetype?.name ?? "Unassigned"}`,
+      latest.archetype?.tagline ? `— ${latest.archetype.tagline}` : "",
+      "",
+      latest.interpretation ?? "",
+      "",
+      ...(data.definingChoices?.slice(0, 3).map(
+        (c) => `→ ${c.chosen} over ${c.rejected}`,
+      ) ?? []),
+    ].filter(Boolean).join("\n");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "My MusicDNA", text: lines });
+      } else {
+        await navigator.clipboard.writeText(lines);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(lines);
+        toast.success("Copied to clipboard");
+      } catch {
+        toast.error("Could not copy");
+      }
+    }
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
@@ -47,20 +79,56 @@ function ProfilePage() {
         </div>
       ) : (
         <>
-          <p className="eyebrow mb-6">Your latest reading</p>
-          {latest.archetype && (
-            <div className="mb-10">
-              <h1 className="display text-5xl md:text-6xl mb-3">{latest.archetype.name}</h1>
-              {latest.archetype.tagline && (
-                <p className="text-lg text-muted-foreground italic">{latest.archetype.tagline}</p>
+          <div className="flex items-start justify-between gap-6 mb-10">
+            <div>
+              <p className="eyebrow mb-6">Your latest reading</p>
+              {latest.archetype && (
+                <>
+                  <h1 className="display text-5xl md:text-6xl mb-3">{latest.archetype.name}</h1>
+                  {latest.archetype.tagline && (
+                    <p className="text-lg text-muted-foreground italic">{latest.archetype.tagline}</p>
+                  )}
+                </>
               )}
             </div>
-          )}
+            <button
+              onClick={share}
+              className="shrink-0 border hairline-strong rounded-sm px-4 py-2 text-xs font-medium hover:bg-surface"
+            >
+              {copied ? "Copied" : "Share"}
+            </button>
+          </div>
+
           {latest.interpretation && (
             <blockquote className="border-l-2 border-primary pl-6 my-12 max-w-2xl">
               <p className="font-serif text-2xl leading-snug text-foreground">{latest.interpretation}</p>
             </blockquote>
           )}
+
+          {data.definingChoices?.length ? (
+            <section className="mt-12 mb-12">
+              <p className="eyebrow mb-5">Defining choices</p>
+              <ul className="divide-y divide-border border hairline-strong rounded-sm bg-surface">
+                {data.definingChoices.slice(0, 5).map((c, i) => (
+                  <li key={i} className="px-5 py-4 flex items-baseline gap-4">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-serif text-lg leading-snug">
+                        <span className="text-foreground">{c.chosen}</span>
+                        <span className="text-muted-foreground"> over </span>
+                        <span className="text-muted-foreground line-through decoration-1">{c.rejected}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {c.chosenArtist} vs {c.rejectedArtist}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <div className="border hairline-strong rounded-sm bg-surface p-6 mt-10">
             <p className="eyebrow mb-4">15-axis radar</p>
