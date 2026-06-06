@@ -5,28 +5,27 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
 
+// Canonical 10 axes. Source of truth: public.axes (9 rows) + transformation.
+// Moods (nostalgic, dreamy, dark, hopeful, romantic, etc.) are DERIVED from
+// combinations of these — see deriveDescriptors below. Never stored.
 const DIMS = [
-  "movement","atmosphere","groove","darkness","hope","nostalgia","transformation",
-  "complexity","melody","verbal_cleverness","authenticity","romanticism","energy",
-  "dreaminess","community",
+  "movement","atmosphere","immersion","scale","community",
+  "perspective","confidence","tension","texture","transformation",
 ] as const;
 
+// Pole labels match the public.axes table verbatim so the LLM, the DB, and the
+// reveal copy all speak the same vocabulary.
 const DIM_LABEL: Record<string, { hi: string; lo: string }> = {
-  movement: { hi: "movement", lo: "stillness" },
-  atmosphere: { hi: "atmosphere", lo: "statement" },
-  groove: { hi: "groove", lo: "arrangement" },
-  darkness: { hi: "darkness", lo: "light" },
-  hope: { hi: "hope", lo: "resignation" },
-  nostalgia: { hi: "nostalgia", lo: "the present" },
-  transformation: { hi: "transformation", lo: "arrival" },
-  complexity: { hi: "complexity", lo: "directness" },
-  melody: { hi: "melody", lo: "texture" },
-  verbal_cleverness: { hi: "language", lo: "feeling" },
-  authenticity: { hi: "rawness", lo: "polish" },
-  romanticism: { hi: "romanticism", lo: "cool" },
-  energy: { hi: "energy", lo: "restraint" },
-  dreaminess: { hi: "dreaminess", lo: "clarity" },
-  community: { hi: "communion", lo: "solitude" },
+  movement: { hi: "forward motion", lo: "stillness" },
+  atmosphere: { hi: "immersive mood", lo: "statement" },
+  immersion: { hi: "slow reveal", lo: "immediacy" },
+  scale: { hi: "vast", lo: "intimate" },
+  community: { hi: "communal", lo: "solitary" },
+  perspective: { hi: "witness", lo: "feeling" },
+  confidence: { hi: "command", lo: "vulnerability" },
+  tension: { hi: "danger", lo: "release" },
+  texture: { hi: "refinement", lo: "rawness" },
+  transformation: { hi: "takes you somewhere", lo: "holds its shape" },
 };
 
 
