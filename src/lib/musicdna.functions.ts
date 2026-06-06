@@ -499,11 +499,19 @@ export const recordChoice = createServerFn({ method: "POST" })
 
     const phrase = REVEAL[topDim];
     const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
-    const verdict = direction
-      ? `You chose ${winner.title} over ${loser.title}. That's ${direction.verdict}.`
-      : `You chose ${winner.title} over ${loser.title}.`;
-    const why = direction?.why ?? "";
     const ms = data.msToDecide ?? null;
+    // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
+    const OPENERS = ["Nice.", "OK.", "Interesting.", "Hm.", "Cool pick.", "Alright then.", "Good one."];
+    const hash = data.pairingId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const opener = OPENERS[hash % OPENERS.length];
+    const speedBeat =
+      ms == null ? "" : ms < 2500 ? " Snap call — no hesitation." : ms > 12000 ? " You sat with that one." : "";
+    // Conversational reaction: lead with reaction to the pick, then the inference, lightly.
+    const verdict = direction
+      ? `${opener} ${winner.title} over ${loser.title} — that's the ${direction.verdict} move.${speedBeat}`
+      : `${opener} ${winner.title} over ${loser.title}.${speedBeat}`;
+    const why = direction?.why ?? "";
+    // Kept for back-compat with any older callers; the new UI folds speed into `verdict` above.
     const hesitation =
       ms == null ? null : ms < 2500 ? "Snap verdict." : ms > 12000 ? "You stared this one down." : null;
 
