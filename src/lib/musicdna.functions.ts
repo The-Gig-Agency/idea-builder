@@ -115,6 +115,24 @@ export const nextPairing = createServerFn({ method: "POST" })
   });
 
 // ============ Record choice ============
+const REVEAL_PHRASE: Record<string, { hi: string; lo: string }> = {
+  movement: { hi: "movement over stillness", lo: "stillness over movement" },
+  atmosphere: { hi: "atmosphere over statement", lo: "statement over atmosphere" },
+  groove: { hi: "groove over arrangement", lo: "arrangement over groove" },
+  darkness: { hi: "darkness over light", lo: "light over darkness" },
+  hope: { hi: "hope over resignation", lo: "resignation over hope" },
+  nostalgia: { hi: "nostalgia over the present", lo: "the present over nostalgia" },
+  transformation: { hi: "transformation over nostalgia", lo: "nostalgia over transformation" },
+  complexity: { hi: "complexity over directness", lo: "directness over complexity" },
+  melody: { hi: "melody over texture", lo: "texture over melody" },
+  verbal_cleverness: { hi: "verbal cleverness over feeling", lo: "feeling over verbal cleverness" },
+  authenticity: { hi: "authenticity over polish", lo: "polish over authenticity" },
+  romanticism: { hi: "romanticism over cool", lo: "cool over romanticism" },
+  energy: { hi: "energy over restraint", lo: "restraint over energy" },
+  dreaminess: { hi: "dreaminess over clarity", lo: "clarity over dreaminess" },
+  community: { hi: "community over solitude", lo: "solitude over community" },
+};
+
 export const recordChoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -127,7 +145,7 @@ export const recordChoice = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const songCols = "movement,atmosphere,groove,darkness,hope,nostalgia,transformation,complexity,melody,verbal_cleverness,authenticity,romanticism,energy,dreaminess,community";
+    const songCols = "id,title,artist,movement,atmosphere,groove,darkness,hope,nostalgia,transformation,complexity,melody,verbal_cleverness,authenticity,romanticism,energy,dreaminess,community";
     const [pairingRes, sessionRes] = await Promise.all([
       supabase
         .from("pairings")
@@ -137,7 +155,8 @@ export const recordChoice = createServerFn({ method: "POST" })
     ]);
     const pairing = pairingRes.data as unknown as {
       tests: string[] | null; diagnostic_weight: number; song_a_id: string; song_b_id: string;
-      song_a: Record<string, number>; song_b: Record<string, number>;
+      song_a: Record<string, number> & { id: string; title: string; artist: string };
+      song_b: Record<string, number> & { id: string; title: string; artist: string };
     } | null;
     const session = sessionRes.data;
     if (pairingRes.error || !pairing) throw new Error(pairingRes.error?.message ?? "pairing not found");
@@ -147,26 +166,39 @@ export const recordChoice = createServerFn({ method: "POST" })
     const chosenIsA = data.chosenSongId === pairing.song_a_id;
     const winner = chosenIsA ? pairing.song_a : pairing.song_b;
     const loser = chosenIsA ? pairing.song_b : pairing.song_a;
+    const rejectedSongId = chosenIsA ? pairing.song_b_id : pairing.song_a_id;
     const w = (pairing.diagnostic_weight || 50) / 100;
     const vec: Record<string, number> = { ...(session.vector as Record<string, number>) };
     const tests: string[] = pairing.tests?.length ? pairing.tests : (DIMS as readonly string[]).slice();
+    let topDim = tests[0] ?? "movement";
+    let topDelta = 0;
     for (const dim of tests) {
       const a = (winner as Record<string, number>)?.[dim] ?? 50;
       const b = (loser as Record<string, number>)?.[dim] ?? 50;
-      vec[dim] = (vec[dim] ?? 0) + (a - b) * w;
+      const delta = a - b;
+      vec[dim] = (vec[dim] ?? 0) + delta * w;
+      if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
+
+    const phrase = REVEAL_PHRASE[topDim];
+    const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
+    const reveal = direction
+      ? `You chose ${winner.title} over ${loser.title}. That's ${direction}.`
+      : `You chose ${winner.title} over ${loser.title}.`;
 
     const { error: cErr } = await supabase.from("choices").insert({
       session_id: data.sessionId,
       pairing_id: data.pairingId,
       chosen_song_id: data.chosenSongId,
+      rejected_song_id: rejectedSongId,
       ms_to_decide: data.msToDecide ?? null,
     });
     if (cErr) throw new Error(cErr.message);
     const { error: uErr } = await supabase.from("sessions").update({ vector: vec }).eq("id", data.sessionId);
     if (uErr) throw new Error(uErr.message);
-    return { vector: vec };
+    return { vector: vec, reveal, dim: topDim, delta: topDelta };
   });
+
 
 // ============ Finalize session: pick archetype, write interpretation ============
 export const finalizeSession = createServerFn({ method: "POST" })
@@ -232,5 +264,25 @@ export const getMyResult = createServerFn({ method: "GET" })
         .order("started_at", { ascending: false })
         .limit(20),
     ]);
-    return { profile, sessions: sessions ?? [] };
+    const latest = sessions?.[0];
+    let definingChoices: Array<{ chosen: string; chosenArtist: string; rejected: string; rejectedArtist: string }> = [];
+    if (latest) {
+      const { data: choices } = await supabase
+        .from("choices")
+        .select("created_at, ms_to_decide, chosen:chosen_song_id(title,artist), rejected:rejected_song_id(title,artist)")
+        .eq("session_id", latest.id)
+        .order("ms_to_decide", { ascending: true, nullsFirst: false })
+        .limit(5);
+      definingChoices = ((choices ?? []) as unknown as Array<{
+        chosen: { title: string; artist: string } | null;
+        rejected: { title: string; artist: string } | null;
+      }>)
+        .filter((c) => c.chosen && c.rejected)
+        .map((c) => ({
+          chosen: c.chosen!.title, chosenArtist: c.chosen!.artist,
+          rejected: c.rejected!.title, rejectedArtist: c.rejected!.artist,
+        }));
+    }
+    return { profile, sessions: sessions ?? [], definingChoices };
   });
+

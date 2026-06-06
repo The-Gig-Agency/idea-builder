@@ -29,6 +29,8 @@ function Play() {
   const [round, setRound] = useState(0);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [reveal, setReveal] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
 
@@ -53,12 +55,23 @@ function Play() {
     if (!pairing || !sessionId || busy) return;
     setBusy(true);
     try {
-      await choose({
+      const { reveal: rev } = await choose({
         data: {
           sessionId, pairingId: pairing.id, chosenSongId: songId,
           msToDecide: Math.min(600000, Date.now() - startedAt.current),
         },
       });
+      setReveal(rev);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Choice failed.");
+      setBusy(false);
+    }
+  }
+
+  async function advance() {
+    if (!sessionId || finishing) return;
+    setFinishing(true);
+    try {
       const { pairing: nxt, round: nr, done } = await next({ data: { sessionId } });
       if (done || !nxt || nr > MAX_ROUNDS) {
         await finalize({ data: { sessionId } });
@@ -67,11 +80,13 @@ function Play() {
       }
       setPairing(nxt as unknown as Pairing);
       setRound(nr);
+      setReveal(null);
       startedAt.current = Date.now();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Choice failed.");
+      toast.error(err instanceof Error ? err.message : "Could not load next.");
     } finally {
       setBusy(false);
+      setFinishing(false);
     }
   }
 
@@ -92,6 +107,21 @@ function Play() {
 
   if (!pairing) {
     return <main className="mx-auto max-w-2xl px-6 py-32 text-center text-muted-foreground">Loading…</main>;
+  }
+
+  if (reveal) {
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-32 text-center">
+        <p className="eyebrow mb-8">What that choice said</p>
+        <p className="font-serif text-2xl md:text-3xl leading-snug mb-12 text-foreground">{reveal}</p>
+        <button
+          onClick={advance} disabled={finishing}
+          className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        >
+          {finishing ? "…" : "Next →"}
+        </button>
+      </main>
+    );
   }
 
   return (
@@ -118,12 +148,7 @@ function Play() {
           </button>
         ))}
       </div>
-
-      {pairing.hypothesis && (
-        <p className="mt-10 text-center text-xs text-muted-foreground italic max-w-2xl mx-auto">
-          {pairing.hypothesis}
-        </p>
-      )}
     </main>
   );
 }
+
