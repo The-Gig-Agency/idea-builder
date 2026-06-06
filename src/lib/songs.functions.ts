@@ -9,7 +9,11 @@ export const searchSongs = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const q = data.q.replace(/[%_]/g, "");
+    // PostgREST .or() parses commas, parens, dots, asterisks and double quotes
+    // as syntax. We strip the LIKE wildcards (% and _) AND every PostgREST
+    // syntax character so user input can't break out into another filter.
+    const q = data.q.replace(/[%_,()."*\\]/g, "").trim();
+    if (!q) return { songs: [] };
     const { data: rows, error } = await supabase
       .from("songs")
       .select("id,title,artist,year,primary_lane,lane")
