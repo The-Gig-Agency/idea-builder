@@ -606,6 +606,20 @@ export const finalizeSession = createServerFn({ method: "POST" })
       if (score > best.score) best = { id: a.id, name: a.name, score };
     }
 
+    // -------- Log Analyst (deterministic, no model call) --------
+    await supabase.from("llm_calls").insert({
+      user_id: userId,
+      session_id: data.sessionId,
+      role: "analyst",
+      model: "deterministic",
+      prompt_version: "analyst.v1",
+      status: "ok",
+      latency_ms: 0,
+      input_summary: { choices: choices.length, archetypes: archetypes.length },
+      output: { patterns, counterarguments, allowed_claims, blocked_claims } as never,
+      confidence: allowed_claims[0]?.confidence ?? null,
+    });
+
     // -------- Layer 5: Critic (AI narrative, constrained) --------
     const evidenceBlock = allowed_claims.length
       ? allowed_claims.map((c) =>
@@ -615,11 +629,8 @@ export const finalizeSession = createServerFn({ method: "POST" })
     const counterBlock = counterarguments.length
       ? counterarguments.map((c) => `- ${c.claim} (${c.impact} impact — ${c.notes})`).join("\n")
       : "- (none)";
-    const narrative = await ai([
-      { role: "system", content: CRITIC_VOICE },
-      {
-        role: "user",
-        content: `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
+
+    const criticPrompt = `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
 Cite the evidence inline (e.g. "across 7 of 12 matchups"). If a strong counter-hypothesis exists, name it. \
 If no claims cleared the threshold, say so plainly — do not invent.
 
@@ -629,9 +640,44 @@ ${evidenceBlock}
 COUNTER-HYPOTHESES TO ACKNOWLEDGE:
 ${counterBlock}
 
-Archetype assigned by cosine match: ${best.name || "Unassigned"}.`,
+Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
+
+    const criticStart = Date.now();
+    let narrative = "";
+    let criticStatus: "ok" | "error" = "ok";
+    let criticError: string | null = null;
+    try {
+      narrative = await ai([
+        { role: "system", content: CRITIC_VOICE },
+        { role: "user", content: criticPrompt },
+      ]);
+    } catch (e) {
+      criticStatus = "error";
+      criticError = e instanceof Error ? e.message : String(e);
+    }
+    const criticLatency = Date.now() - criticStart;
+
+    await supabase.from("llm_calls").insert({
+      user_id: userId,
+      session_id: data.sessionId,
+      role: "critic",
+      model: MODEL,
+      prompt_version: "critic.v1",
+      status: criticStatus,
+      latency_ms: criticLatency,
+      error_message: criticError,
+      input_summary: {
+        allowed_claims: allowed_claims.length,
+        counterarguments: counterarguments.length,
+        archetype: best.name,
       },
-    ]);
+      output: { length: narrative.length } as never,
+      narrative: narrative || null,
+    });
+
+    if (criticStatus === "error") {
+      throw new Error(criticError ?? "Critic failed");
+    }
 
     // -------- Persist --------
     const reasoningRow = {
