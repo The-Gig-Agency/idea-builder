@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { startSession, nextPairing, recordChoice, finalizeSession, recordEvent, roundInsight, finalSynthesis } from "@/lib/musicdna.functions";
 import { toast } from "sonner";
 
-const MAX_ROUNDS = 12;
+const MAX_ROUNDS = 6;
 
 export const Route = createFileRoute("/_authenticated/play")({
   head: () => ({ meta: [{ title: "Choose one — MusicDNA" }] }),
