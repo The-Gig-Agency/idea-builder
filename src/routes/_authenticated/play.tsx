@@ -113,8 +113,17 @@ function Play() {
   if (reveal) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-32 text-center">
-        <p className="eyebrow mb-8">What that choice said</p>
-        <p className="font-serif text-2xl md:text-3xl leading-snug mb-12 text-foreground">{reveal}</p>
+        <p className="eyebrow mb-8">The verdict</p>
+        <p className="font-serif text-2xl md:text-3xl leading-snug mb-10 text-foreground">{reveal.verdict}</p>
+        {reveal.why && (
+          <>
+            <p className="eyebrow mb-4">Why that mattered</p>
+            <p className="font-serif italic text-xl md:text-2xl leading-snug mb-8 text-muted-foreground">{reveal.why}</p>
+          </>
+        )}
+        {reveal.hesitation && (
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground mb-10">{reveal.hesitation}</p>
+        )}
         <button
           onClick={advance} disabled={finishing}
           className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-50"
@@ -124,6 +133,7 @@ function Play() {
       </main>
     );
   }
+
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
