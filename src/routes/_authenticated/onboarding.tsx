@@ -52,7 +52,17 @@ function Onboarding() {
   const reactThreeFn = useServerFn(reactToThree);
   const refineFn = useServerFn(refineWithTwoMore);
   const logEvent = useServerFn(recordEvent);
+  const fetchOpener = useServerFn(getActiveDecadePrompt);
   const navigate = useNavigate();
+
+  // Decade-specific opening question (admin-editable). Falls back to a known-good prompt.
+  const openerQuery = useQuery({
+    queryKey: ["decade-prompt", ONBOARDING_DECADE],
+    queryFn: () => fetchOpener({ data: { decade: ONBOARDING_DECADE } }),
+    staleTime: 5 * 60_000,
+  });
+  const opener = openerQuery.data?.text || FALLBACK_OPENER;
+  const PROMPTS: string[] = [opener, ...FOLLOWUP_PROMPTS];
 
   const [history, setHistory] = useState<Exchange[]>([]);
   const [input, setInput] = useState("");
