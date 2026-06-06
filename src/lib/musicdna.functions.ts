@@ -584,17 +584,18 @@ export const recordChoice = createServerFn({ method: "POST" })
     const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
     const ms = data.msToDecide ?? null;
     // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
-    const OPENERS = ["Nice.", "OK.", "Interesting.", "Hm.", "Cool pick.", "Alright then.", "Good one."];
+    const OPENERS = ["Nice.", "OK.", "Hm.", "Interesting.", "Cool pick.", "Alright.", "Noted."];
     const hash = data.pairingId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
     const opener = OPENERS[hash % OPENERS.length];
     const speedBeat =
-      ms == null ? "" : ms < 2500 ? " Snap call — no hesitation." : ms > 12000 ? " You sat with that one." : "";
-    // Conversational reaction: lead with reaction to the pick, then the inference, lightly.
+      ms == null ? "" : ms < 2500 ? "\nSnap call. No hesitation." : ms > 12000 ? "\nYou sat with that one." : "";
+    // Conversational reaction: short opener, the pick, the inference, optional speed beat.
+    // Line-broken so the UI can render it as a beat sequence.
     const verdict = direction
-      ? `${opener} ${winner.title} over ${loser.title} — that's the ${direction.verdict} move.${speedBeat}`
+      ? `${opener} ${winner.title} over ${loser.title}.\nThat's ${direction.verdict}.${speedBeat}`
       : `${opener} ${winner.title} over ${loser.title}.${speedBeat}`;
     const why = direction?.why ?? "";
-    // Kept for back-compat with any older callers; the new UI folds speed into `verdict` above.
+    // Kept for back-compat; the new UI folds speed into `verdict` above.
     const hesitation =
       ms == null ? null : ms < 2500 ? "Snap verdict." : ms > 12000 ? "You stared this one down." : null;
 
