@@ -186,7 +186,7 @@ export const analyzeOpeningSongs = createServerFn({ method: "POST" })
         opening_hypothesis: analysis.hypothesis,
         opening_lane: analysis.lane,
         opening_lane_confidence: analysis.confidence,
-        opening_analysis_json: analysis as unknown as Record<string, unknown>,
+        opening_analysis_json: JSON.parse(JSON.stringify(analysis)),
       })
       .eq("user_id", userId);
     return analysis;
