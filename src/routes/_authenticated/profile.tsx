@@ -130,6 +130,47 @@ function ProfilePage() {
             </section>
           ) : null}
 
+          {data.reasoning?.allowed_claims?.length ? (
+            <section className="mt-12 mb-12">
+              <p className="eyebrow mb-5">The evidence</p>
+              <ul className="divide-y divide-border border hairline-strong rounded-sm bg-surface">
+                {data.reasoning.allowed_claims.map((c, i) => (
+                  <li key={i} className="px-5 py-4">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <p className="font-serif text-lg leading-snug">
+                        <span className="text-foreground">{c.preferred}</span>
+                        <span className="text-muted-foreground"> over </span>
+                        <span className="text-muted-foreground">{c.opposed}</span>
+                      </p>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
+                        {c.supporting_choices}/{c.tested_total} · conf {c.confidence.toFixed(2)}
+                      </span>
+                    </div>
+                    {c.examples?.length ? (
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        e.g. {c.examples.map((e) => `${e.chosen} over ${e.rejected}`).join(" · ")}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {data.reasoning?.counterarguments?.length ? (
+            <section className="mt-8 mb-12">
+              <p className="eyebrow mb-3">What this reading could also be</p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {data.reasoning.counterarguments.map((c, i) => (
+                  <li key={i} className="border-l-2 border-border pl-4">
+                    <span className="text-foreground">{c.claim}</span> <span className="opacity-70">— {c.notes}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+
           <div className="border hairline-strong rounded-sm bg-surface p-6 mt-10">
             <p className="eyebrow mb-4">15-axis radar</p>
             <div style={{ width: "100%", height: 460 }}>
