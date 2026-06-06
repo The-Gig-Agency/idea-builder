@@ -142,20 +142,18 @@ function HowItWorks() {
   const steps = [
     {
       n: "01",
-      title: "Pick your first five songs",
-      body: "Start with the songs you already love. This builds a hypothesis about what you value in music.",
+      title: "Name five songs you love",
+      body: "The songs that never leave your playlist. The songs you stop skipping. The songs that still hit years later.",
     },
     {
       n: "02",
-      kicker: "The matchups",
-      title: "Choose one song, again and again",
-      body: "Each pair is built to test a hidden dimension of your taste. Temptation vs This Charming Man. A Forest vs The Killing Moon. Every choice reveals something.",
+      title: "Make some impossible choices",
+      body: "We'll put great songs head-to-head and ask you to choose. Some decisions take a second. Some will make you stare at the screen and argue with yourself. That's the point.",
     },
     {
       n: "03",
-      kicker: "The reading",
-      title: "See what your taste says about you",
-      body: 'Not "you like alternative rock." Instead: you consistently reward atmosphere over verbal cleverness, movement over polish, transformation over nostalgia. It feels annoyingly accurate.',
+      title: "See what your choices reveal",
+      body: "Your favorite songs aren't random. Hidden inside your choices are patterns you probably never noticed: what moves you, what you value, and why certain songs stay with you long after others fade away. Think of it as a personality test written by your record collection.",
     },
   ];
   return (
