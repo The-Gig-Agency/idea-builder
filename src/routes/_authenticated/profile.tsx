@@ -383,7 +383,7 @@ function ProfilePage() {
                 <ul className="space-y-3">
                   {past.map((s) => (
                     <li key={s.id} className="border hairline rounded-sm bg-surface px-5 py-4 flex items-center justify-between gap-4 hover:border-primary/40 transition-colors">
-                      <a href={`/s/${s.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 group">
+                      <a href={`/s/${(s as { share_token?: string }).share_token ?? s.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 group">
                         <div className="flex items-baseline gap-3 mb-1">
                           <p className="font-serif text-lg truncate group-hover:underline">
                             {s.archetype?.name ?? "Unassigned"}
