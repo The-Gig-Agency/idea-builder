@@ -370,10 +370,12 @@ function fieldsFor(e: Entity): Field[] {
     return [
       { key: "song_a_id", type: "text", hint: "uuid of song A" },
       { key: "song_b_id", type: "text", hint: "uuid of song B" },
-      { key: "hypothesis", type: "text", long: true },
+      { key: "user_facing_tradeoff", type: "text", long: true, optional: true, hint: 'Plain-language tradeoff. Must pass the Friend Test, e.g. "Do you disappear into a song, or bring it into the room with you?"' },
+      { key: "hypothesis", type: "text", long: true, hint: "internal critic-speak — what dimensions this tests" },
       { key: "why_good", type: "text", long: true, optional: true },
       { key: "tests", type: "json", optional: true, hint: '["movement","darkness"]' },
       { key: "lane", type: "text", optional: true, hint: "default: alternative" },
+      { key: "difficulty", type: "number", optional: true, hint: "1=obvious · 2=moderate · 3=painful" },
       { key: "diagnostic_weight", type: "number", hint: "0–100" },
       { key: "active", type: "boolean", hint: "true / false" },
     ];
