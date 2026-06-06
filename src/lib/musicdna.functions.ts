@@ -952,7 +952,10 @@ const EVENT_TYPES = [
   "result_viewed",
   "result_shared",
   "session_quit",
+  "lane_probed",
+  "lane_flipped",
 ] as const;
+
 
 export const recordEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
