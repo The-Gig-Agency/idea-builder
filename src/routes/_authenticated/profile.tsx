@@ -105,7 +105,8 @@ function ProfilePage() {
 
   async function share() {
     if (!latest) return;
-    const url = `${window.location.origin}/s/${latest.id}`;
+    const slug = (latest as { share_token?: string }).share_token ?? latest.id;
+    const url = `${window.location.origin}/s/${slug}`;
     const title = `MusicDNA: ${latest.archetype?.name ?? "A reading"}`;
     const text = latest.archetype?.tagline
       ? `${title} — ${latest.archetype.tagline}`
