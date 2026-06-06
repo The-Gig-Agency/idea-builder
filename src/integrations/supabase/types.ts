@@ -54,6 +54,7 @@ export type Database = {
           id: string
           ms_to_decide: number | null
           pairing_id: string
+          rejected_song_id: string | null
           session_id: string
         }
         Insert: {
@@ -62,6 +63,7 @@ export type Database = {
           id?: string
           ms_to_decide?: number | null
           pairing_id: string
+          rejected_song_id?: string | null
           session_id: string
         }
         Update: {
@@ -70,6 +72,7 @@ export type Database = {
           id?: string
           ms_to_decide?: number | null
           pairing_id?: string
+          rejected_song_id?: string | null
           session_id?: string
         }
         Relationships: [
@@ -85,6 +88,13 @@ export type Database = {
             columns: ["pairing_id"]
             isOneToOne: false
             referencedRelation: "pairings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "choices_rejected_song_id_fkey"
+            columns: ["rejected_song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
             referencedColumns: ["id"]
           },
           {
