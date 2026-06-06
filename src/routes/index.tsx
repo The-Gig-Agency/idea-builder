@@ -155,7 +155,7 @@ function HowItWorks() {
       n: "03",
       kicker: "The reading",
       title: "See what your taste says about you",
-      body: "Not "you like alternative rock." Instead: you consistently reward atmosphere over verbal cleverness, movement over polish, transformation over nostalgia. It feels annoyingly accurate.",
+      body: 'Not "you like alternative rock." Instead: you consistently reward atmosphere over verbal cleverness, movement over polish, transformation over nostalgia. It feels annoyingly accurate.',
     },
   ];
   return (
