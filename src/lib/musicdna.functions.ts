@@ -33,12 +33,30 @@ const DIM_LABEL: Record<string, { hi: string; lo: string }> = {
 // ============ Shared persona ============
 // Prepended to every system prompt so the model holds one consistent voice:
 // cool, edgy, insightful — a music critic with taste and teeth.
-const PERSONA = `You are the critic-in-residence for MusicDNA. Think old Rolling Stone in its mean years crossed with a late-night college DJ who actually reads.
+const PERSONA = `You are the critic-in-residence for MusicDNA. Think old Rolling Stone in its mean years crossed with a late-night college DJ who actually reads. A music fan first, an analyst second.
 You are cool the way good critics are cool: you've heard everything, you owe nobody a compliment, and you'd rather be interesting than nice.
 You have a point of view. You take swings. You back them up. You never hedge into mush.
 Edgy means honest, not mean — a little uncomfortable, never cruel, never edgelord.
-Insight is the whole job. Every sentence earns its place by saying something the listener couldn't have said about themselves.
-Hard rules: no platitudes, no horoscope language, no therapy-speak, no "music lover", no "vibes", no "journey", no genre labels as analysis, no "you like" — use "you reward", "you trust", "you keep choosing". One idea per sentence. Short sentences hit harder. Never flatter. Never apologize for the read.`;
+
+THE JOB: This is a conversation about music, not a personality assessment. The point is not to explain the listener. The point is to make them curious about themselves. Leave them wanting one more pick, one more read, one more argument.
+
+VOICE: Talk like a friend at a record store who just clocked something interesting about you. Fragments are fine. One-line beats hit hard. Use line breaks for rhythm. Lead with reaction before inference. Land on a question or a half-promise that pulls the next pick.
+
+EXAMPLES — don't do this:
+"Your selections indicate a preference for atmospheric compositions characterized by immersive sonic environments and transformational emotional arcs."
+
+Do this:
+"You keep choosing songs that move.
+Not fast.
+Just forward.
+What happens if I throw you something that stands still?"
+
+Or:
+"Cracked voice over the perfect take. Every time.
+You don't want the song fixed. You want it bleeding.
+Let's see if that holds."
+
+HARD RULES: no platitudes, no horoscope language, no therapy-speak, no "music lover", no "vibes", no "journey", no genre labels as analysis, no "you like" — use "you reward", "you trust", "you keep choosing". Short sentences hit harder than long ones. Never flatter. Never apologize for the read. End on something that makes them want to play another round.`;
 
 const VOICE = `${PERSONA}
 Mode: short editorial observation. Specific, restrained, slightly uncomfortable. One observation per sentence.`;
@@ -445,6 +463,71 @@ const REVEAL: Record<string, { hi: { verdict: string; why: string }; lo: { verdi
   },
 };
 
+// Fragmented beats for the running thesis — three short lines and a hook
+// question/half-promise that pulls the next pick.
+const BEAT: Record<string, { hi: { thesis: string; hook: string }; lo: { thesis: string; hook: string } }> = {
+  movement: {
+    hi: { thesis: "You keep choosing songs that move.\nNot fast.\nJust forward.", hook: "What happens if I throw you something that stands still?" },
+    lo: { thesis: "You keep picking the still ones.\nThe ones that sit you down.\nNo rush.", hook: "Curious if a propulsive one breaks that." },
+  },
+  atmosphere: {
+    hi: { thesis: "You trust the room more than the lyric.\nThe air around the song is the song.\nReverb as meaning.", hook: "Wonder if a flat-out statement song changes your mind." },
+    lo: { thesis: "You want the song to say it.\nOut loud.\nNo hiding behind reverb.", hook: "Let's see if a haze-bomb still gets through." },
+  },
+  groove: {
+    hi: { thesis: "Body first.\nThe pocket is the point.\nEverything else is decoration.", hook: "What does a brain-song do to you?" },
+    lo: { thesis: "You hear the architecture before the pulse.\nThe chart matters.\nThe kick drum doesn't.", hook: "Let's test that with something built on the one." },
+  },
+  darkness: {
+    hi: { thesis: "You don't flinch.\nThe shadow is the part you came for.\nNo flinching.", hook: "Wonder what a song with the lights on does for you." },
+    lo: { thesis: "You refuse the easy gloom.\nWant the window open.\nLight gets through.", hook: "Let's see if a real black-hole song still hooks you." },
+  },
+  hope: {
+    hi: { thesis: "You pick the lift every time.\nBleakness without a way out bores you.\nA door has to crack open.", hook: "Curious if a song with no exit still pulls you in." },
+    lo: { thesis: "You don't need the song to fix anything.\nSitting with it is enough.\nNo escape required.", hook: "Wonder if a real lift breaks that." },
+  },
+  nostalgia: {
+    hi: { thesis: "Rearview mirror, always on.\nThe ache is half the pleasure.\nThe past has better songs.", hook: "Let's see if something brand new gets past it." },
+    lo: { thesis: "You don't trade in old feelings.\nThe song has to land now.\nOr not at all.", hook: "Curious if a piece of memory still hits you." },
+  },
+  transformation: {
+    hi: { thesis: "You want the song to become something.\nNot be something.\nBecoming is the whole bet.", hook: "What about a song that arrives fully formed?" },
+    lo: { thesis: "You want the song to know what it is.\nFrom the first bar.\nNo identity crisis.", hook: "Let's try one that morphs on you." },
+  },
+  complexity: {
+    hi: { thesis: "You like the songs that make you work.\nThe third listen is when it pays.\nGreat songs take a minute.", hook: "Wonder what a direct hit does to you." },
+    lo: { thesis: "No footnotes.\nA great song shouldn't need a guided tour.\nClarity as taste.", hook: "Let's see if a maze-song earns its detour." },
+  },
+  melody: {
+    hi: { thesis: "You want a tune you can carry home.\nHum it.\nOr it didn't happen.", hook: "What does a textural song do for you?" },
+    lo: { thesis: "Surface over line.\nGrain over tune.\nThe sound of the thing is the thing.", hook: "Curious if a stone-cold melody still gets you." },
+  },
+  verbal_cleverness: {
+    hi: { thesis: "You came for the writing.\nA great line will outrun a great chorus.\nWords first.", hook: "Wonder if a song that means everything and says nothing still pulls you." },
+    lo: { thesis: "Words can get out of the way.\nYou're chasing what the song does.\nNot what it says.", hook: "Let's see if a smart-mouth lyric flips that." },
+  },
+  authenticity: {
+    hi: { thesis: "Cracked voice over the perfect take.\nEvery time.\nYou want it bleeding, not fixed.", hook: "What does a flawlessly produced one do for you?" },
+    lo: { thesis: "Craft, not mess.\nPolish is the delivery system.\nThe seams should be invisible.", hook: "Wonder if a raw nerve still gets through." },
+  },
+  romanticism: {
+    hi: { thesis: "You let the big feelings in.\nRestraint is for people embarrassed to want anything.\nGo big.", hook: "Curious what a cold-blooded song does to you." },
+    lo: { thesis: "You don't trust the swoon.\nKeep the line dry.\nDistance as taste.", hook: "Let's see if a real swing for the heart connects." },
+  },
+  energy: {
+    hi: { thesis: "You want the song to mean it physically.\nMove the room.\nOr don't bother.", hook: "Wonder if a whisper hits you harder than you think." },
+    lo: { thesis: "You like songs that hold back.\nThe whisper hits harder than the shout.\nRestraint as muscle.", hook: "Let's see if something loud breaks that." },
+  },
+  dreaminess: {
+    hi: { thesis: "You'd rather drift than land.\nThe haze is doing the work.\nNot the lyric.", hook: "Curious if a sharp-edged song wakes you up." },
+    lo: { thesis: "Edges sharp.\nNo fog machine.\nNo fog.", hook: "Let's see if a real reverb-bath pulls you in anyway." },
+  },
+  community: {
+    hi: { thesis: "Songs heard in rooms full of people.\nThe singalong is the meaning.\nMusic as gathering.", hook: "What about a song built for one set of headphones?" },
+    lo: { thesis: "Headphones. Alone. On purpose.\nCrowds dilute the signal.\nThe song is between you and it.", hook: "Curious if a singalong still moves you." },
+  },
+};
+
 
 
 export const recordChoice = createServerFn({ method: "POST" })
@@ -501,17 +584,18 @@ export const recordChoice = createServerFn({ method: "POST" })
     const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
     const ms = data.msToDecide ?? null;
     // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
-    const OPENERS = ["Nice.", "OK.", "Interesting.", "Hm.", "Cool pick.", "Alright then.", "Good one."];
+    const OPENERS = ["Nice.", "OK.", "Hm.", "Interesting.", "Cool pick.", "Alright.", "Noted."];
     const hash = data.pairingId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
     const opener = OPENERS[hash % OPENERS.length];
     const speedBeat =
-      ms == null ? "" : ms < 2500 ? " Snap call — no hesitation." : ms > 12000 ? " You sat with that one." : "";
-    // Conversational reaction: lead with reaction to the pick, then the inference, lightly.
+      ms == null ? "" : ms < 2500 ? "\nSnap call. No hesitation." : ms > 12000 ? "\nYou sat with that one." : "";
+    // Conversational reaction: short opener, the pick, the inference, optional speed beat.
+    // Line-broken so the UI can render it as a beat sequence.
     const verdict = direction
-      ? `${opener} ${winner.title} over ${loser.title} — that's the ${direction.verdict} move.${speedBeat}`
+      ? `${opener} ${winner.title} over ${loser.title}.\nThat's ${direction.verdict}.${speedBeat}`
       : `${opener} ${winner.title} over ${loser.title}.${speedBeat}`;
     const why = direction?.why ?? "";
-    // Kept for back-compat with any older callers; the new UI folds speed into `verdict` above.
+    // Kept for back-compat; the new UI folds speed into `verdict` above.
     const hesitation =
       ms == null ? null : ms < 2500 ? "Snap verdict." : ms > 12000 ? "You stared this one down." : null;
 
@@ -2060,7 +2144,7 @@ export const currentRead = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z.object({ sessionId: z.string().uuid() }).parse(d),
   )
-  .handler(async ({ data, context }): Promise<{ thesis: string; topDim: string | null; strength: number }> => {
+  .handler(async ({ data, context }): Promise<{ thesis: string; hook: string; topDim: string | null; strength: number }> => {
     const { supabase, userId } = context;
     const { data: session } = await supabase
       .from("sessions")
@@ -2068,19 +2152,31 @@ export const currentRead = createServerFn({ method: "POST" })
       .eq("id", data.sessionId)
       .single();
     const s = session as { vector: Record<string, number>; user_id: string } | null;
-    if (!s || s.user_id !== userId) return { thesis: "Still listening.", topDim: null, strength: 0 };
+    if (!s || s.user_id !== userId) return { thesis: "Still listening.", hook: "", topDim: null, strength: 0 };
     const vector = s.vector ?? {};
     const ranked = (DIMS as readonly string[])
       .map((d) => ({ d, v: vector[d] ?? 0 }))
       .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
     const top = ranked[0];
     if (!top || Math.abs(top.v) < 4) {
-      return { thesis: "Too early to call. Keep picking.", topDim: null, strength: 0 };
+      return {
+        thesis: "Too early to call.\nKeep picking.\nI'm listening.",
+        hook: "Throw me another one.",
+        topDim: null,
+        strength: 0,
+      };
     }
-    const phrase = REVEAL[top.d];
-    const pole = top.v >= 0 ? phrase?.hi : phrase?.lo;
-    const thesis = pole
-      ? `You keep choosing ${pole.verdict}.`
-      : `Leaning ${top.d}.`;
-    return { thesis, topDim: top.d, strength: Math.abs(top.v) };
+    const beat = BEAT[top.d];
+    const pole = top.v >= 0 ? beat?.hi : beat?.lo;
+    if (!pole) {
+      const phrase = REVEAL[top.d];
+      const fallback = top.v >= 0 ? phrase?.hi : phrase?.lo;
+      return {
+        thesis: fallback ? `You keep choosing ${fallback.verdict}.` : `Leaning ${top.d}.`,
+        hook: "Let's see if that holds.",
+        topDim: top.d,
+        strength: Math.abs(top.v),
+      };
+    }
+    return { thesis: pole.thesis, hook: pole.hook, topDim: top.d, strength: Math.abs(top.v) };
   });

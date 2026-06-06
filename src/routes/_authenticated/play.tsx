@@ -29,8 +29,9 @@ type Entry = {
   round: number;
   pairing: Pairing;
   chosenSongId: string;
-  reaction: string;     // verdict + why merged, conversational
-  thesis: string;       // running hypothesis after this pick
+  reaction: string;     // opener + pick + inference, line-broken
+  thesis: string;       // running hypothesis after this pick, line-broken
+  hook: string;         // question/half-promise pulling the next pick
   direction: "forming" | "holding" | "revising";
   topDim: string | null;
 };
@@ -134,10 +135,12 @@ function Play() {
 
       // Running hypothesis line.
       let thesis = "Reading you now.";
+      let hook = "";
       let topDim: string | null = null;
       try {
         const r = await readFn({ data: { sessionId } });
         thesis = r.thesis;
+        hook = r.hook ?? "";
         topDim = r.topDim;
       } catch { /* keep default */ }
 
@@ -151,7 +154,8 @@ function Play() {
               : "holding";
       prevTopDim.current = topDim ?? prevTopDim.current;
 
-      const reaction = why ? `${verdict} ${why}` : verdict;
+      // Merge "why" beat onto the reaction with a line break for rhythm.
+      const reaction = why ? `${verdict}\n${why}` : verdict;
 
       const entry: Entry = {
         round: currentRound,
@@ -159,6 +163,7 @@ function Play() {
         chosenSongId: songId,
         reaction,
         thesis,
+        hook,
         direction,
         topDim,
       };
@@ -297,16 +302,21 @@ function Play() {
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                 Round {String(e.round).padStart(2, "0")} · {chosen.title} vs. {rejected.title} — you picked <span className="text-foreground">{chosen.title}</span>
               </p>
-              <p className="font-serif text-lg md:text-xl leading-snug text-foreground">
+              <p className="font-serif text-lg md:text-xl leading-snug text-foreground whitespace-pre-line">
                 {e.reaction}
               </p>
-              <div className="border-l-2 border-primary/40 pl-4 py-1 space-y-1">
+              <div className="border-l-2 border-primary/40 pl-4 py-1 space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                   my read so far · {DIR_LABEL[e.direction]} {DIR_GLYPH[e.direction]}
                 </p>
-                <p className="font-serif italic text-base md:text-lg text-foreground/90 leading-snug">
+                <p className="font-serif italic text-base md:text-lg text-foreground/90 leading-snug whitespace-pre-line">
                   {e.thesis}
                 </p>
+                {e.hook && (
+                  <p className="font-serif text-sm md:text-base text-muted-foreground leading-snug pt-1">
+                    {e.hook}
+                  </p>
+                )}
               </div>
             </article>
           );
