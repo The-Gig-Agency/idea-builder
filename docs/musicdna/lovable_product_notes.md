@@ -6,6 +6,8 @@ MusicDNA is not learning songs. MusicDNA is learning tradeoffs.
 
 Do not optimize the MVP around "great songs" or "famous songs." Optimize around decisions that reveal a user preference under constraint.
 
+Use `docs/musicdna/intelligence_layer.md` before generating result copy. The AI must produce evidence, patterns, counterarguments, and confidence before it is allowed to produce prose.
+
 ## New Insight
 
 `Breaking Into Heaven` is a diagnostic song.

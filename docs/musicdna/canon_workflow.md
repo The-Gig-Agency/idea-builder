@@ -124,6 +124,7 @@ For the first prototype, use:
 - 3 archetypes
 - conversational onboarding
 - per-choice reveal copy
+- evidence-first result reasoning from `docs/musicdna/intelligence_layer.md`
 
 The V0 question is not "Can we model music taste perfectly?"
 
