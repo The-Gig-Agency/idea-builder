@@ -230,11 +230,15 @@ export const recordChoice = createServerFn({ method: "POST" })
       if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
 
-    const phrase = REVEAL_PHRASE[topDim];
+    const phrase = REVEAL[topDim];
     const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
-    const reveal = direction
-      ? `You chose ${winner.title} over ${loser.title}. That's ${direction}.`
+    const verdict = direction
+      ? `You chose ${winner.title} over ${loser.title}. That's ${direction.verdict}.`
       : `You chose ${winner.title} over ${loser.title}.`;
+    const why = direction?.why ?? "";
+    const ms = data.msToDecide ?? null;
+    const hesitation =
+      ms == null ? null : ms < 2500 ? "Snap verdict." : ms > 12000 ? "You stared this one down." : null;
 
     const { error: cErr } = await supabase.from("choices").insert({
       session_id: data.sessionId,
@@ -246,8 +250,9 @@ export const recordChoice = createServerFn({ method: "POST" })
     if (cErr) throw new Error(cErr.message);
     const { error: uErr } = await supabase.from("sessions").update({ vector: vec }).eq("id", data.sessionId);
     if (uErr) throw new Error(uErr.message);
-    return { vector: vec, reveal, dim: topDim, delta: topDelta };
+    return { vector: vec, verdict, why, hesitation, dim: topDim, delta: topDelta };
   });
+
 
 
 // ============ Finalize session: pick archetype, write interpretation ============
