@@ -1825,6 +1825,8 @@ export const chatTurn = createServerFn({ method: "POST" })
     // Saves an LLM call and avoids feeding noise into the vector.
     const EXTRACTOR_MIN_CHARS = 12;
     const trimmedMsg = data.message.trim();
+    const trimmedMsg = data.message.trim();
+    const recentTurns = (history ?? [])
       .slice(-8)
       .map((m) => `${m.role}: ${m.content}`)
       .join("\n");
@@ -1834,7 +1836,7 @@ Only include dimensions the message clearly speaks to. Positive = high pole, neg
 ${(DIMS as readonly string[]).map((d) => `- ${d}: +${DIM_LABEL[d]?.hi} / -${DIM_LABEL[d]?.lo}`).join("\n")}
 Rules: at most 5 dimensions per reply. Skip dimensions the reply doesn't actually address. If the reply is empty, hostile filler, or off-topic, return {"deltas": {}}.
 No prose, no markdown fences.`;
-    try {
+    if (trimmedMsg.length >= EXTRACTOR_MIN_CHARS) try {
       const extractTxt = await ai([
         { role: "system", content: extractorVoice },
         { role: "user", content: `Recent turns:\n${recentTurns || "(none)"}\n\nLatest user reply:\n${data.message}\n\nReturn the JSON now.` },
