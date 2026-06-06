@@ -538,12 +538,24 @@ export const getMyResult = createServerFn({ method: "GET" })
     ]);
     const latest = sessions?.[0];
     let definingChoices: Array<{ chosen: string; chosenArtist: string; rejected: string; rejectedArtist: string }> = [];
+    type Claim = {
+      dimension: string;
+      preferred?: string;
+      opposed?: string;
+      supporting_choices: number;
+      tested_total: number;
+      confidence: number;
+      examples: Array<{ chosen: string; rejected: string; delta: number }>;
+      tradeoff: string;
+    };
+    type Counter = { claim: string; impact: "low" | "medium" | "high"; notes: string };
     let reasoning: {
-      allowed_claims: unknown;
-      blocked_claims: unknown;
-      counterarguments: unknown;
-      patterns: unknown;
+      allowed_claims: Claim[];
+      blocked_claims: Claim[];
+      counterarguments: Counter[];
+      patterns: Claim[];
     } | null = null;
+
     if (latest) {
       const [choicesRes, reasoningRes] = await Promise.all([
         supabase
