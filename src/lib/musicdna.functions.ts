@@ -83,8 +83,8 @@ export const nextPairing = createServerFn({ method: "POST" })
       .from("pairings")
       .select(`
         id, tests, hypothesis, why_good, diagnostic_weight,
-        song_a:song_a_id(id,title,artist,year,lane),
-        song_b:song_b_id(id,title,artist,year,lane)
+        song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
+        song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
       `)
       .eq("active", true);
     if (error) throw new Error(error.message);
@@ -116,8 +116,8 @@ export const recordChoice = createServerFn({ method: "POST" })
       supabase
         .from("pairings")
         .select(`tests, diagnostic_weight, song_a_id, song_b_id,
-          song_a:song_a_id(${DIMS.join(",")}),
-          song_b:song_b_id(${DIMS.join(",")})`)
+          song_a:songs!pairings_song_a_id_fkey(${DIMS.join(",")}),
+          song_b:songs!pairings_song_b_id_fkey(${DIMS.join(",")})`)
         .eq("id", data.pairingId).single(),
       supabase.from("sessions").select("vector,user_id").eq("id", data.sessionId).single(),
     ]);

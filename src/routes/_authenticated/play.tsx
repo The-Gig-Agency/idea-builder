@@ -40,7 +40,7 @@ function Play() {
         const { sessionId } = await start({});
         setSessionId(sessionId);
         const { pairing, round } = await next({ data: { sessionId } });
-        setPairing(pairing as Pairing | null);
+        setPairing(pairing as unknown as Pairing | null);
         setRound(round);
         startedAt.current = Date.now();
       } catch (err) {
@@ -70,7 +70,7 @@ function Play() {
         setDone(true);
         return;
       }
-      setPairing(nxt as Pairing);
+      setPairing(nxt as unknown as Pairing);
       setRound(nr);
       startedAt.current = Date.now();
     } catch (err) {
