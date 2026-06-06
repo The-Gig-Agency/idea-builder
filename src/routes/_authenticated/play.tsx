@@ -194,12 +194,21 @@ function Play() {
         ) : (
           <p className="text-muted-foreground mb-12">Reading complete.</p>
         )}
-        <button
-          onClick={() => navigate({ to: "/profile" })}
-          className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
-        >
-          See your full reading →
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => navigate({ to: "/me" })}
+            className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
+          >
+            Keep talking to me →
+          </button>
+          <button
+            onClick={() => navigate({ to: "/profile" })}
+            className="border hairline-strong rounded-sm px-6 py-3 text-sm font-medium hover:bg-muted/40"
+          >
+            See your full reading
+          </button>
+        </div>
+
       </main>
     );
   }
