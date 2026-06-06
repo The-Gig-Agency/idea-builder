@@ -1225,7 +1225,7 @@ Output STRICT JSON:
   "hypothesis_v1": "ONE sentence, max 22 words. A falsifiable claim about the LISTENER. Use 'I think', 'maybe', 'my guess'. End with an invitation to break it ('tell me I'm wrong', 'prove me wrong with the next one').",
   "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
-  "suspected_dimensions": ["movement","atmosphere","groove","darkness","hope","nostalgia","transformation","complexity","melody","verbal_cleverness","authenticity","romanticism","energy","dreaminess","community"]
+  "suspected_dimensions": ["movement","atmosphere","immersion","scale","community","perspective","confidence","tension","texture","transformation"]
 }
 No prose, no markdown fences.`;
 
