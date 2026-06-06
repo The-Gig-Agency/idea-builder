@@ -163,7 +163,7 @@ function ProfilePage() {
                 {copied ? "Copied" : "Share / challenge a friend"}
               </button>
               <a
-                href={`/s/${latest.id}`}
+                href={`/s/${(latest as { share_token?: string }).share_token ?? latest.id}`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
