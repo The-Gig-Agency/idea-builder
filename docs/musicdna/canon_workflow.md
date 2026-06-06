@@ -5,10 +5,11 @@
 Create the first proprietary MusicDNA asset for the Alternative/Post-Punk lane:
 
 1. a 250-song diagnostic anchor set
-2. draft vectors across 15 dimensions
+2. draft vectors across the current 15 dimensions
 3. diagnostic metadata for each song
-4. 500 AI-generated candidate pairings
-5. 150-250 human-approved diagnostic pairings
+4. candidate-dimension notes for `immersion` and `scale`
+5. 500 AI-generated candidate pairings
+6. 150-250 human-approved diagnostic pairings
 
 The goal is not to collect the best songs.
 
@@ -45,8 +46,16 @@ Review:
 - `diagnostic_power`
 - `primary_dimensions`
 - `archetype_signals`
+- `candidate_dimensions`
 
 High `diagnostic_power` songs should be good at splitting users along meaningful dimensions. Low `diagnostic_power` songs may still be famous, beloved, or useful as familiarity anchors.
+
+`candidate_dimensions` are not part of the active schema yet. Use them to record emerging latent traits before committing to a database migration.
+
+Current candidate dimensions:
+
+- `immersion`: immediacy vs slow reveal / cumulative effect
+- `scale`: intimate vs vast / widescreen
 
 ### Stage 3: Vector Review
 
@@ -59,6 +68,8 @@ Human review should focus first on songs that will appear in high-impact pairing
 - `A Forest`
 - `The Killing Moon`
 - `Fools Gold`
+- `Breaking Into Heaven`
+- `Slow Down`
 - `Born Slippy .NUXX`
 - `Vapour Trail`
 - `This Charming Man`
@@ -84,6 +95,15 @@ Candidate pairings should include:
 - `why_this_matters`
 - `expected_information_gain`
 - `curator_status`
+
+Priority candidate pairings:
+
+| Pairing | Tests |
+|---|---|
+| `Breaking Into Heaven` vs `She Bangs the Drums` | immersion vs immediacy, journey vs anthem |
+| `Fools Gold` vs `There She Goes` | groove-state vs melodic concision |
+| `Slow Down` vs a more immediate single | drift/drag vs hook/payoff |
+| `Blue` vs `History` | immersion/exhaustion vs memory/grandeur |
 
 ### Stage 5: Elite Pairing Selection
 

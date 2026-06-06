@@ -59,6 +59,43 @@ All song vectors use a 0-100 scale.
 | dreaminess | grounded, sharp-edged | haze, blur, float, dissociation |
 | community | private, solitary, inward | anthemic, communal, singalong/social |
 
+## Candidate Dimension Expansion
+
+The next ontology pass should strongly consider adding these dimensions:
+
+| Dimension | Low Means | High Means |
+|---|---|---|
+| immersion | immediacy, instant hook, instant payoff, radio-friendly | slow reveal, cumulative effect, rewards repeat listening |
+| scale | intimate, small-room, human-scale | vast, widescreen, cathedral-sized, horizon-seeking |
+
+`immersion` may be one of the most predictive MusicDNA dimensions. It captures a tradeoff that ordinary genre systems miss:
+
+> Immediacy vs immersion.
+
+Example:
+
+```text
+Breaking Into Heaven > She Bangs the Drums
+```
+
+This is not simply "Stone Roses preference." It may indicate:
+
+- immersion over immediacy
+- journey over anthem
+- atmosphere over hook
+- cumulative effect over instant payoff
+
+Other high-immersion diagnostic anchors include:
+
+- `Breaking Into Heaven`
+- `Slow Down`
+- `Fools Gold`
+- `Blue`
+- `Vapour Trail`
+- `Born Slippy .NUXX`
+
+Do not treat these as "better songs." Treat them as songs that reveal a user's willingness to wait, sink in, and trust cumulative motion.
+
 ## Graph Layers
 
 ### Identity Graph
@@ -93,6 +130,17 @@ A Diagnostic Canon asks:
 
 MusicDNA needs the second. Some songs are culturally important but diagnostically weak. Some songs are not consensus classics but are incredibly revealing because they split listeners along meaningful latent dimensions.
 
+The app is not learning songs. It is learning tradeoffs.
+
+Examples:
+
+| Choice | Possible Tradeoff |
+|---|---|
+| `Breaking Into Heaven` over `She Bangs the Drums` | immersion > immediacy, journey > anthem |
+| `Fools Gold` over `There She Goes` | groove-state > melodic concision |
+| `Slow Down` over a more immediate single | drift/drag > hook/payoff |
+| `Ceremony` over `Dreaming of Me` | transformation > charm/nostalgia |
+
 ## Diagnostic Song Fields
 
 Each song row should include:
@@ -101,7 +149,11 @@ Each song row should include:
 {
   "diagnostic_power": 94,
   "primary_dimensions": ["transformation", "hope"],
-  "archetype_signals": ["forward_motion_romantic", "texture_astronaut"]
+  "archetype_signals": ["forward_motion_romantic", "texture_astronaut"],
+  "candidate_dimensions": {
+    "immersion": 91,
+    "scale": 88
+  }
 }
 ```
 
