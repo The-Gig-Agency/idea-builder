@@ -221,25 +221,78 @@ export const analyzeOpeningSongs = createServerFn({ method: "POST" })
 export const generateOpeningHypothesis = analyzeOpeningSongs;
 
 // ============ Start session ============
+const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock"];
+
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const { data: profile } = await supabase
       .from("profiles")
-      .select("opening_lane, opening_lane_confidence")
+      .select("opening_lane, opening_lane_confidence, opening_analysis_json")
       .eq("user_id", userId)
       .maybeSingle();
     const lane = ((profile?.opening_lane as Lane | null) ?? "general") as Lane;
     const lane_confidence = Number(profile?.opening_lane_confidence ?? 0);
+
+    // Seed probe candidates: secondary lanes from opening analysis, then a wildcard.
+    const analysis = (profile?.opening_analysis_json ?? {}) as { secondary_lanes?: string[] };
+    const secondaries = (analysis.secondary_lanes ?? []).filter((l): l is Lane =>
+      (ALL_LANES as readonly string[]).includes(l) && l !== lane,
+    );
+    const wildcardPool = ALL_LANES.filter((l) => l !== lane && !secondaries.includes(l));
+    const wildcard = wildcardPool[Math.floor(Math.random() * wildcardPool.length)];
+    const probe_candidate_lanes = Array.from(new Set([...secondaries, wildcard].filter(Boolean) as Lane[])).slice(0, 3);
+
     const { data, error } = await supabase
       .from("sessions")
-      .insert({ user_id: userId, vector: {}, lane, lane_confidence })
+      .insert({
+        user_id: userId,
+        vector: {},
+        lane,
+        lane_confidence,
+        probe_candidate_lanes,
+        probe_state: { probes_shown: [], pending: {}, lane_alignment: {}, flips: [] },
+      })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     return { sessionId: data.id, lane, lane_confidence };
   });
+
+// ============ Next pairing ============
+// Probe schedule: at these rounds we silently inject a pairing from a
+// candidate lane (not the user's current lane) to see if the user resonates.
+const PROBE_ROUNDS = new Set([4, 9, 14]);
+
+type ProbeState = {
+  probes_shown: Array<{ round: number; pairing_id: string; lane: Lane }>;
+  pending: Record<string, Lane>; // pairing_id → probe lane (not yet recorded)
+  lane_alignment: Record<string, { wins: number; total: number; magnitude: number; cosine_sum: number }>;
+  flips: Array<{ round: number; from: Lane; to: Lane; reason: string }>;
+};
+
+export const nextPairing = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const [usedRes, sessionRes] = await Promise.all([
+      supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
+      supabase
+        .from("sessions")
+        .select("vector, lane, probe_candidate_lanes, probe_state")
+        .eq("id", data.sessionId)
+        .single(),
+    ]);
+    const sessionLane = (sessionRes.data?.lane as Lane | null) ?? "general";
+    const probeCandidates = (sessionRes.data?.probe_candidate_lanes as Lane[] | null) ?? [];
+    const probeState = (sessionRes.data?.probe_state ?? {}) as ProbeState;
+    probeState.probes_shown = probeState.probes_shown ?? [];
+    probeState.pending = probeState.pending ?? {};
+    probeState.lane_alignment = probeState.lane_alignment ?? {};
+    probeState.flips = probeState.flips ?? [];
+
 
 // ============ Next pairing ============
 export const nextPairing = createServerFn({ method: "POST" })
