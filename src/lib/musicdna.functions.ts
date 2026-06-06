@@ -753,8 +753,11 @@ export const finalizeSession = createServerFn({ method: "POST" })
     });
 
     // -------- Layer 4: Evidence threshold --------
-    const MIN_SUPPORT = 3;
-    const MIN_CONFIDENCE = 0.65;
+    // Tuned for 6-round adaptive test: 2 supporting choices on an axis is
+    // enough to call a tendency, as long as direction is consistent and the
+    // magnitude is real. 0.55 keeps out pure noise without demanding 12 rounds.
+    const MIN_SUPPORT = 2;
+    const MIN_CONFIDENCE = 0.55;
     const allowed_claims = patterns
       .filter((p) => p.supporting_choices >= MIN_SUPPORT && p.confidence >= MIN_CONFIDENCE)
       .slice(0, 5);
