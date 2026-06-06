@@ -1929,8 +1929,12 @@ No prose, no markdown fences.`;
 
     // -------- Update critic profile from this exchange --------
     // The user's reply is feedback on the critic's PRIOR assistant turn (the
-    // one before this new reply). Use that pair to extract tone/move signals.
-    try {
+    // one before this new reply). Note: `history` was fetched AFTER we inserted
+    // the new user message but BEFORE the new assistant reply, so the last
+    // assistant entry in it is correctly the one the user just reacted to —
+    // don't reorder those statements.
+    // Skip on short / trivial replies — no real signal, just LLM spend.
+    if (trimmedMsg.length >= EXTRACTOR_MIN_CHARS) try {
       const priorAssistant = [...(history ?? [])]
         .reverse()
         .find((m) => m.role === "assistant")?.content as string | undefined;
