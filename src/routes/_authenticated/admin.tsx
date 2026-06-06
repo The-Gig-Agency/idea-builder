@@ -10,6 +10,16 @@ import {
   adminDelete,
   adminSetDiagnosticWeight,
 } from "@/lib/admin.functions";
+import {
+  listDecadePrompts,
+  updateDecadePromptText,
+  setActiveDecadePrompt,
+  createDecadePrompt,
+  deleteDecadePrompt,
+  DECADES,
+  type Decade,
+  type DecadePrompt,
+} from "@/lib/decade-prompts.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — MusicDNA" }] }),
@@ -17,10 +27,12 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 type Entity = "songs" | "pairings" | "archetypes";
-const ENTITIES: { key: Entity; label: string }[] = [
+type Tab = Entity | "decade_prompts";
+const ENTITIES: { key: Tab; label: string }[] = [
   { key: "songs", label: "Songs" },
   { key: "pairings", label: "Pairings" },
   { key: "archetypes", label: "Archetypes" },
+  { key: "decade_prompts", label: "Decade Prompts" },
 ];
 
 type Row = Record<string, unknown> & { id: string };
@@ -36,7 +48,7 @@ function AdminPage() {
     retryDelay: 250,
     staleTime: 60_000,
   });
-  const [tab, setTab] = useState<Entity>("songs");
+  const [tab, setTab] = useState<Tab>("songs");
   const [editing, setEditing] = useState<{ row: Row | null } | null>(null);
 
   if (gate.isLoading) {
@@ -70,15 +82,17 @@ function AdminPage() {
             Edit songs, pairings, and archetypes. Changes go live immediately.
           </p>
         </div>
-        <button
-          onClick={() => setEditing({ row: null })}
-          className="rounded-sm bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
-        >
-          + New {tab.replace(/s$/, "")}
-        </button>
+        {tab !== "decade_prompts" && (
+          <button
+            onClick={() => setEditing({ row: null })}
+            className="rounded-sm bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            + New {tab.replace(/s$/, "")}
+          </button>
+        )}
       </div>
 
-      <nav className="flex gap-1 border-b hairline mb-6">
+      <nav className="flex gap-1 border-b hairline mb-6 flex-wrap">
         {ENTITIES.map((e) => (
           <button
             key={e.key}
@@ -94,15 +108,19 @@ function AdminPage() {
         ))}
       </nav>
 
-      <EntityTable
-        key={tab}
-        entity={tab}
-        onEdit={(row) => setEditing({ row })}
-      />
+      {tab === "decade_prompts" ? (
+        <DecadePromptsEditor />
+      ) : (
+        <EntityTable
+          key={tab}
+          entity={tab as Exclude<Entity, "decade_prompts">}
+          onEdit={(row) => setEditing({ row })}
+        />
+      )}
 
-      {editing && (
+      {editing && tab !== "decade_prompts" && (
         <EditDrawer
-          entity={tab}
+          entity={tab as Exclude<Entity, "decade_prompts">}
           row={editing.row}
           onClose={() => setEditing(null)}
         />
@@ -424,4 +442,188 @@ function fieldsFor(e: Entity): Field[] {
     { key: "signature_axes", type: "json", optional: true, hint: '{"movement":5,"darkness":-3}' },
     { key: "signature_signals", type: "json", optional: true, hint: '["…"]' },
   ];
+}
+
+// ============ Decade Opening Prompts editor ============
+function DecadePromptsEditor() {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listDecadePrompts);
+  const updateTextFn = useServerFn(updateDecadePromptText);
+  const setActiveFn = useServerFn(setActiveDecadePrompt);
+  const createFn = useServerFn(createDecadePrompt);
+  const deleteFn = useServerFn(deleteDecadePrompt);
+
+  const query = useQuery({
+    queryKey: ["admin", "decade_prompts"],
+    queryFn: () => listFn(),
+  });
+
+  const grouped = useMemo(() => {
+    const map: Record<Decade, DecadePrompt[]> = {
+      "70s": [], "80s": [], "90s": [], "00s": [], "10s": [],
+    };
+    for (const r of query.data?.rows ?? []) map[r.decade]?.push(r);
+    return map;
+  }, [query.data]);
+
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ["admin", "decade_prompts"] });
+  }
+
+  return (
+    <div className="space-y-10">
+      <p className="text-sm text-muted-foreground max-w-2xl">
+        The opening question shown as song #1 on each decade's onboarding page. One per decade is marked <span className="text-foreground font-medium">active</span> — that's the one users see. Edit text inline (press Enter or blur to save). Promote a different option by clicking its radio.
+      </p>
+
+      {DECADES.map((decade) => (
+        <section key={decade} className="space-y-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="display text-2xl">{decade}</h2>
+            <NewPromptInline
+              onCreate={async (text) => {
+                try {
+                  await createFn({ data: { decade, text } });
+                  toast.success(`Added to ${decade}`);
+                  invalidate();
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+            />
+          </div>
+          <ul className="border hairline-strong rounded-sm bg-surface divide-y hairline">
+            {grouped[decade].map((p) => (
+              <li key={p.id} className="flex items-start gap-3 p-3">
+                <label className="pt-2 cursor-pointer" title="Make this the active prompt">
+                  <input
+                    type="radio"
+                    name={`active-${decade}`}
+                    checked={p.is_active}
+                    onChange={async () => {
+                      try {
+                        await setActiveFn({ data: { id: p.id } });
+                        toast.success(`${decade} active prompt set`);
+                        invalidate();
+                      } catch (e) {
+                        toast.error((e as Error).message);
+                      }
+                    }}
+                  />
+                </label>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground pt-2 w-8">
+                  {String(p.position).padStart(2, "0")}
+                </span>
+                <PromptTextField
+                  initial={p.text}
+                  onSave={async (text) => {
+                    if (text === p.text) return;
+                    try {
+                      await updateTextFn({ data: { id: p.id, text } });
+                      toast.success("Saved");
+                      invalidate();
+                    } catch (e) {
+                      toast.error((e as Error).message);
+                    }
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    if (p.is_active) {
+                      toast.error("Promote a different prompt first.");
+                      return;
+                    }
+                    if (!confirm("Delete this prompt?")) return;
+                    try {
+                      await deleteFn({ data: { id: p.id } });
+                      toast.success("Deleted");
+                      invalidate();
+                    } catch (e) {
+                      toast.error((e as Error).message);
+                    }
+                  }}
+                  className="text-xs text-destructive underline mt-2 whitespace-nowrap"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+            {grouped[decade].length === 0 && (
+              <li className="p-4 text-center text-sm text-muted-foreground">
+                No prompts for {decade} yet.
+              </li>
+            )}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function PromptTextField({
+  initial,
+  onSave,
+}: {
+  initial: string;
+  onSave: (text: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onSave(value.trim())}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      className="flex-1 bg-transparent border-b hairline focus:border-primary focus:outline-none px-1 py-2 text-base font-serif"
+    />
+  );
+}
+
+function NewPromptInline({ onCreate }: { onCreate: (text: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+      >
+        + add option
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="New prompt text…"
+        className="border hairline rounded-sm bg-background px-2 py-1 text-sm w-80"
+        autoFocus
+      />
+      <button
+        onClick={async () => {
+          const t = text.trim();
+          if (t.length < 3) return;
+          await onCreate(t);
+          setText("");
+          setOpen(false);
+        }}
+        className="text-xs px-3 py-1 bg-primary text-primary-foreground rounded-sm"
+      >
+        Add
+      </button>
+      <button
+        onClick={() => { setText(""); setOpen(false); }}
+        className="text-xs text-muted-foreground"
+      >
+        Cancel
+      </button>
+    </div>
+  );
 }

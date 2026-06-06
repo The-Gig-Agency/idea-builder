@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { reactToOne, reactToThree, refineWithTwoMore, recordEvent } from "@/lib/musicdna.functions";
+import { getActiveDecadePrompt } from "@/lib/decade-prompts.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
@@ -18,15 +20,17 @@ const LANE_LABEL: Record<string, string> = {
   general: "General",
 };
 
-// Short, momentum-building prompts. The first one carries the weight,
-// the rest get tighter as the conversation finds its rhythm.
-const PROMPTS: string[] = [
-  "What song would you genuinely mourn?",
+// Short, momentum-building prompts. Song #1 is decade-specific (loaded from
+// the decade_opening_prompts table, admin-editable). #2–#5 stay constant.
+// MVP decade = 80s. Other decades will plug in via subdomains later.
+const ONBOARDING_DECADE = "80s" as const;
+const FOLLOWUP_PROMPTS: string[] = [
   "What song never gets old?",
   "What one feels bigger than itself?",
   "What's your sleeper pick?",
   "What song explains you best?",
 ];
+const FALLBACK_OPENER = "What song still sounds like the future?";
 
 const PLACEHOLDERS: string[] = [
   "Ceremony — New Order",
@@ -48,7 +52,17 @@ function Onboarding() {
   const reactThreeFn = useServerFn(reactToThree);
   const refineFn = useServerFn(refineWithTwoMore);
   const logEvent = useServerFn(recordEvent);
+  const fetchOpener = useServerFn(getActiveDecadePrompt);
   const navigate = useNavigate();
+
+  // Decade-specific opening question (admin-editable). Falls back to a known-good prompt.
+  const openerQuery = useQuery({
+    queryKey: ["decade-prompt", ONBOARDING_DECADE],
+    queryFn: () => fetchOpener({ data: { decade: ONBOARDING_DECADE } }),
+    staleTime: 5 * 60_000,
+  });
+  const opener = openerQuery.data?.text || FALLBACK_OPENER;
+  const PROMPTS: string[] = [opener, ...FOLLOWUP_PROMPTS];
 
   const [history, setHistory] = useState<Exchange[]>([]);
   const [input, setInput] = useState("");

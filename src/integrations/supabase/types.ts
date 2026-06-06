@@ -142,6 +142,36 @@ export type Database = {
           },
         ]
       }
+      decade_opening_prompts: {
+        Row: {
+          created_at: string
+          decade: string
+          id: string
+          is_active: boolean
+          position: number
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decade: string
+          id?: string
+          is_active?: boolean
+          position: number
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decade?: string
+          id?: string
+          is_active?: boolean
+          position?: number
+          text?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_log: {
         Row: {
           choice_id: string | null
