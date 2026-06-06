@@ -54,6 +54,8 @@ function Play() {
   const [reveal, setReveal] = useState<{ verdict: string; why: string; hesitation: string | null } | null>(null);
   const [insight, setInsight] = useState<Insight | null>(null);
   const [synthesis, setSynthesis] = useState<string | null>(null);
+  const [kept, setKept] = useState<Array<{ tradeoff: string; examples: string[]; supporting: number; tested: number }>>([]);
+  const [counters, setCounters] = useState<Array<{ claim: string; notes: string }>>([]);
   const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
