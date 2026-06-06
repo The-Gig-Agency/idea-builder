@@ -520,7 +520,7 @@ export const recordChoice = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const songCols = "id,title,artist,movement,atmosphere,groove,darkness,hope,nostalgia,transformation,complexity,melody,verbal_cleverness,authenticity,romanticism,energy,dreaminess,community";
+    const songCols = "id,title,artist,movement,atmosphere,immersion,scale,community,perspective,confidence,tension,texture,transformation";
     const [pairingRes, sessionRes] = await Promise.all([
       supabase
         .from("pairings")
