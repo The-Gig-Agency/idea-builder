@@ -1635,7 +1635,7 @@ export const finalSynthesis = createServerFn({ method: "POST" })
     try {
       const txt = await ai([
         { role: "system", content: SYNTH_VOICE },
-        { role: "user", content:
+      { role: "user", content:
 `SONGS THEY PICKED (in order):
 ${songsPicked}
 
@@ -1644,6 +1644,9 @@ ${evidenceBlock}
 
 COUNTER-EXPLANATIONS YOU MAY ACKNOWLEDGE:
 ${counterBlock}
+
+DERIVED MOODS (read off their tradeoffs — you MAY call them this if the evidence supports it, never as a label, only as flavor):
+${derivedMoods.length ? derivedMoods.join(", ") : "(none earned)"}
 
 Return the JSON now.` },
       ]);
