@@ -96,7 +96,7 @@ function SharePage() {
           <section className="mt-14">
             <p className="eyebrow mb-5">The choices that gave it away</p>
             <ul className="divide-y divide-border border hairline-strong rounded-sm bg-surface">
-              {definingChoices.map((c, i) => (
+              {(definingChoices as Array<{ chosen: string; chosenArtist: string; rejected: string; rejectedArtist: string }>).map((c, i) => (
                 <li key={i} className="px-5 py-4 flex items-baseline gap-4">
                   <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
                     {String(i + 1).padStart(2, "0")}
