@@ -2,8 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import {
-  reactToThree,
-  refineWithTwoMore,
+  reactToOne,
+  commitOpeningThree,
   recordEvent,
   startSession,
   nextPairing,
@@ -33,18 +33,18 @@ const LANE_LABEL: Record<string, string> = {
   general: "General",
 };
 
-const SLOT1_LABELS = ["The one you'd save first", "The one right after", "And one more"];
-const SLOT2_LABELS = ["Try to break my read", "And one more — go"];
+const SLOT_LABELS = [
+  "The one at the top",
+  "Now #2",
+  "And the third",
+];
 const PLACEHOLDERS = [
   "Ceremony — New Order",
-  "Fool's Gold — The Stone Roses",
-  "Untrue — Burial",
-  "Bizarre Love Triangle — New Order",
   "Pyramid Song — Radiohead",
+  "Untrue — Burial",
 ];
 
-type Phase = "ranking3" | "ranking2" | "playing" | "done";
-type ThreeReact = { reaction: string; hypothesis_v1: string };
+type Phase = "slot1" | "slot2" | "slot3" | "playing" | "done";
 type Refined = { reaction?: string; hypothesis: string; lane: string; confidence: number };
 type Song = { id: string; title: string; artist: string; year: number | null; lane: string };
 type Pairing = {
@@ -66,9 +66,8 @@ const DIR_GLYPH: Record<Entry["direction"], string> = { forming: "↑", holding:
 const DIR_LABEL: Record<Entry["direction"], string> = { forming: "first read", holding: "holding", revising: "revising" };
 
 function Onboarding() {
-  // server fns
-  const reactThreeFn = useServerFn(reactToThree);
-  const refineFn = useServerFn(refineWithTwoMore);
+  const reactOneFn = useServerFn(reactToOne);
+  const commitFn = useServerFn(commitOpeningThree);
   const logEvent = useServerFn(recordEvent);
   const getOpenerFn = useServerFn(getOnboardingOpener);
   const startFn = useServerFn(startSession);
@@ -81,7 +80,7 @@ function Onboarding() {
 
   type EventInput = {
     event_type:
-      | "onboarding_viewed" | "onboarding_three_submitted" | "onboarding_classified"
+      | "onboarding_viewed" | "onboarding_slot_submitted" | "onboarding_three_submitted" | "onboarding_classified"
       | "pairing_shown" | "choice_made" | "reveal_shown" | "reveal_continued"
       | "session_completed" | "result_viewed" | "result_shared" | "session_quit";
     session_id?: string | null;
@@ -93,14 +92,13 @@ function Onboarding() {
   };
   const track = (e: EventInput) => { logEvent({ data: e } as never).catch(() => {}); };
 
-  // phase + ranking state
-  const [phase, setPhase] = useState<Phase>("ranking3");
-  const [three, setThree] = useState<[string, string, string]>(["", "", ""]);
-  const [two, setTwo] = useState<[string, string]>(["", ""]);
+  // phase + slot state
+  const [phase, setPhase] = useState<Phase>("slot1");
+  const [songs, setSongs] = useState<string[]>([]); // submitted, locked
+  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [threeRead, setThreeRead] = useState<ThreeReact | null>(null);
+  const [reactions, setReactions] = useState<string[]>([]); // per-slot reaction text
   const [refined, setRefined] = useState<Refined | null>(null);
-  const [r3Step, setR3Step] = useState<0 | 1 | 2>(0);
   const [r5Step, setR5Step] = useState<0 | 1 | 2>(0);
   const [opener, setOpener] = useState<OnboardingOpener | null>(null);
 
@@ -115,7 +113,7 @@ function Onboarding() {
   const startedAt = useRef<number>(Date.now());
   const playStartedRef = useRef(false);
   const prevTopDim = useRef<string | null>(null);
-  const rank2Ref = useRef<HTMLDivElement | null>(null);
+  const slotAnchorRef = useRef<HTMLDivElement | null>(null);
   const pairingAnchorRef = useRef<HTMLDivElement | null>(null);
   const doneAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -138,32 +136,16 @@ function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // reveal-3 choreography
-  useEffect(() => {
-    if (!threeRead) return;
-    setR3Step(0);
-    const t1 = setTimeout(() => setR3Step(1), 350);
-    const t2 = setTimeout(() => setR3Step(2), 1100);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [threeRead]);
-
-  // After reveal-3, surface the rank2 form and scroll to it
-  useEffect(() => {
-    if (r3Step === 2 && phase === "ranking2") {
-      setTimeout(() => rank2Ref.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 200);
-    }
-  }, [r3Step, phase]);
-
-  // reveal-5 choreography
+  // reveal-final choreography (after slot 3)
   useEffect(() => {
     if (!refined) return;
     setR5Step(0);
     const t1 = setTimeout(() => setR5Step(1), 350);
-    const t2 = setTimeout(() => setR5Step(2), 1100);
+    const t2 = setTimeout(() => setR5Step(2), 1200);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [refined]);
 
-  // After reveal-5 lands, auto-start the side-by-sides — no handoff button
+  // After reveal lands, auto-start the side-by-sides
   useEffect(() => {
     if (r5Step !== 2 || phase !== "playing" || playStartedRef.current) return;
     playStartedRef.current = true;
@@ -190,67 +172,69 @@ function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r5Step, phase]);
 
-  // scroll new pairing into view
+  // scroll new active slot or pairing into view
+  useEffect(() => {
+    if ((phase === "slot2" || phase === "slot3") && slotAnchorRef.current) {
+      setTimeout(() => slotAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+    }
+  }, [phase]);
   useEffect(() => {
     if (pairing && pairingAnchorRef.current) {
       pairingAnchorRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [pairing?.id]);
-
-  // scroll to report when finished
   useEffect(() => {
     if (phase === "done" && doneAnchorRef.current) {
       doneAnchorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [phase]);
 
-  async function submitThree() {
+  async function submitSlot() {
     if (busy) return;
-    const cleaned = three.map((s) => s.trim()) as [string, string, string];
-    if (cleaned.some((s) => s.length < 2)) {
-      toast.error("Fill in all three — rank matters.");
+    const text = draft.trim();
+    if (text.length < 2) {
+      toast.error("Type a song first.");
       return;
     }
+    const rank = songs.length + 1; // 1, 2, or 3
     setBusy(true);
     try {
       await ensureAnonSession();
-      const r = (await reactThreeFn({ data: { songs: cleaned } } as never)) as ThreeReact;
-      setThree(cleaned);
-      setThreeRead(r);
-      setPhase("ranking2");
-      track({
-        event_type: "onboarding_three_submitted",
-        variant: opener?.variant_key ?? "fallback",
-      });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't read those.");
-    } finally {
-      setBusy(false);
-    }
-  }
+      const nextSongs = [...songs, text];
 
-  async function submitTwoMore() {
-    if (busy) return;
-    const cleaned = two.map((s) => s.trim()) as [string, string];
-    if (cleaned.some((s) => s.length < 2)) {
-      toast.error("Two more — try to break my read.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await ensureAnonSession();
-      const r = (await refineFn({
-        data: { firstThree: three, twoMore: cleaned },
-      } as never)) as Refined;
-      setTwo(cleaned);
-      setRefined(r);
-      setPhase("playing"); // reveal5 then auto-start side-by-sides
-      track({
-        event_type: "onboarding_classified",
-        props: { lane: r.lane, confidence: r.confidence, song_count: 5 },
-      });
+      if (rank < 3) {
+        // Short reaction, then reveal next slot.
+        const r = (await reactOneFn({
+          data: { song: text, index: rank - 1, priorSongs: songs },
+        } as never)) as { text: string };
+        setSongs(nextSongs);
+        setDraft("");
+        setReactions((prev) => [...prev, r.text]);
+        setPhase(rank === 1 ? "slot2" : "slot3");
+        track({ event_type: "onboarding_slot_submitted", props: { rank } });
+      } else {
+        // Slot 3 — commit. Show a quick reaction first (from commit response),
+        // then synthesis/hypothesis, then auto-start pairings.
+        const r = (await commitFn({ data: { songs: nextSongs } } as never)) as {
+          reaction: string;
+          hypothesis: string;
+          lane: string;
+          confidence: number;
+        };
+        setSongs(nextSongs);
+        setDraft("");
+        setReactions((prev) => [...prev, r.reaction]);
+        setRefined({ hypothesis: r.hypothesis, lane: r.lane, confidence: r.confidence });
+        setPhase("playing");
+        track({ event_type: "onboarding_slot_submitted", props: { rank: 3 } });
+        track({ event_type: "onboarding_three_submitted", variant: opener?.variant_key ?? "fallback" });
+        track({
+          event_type: "onboarding_classified",
+          props: { lane: r.lane, confidence: r.confidence, song_count: 3 },
+        });
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't refine.");
+      toast.error(e instanceof Error ? e.message : "Couldn't read that.");
     } finally {
       setBusy(false);
     }
@@ -346,53 +330,42 @@ function Onboarding() {
     );
   }
 
-  // INITIAL: rank-three prompt only
-  if (phase === "ranking3") {
+  // INITIAL: cold open — single slot only
+  if (phase === "slot1") {
     return (
       <main className="mx-auto max-w-2xl px-6 pt-16 pb-24 min-h-screen flex flex-col">
         <section className="space-y-10 animate-in fade-in duration-500">
           <header className="space-y-3">
-            <p className="eyebrow">{opener?.eyebrow ?? "three songs · ranked"}</p>
-            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight whitespace-pre-line">
-              {opener ? renderHeadline(opener.headline) : (
-                <>
-                  Name three songs you love.
-                  <br />
-                  <span className="italic text-muted-foreground">Rank them.</span>
-                </>
-              )}
+            <p className="eyebrow">three songs · ranked</p>
+            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+              Three songs. Ranked.
+              <br />
+              <span className="italic text-muted-foreground">That's all I need.</span>
             </h1>
             <p className="text-sm text-muted-foreground max-w-md">
-              {opener?.sub ?? "The order matters. Your #1 says more than you think."}
+              Start with #1 — the one at the top.
             </p>
           </header>
 
           <div className="space-y-6">
-            {[0, 1, 2].map((i) => (
-              <RankedInput
-                key={i}
-                rank={i + 1}
-                label={(opener?.slot_labels?.[i]) ?? SLOT1_LABELS[i]}
-                value={three[i]}
-                placeholder={PLACEHOLDERS[i]}
-                onChange={(v) => {
-                  const next = [...three] as [string, string, string];
-                  next[i] = v;
-                  setThree(next);
-                }}
-                autoFocus={i === 0}
-                onEnter={i === 2 ? submitThree : undefined}
-              />
-            ))}
+            <RankedInput
+              rank={1}
+              label={SLOT_LABELS[0]}
+              value={draft}
+              placeholder={PLACEHOLDERS[0]}
+              onChange={setDraft}
+              autoFocus
+              onEnter={submitSlot}
+            />
           </div>
 
           <div>
             <button
-              onClick={submitThree}
-              disabled={busy || three.some((s) => s.trim().length < 2)}
+              onClick={submitSlot}
+              disabled={busy || draft.trim().length < 2}
               className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
             >
-              {busy ? "Reading…" : (opener?.cta ?? "See what I think →")}
+              {busy ? "Reading…" : "→"}
             </button>
           </div>
         </section>
@@ -400,86 +373,64 @@ function Onboarding() {
     );
   }
 
-  // TRANSCRIPT: ranking2 → playing → done all in one continuous scroll
+  // TRANSCRIPT: slot2 → slot3 → playing → done in one continuous scroll
   return (
     <main className="mx-auto max-w-3xl px-6 pt-12 pb-24 space-y-12">
       <header className="space-y-2">
         <p className="eyebrow">the interview</p>
       </header>
 
-      {/* Block 1: the first three + reaction */}
-      {threeRead && (
-        <section className="space-y-6 animate-in fade-in duration-500">
-          <RankedChecklist songs={three} startRank={1} muted={!!refined} />
-          {r3Step >= 1 && !refined && (
-            <p className="font-serif italic text-3xl md:text-4xl text-primary animate-in fade-in slide-in-from-bottom-2 duration-500">
-              Interesting…
-            </p>
-          )}
-          {r3Step >= 2 && (
-            <>
-              <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground animate-in fade-in slide-in-from-bottom-2 duration-700">
-                {threeRead.reaction}
-              </p>
-              <div className="border-l-2 border-primary/60 pl-4 py-1 animate-in fade-in duration-700">
-                <p className="eyebrow mb-1">working hypothesis</p>
-                <p className="font-serif text-lg italic">"{threeRead.hypothesis_v1}"</p>
+      {/* Submitted songs + their reactions, interleaved */}
+      <section className="space-y-8">
+        {songs.map((s, i) => (
+          <div key={i} className="space-y-3 animate-in fade-in duration-500">
+            <div className="grid grid-cols-[3rem_1fr] gap-4 items-baseline">
+              <span className="text-right font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">
+                #{i + 1}
+              </span>
+              <span className="font-mono text-base md:text-lg text-foreground">✓ {s}</span>
+            </div>
+            {reactions[i] && (
+              <div className="pl-[4rem]">
+                <p className="font-serif text-xl md:text-2xl leading-snug text-foreground animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  {reactions[i]}
+                </p>
               </div>
-            </>
-          )}
-        </section>
-      )}
+            )}
+          </div>
+        ))}
+      </section>
 
-      {/* Block 2: rank two more — inline, no page break */}
-      {phase === "ranking2" && r3Step >= 2 && (
-        <section ref={rank2Ref} className="space-y-8 animate-in fade-in duration-500">
-          <header className="space-y-3">
-            <p className="eyebrow">two more · still ranked</p>
-            <h2 className="display text-3xl md:text-4xl leading-[1.05] tracking-tight">
-              Throw me two more.
-              <br />
-              <span className="italic text-muted-foreground">Try to break my read.</span>
-            </h2>
-          </header>
+      {/* Active slot input — slot2 or slot3 */}
+      {(phase === "slot2" || phase === "slot3") && (
+        <section ref={slotAnchorRef} className="space-y-6 animate-in fade-in duration-500">
           <div className="space-y-6">
-            {[0, 1].map((i) => (
-              <RankedInput
-                key={i}
-                rank={i + 4}
-                label={SLOT2_LABELS[i]}
-                value={two[i]}
-                placeholder={PLACEHOLDERS[i + 3]}
-                onChange={(v) => {
-                  const next = [...two] as [string, string];
-                  next[i] = v;
-                  setTwo(next);
-                }}
-                autoFocus={i === 0}
-                onEnter={i === 1 ? submitTwoMore : undefined}
-              />
-            ))}
+            <RankedInput
+              key={phase}
+              rank={songs.length + 1}
+              label={SLOT_LABELS[songs.length] ?? ""}
+              value={draft}
+              placeholder={PLACEHOLDERS[songs.length] ?? ""}
+              onChange={setDraft}
+              autoFocus
+              onEnter={submitSlot}
+            />
           </div>
           <div>
             <button
-              onClick={submitTwoMore}
-              disabled={busy || two.some((s) => s.trim().length < 2)}
+              onClick={submitSlot}
+              disabled={busy || draft.trim().length < 2}
               className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
             >
-              {busy ? "Refining…" : "Refine your read →"}
+              {busy ? "Reading…" : "→"}
             </button>
           </div>
         </section>
       )}
 
-      {/* Block 3: refined read on all five */}
+      {/* Final synthesis after slot 3 */}
       {refined && (
         <section className="space-y-6 animate-in fade-in duration-500">
-          <RankedChecklist songs={[...three, ...two]} startRank={1} />
-          {r5Step >= 1 && refined.reaction && (
-            <p className="font-serif text-2xl md:text-3xl leading-snug animate-in fade-in duration-500">
-              {refined.reaction}
-            </p>
-          )}
           {r5Step >= 2 && (
             <>
               <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary animate-in fade-in duration-700">
@@ -502,7 +453,7 @@ function Onboarding() {
         </section>
       )}
 
-      {/* Block 4: play transcript */}
+      {/* Play transcript */}
       {entries.length > 0 && (
         <div className="space-y-10">
           {entries.map((e) => {
@@ -535,7 +486,7 @@ function Onboarding() {
         </div>
       )}
 
-      {/* Block 5: current pairing */}
+      {/* Current pairing */}
       {pairing && phase === "playing" && (
         <section ref={pairingAnchorRef} className="space-y-6 pt-2">
           <div className="flex items-center justify-between">
@@ -569,7 +520,7 @@ function Onboarding() {
         </p>
       )}
 
-      {/* Block 6: final report */}
+      {/* Final report */}
       {phase === "done" && (
         <section ref={doneAnchorRef} className="space-y-14 pt-6 animate-in fade-in duration-700">
           <header className="space-y-3">
@@ -676,37 +627,5 @@ function RankedInput({
         </div>
       </div>
     </div>
-  );
-}
-
-function RankedChecklist({ songs, startRank, muted }: { songs: string[]; startRank: number; muted?: boolean; }) {
-  return (
-    <ul className="space-y-2">
-      {songs.map((s, i) => (
-        <li key={i} className={`grid grid-cols-[3rem_1fr] gap-4 items-baseline ${muted ? "opacity-50" : ""}`}>
-          <span className="text-right font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            #{startRank + i}
-          </span>
-          <span className="font-mono text-base md:text-lg text-foreground">✓ {s}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function renderHeadline(headline: string) {
-  const lines = headline.split("\n");
-  return (
-    <>
-      {lines.map((line, i) => (
-        <span key={i} className="block">
-          {i === lines.length - 1 && lines.length > 1 ? (
-            <span className="italic text-muted-foreground">{line}</span>
-          ) : (
-            line
-          )}
-        </span>
-      ))}
-    </>
   );
 }
