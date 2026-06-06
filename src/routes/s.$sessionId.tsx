@@ -4,7 +4,9 @@ import { getPublicSession } from "@/lib/share.functions";
 export const Route = createFileRoute("/s/$sessionId")({
   loader: async ({ params }) => {
     try {
-      return await getPublicSession({ data: { sessionId: params.sessionId } });
+      // The route param is named sessionId for back-compat but is interpreted
+      // as a share_token first (UUIDs are only accepted for explicitly public sessions).
+      return await getPublicSession({ data: { token: params.sessionId } });
     } catch (e) {
       throw notFound({ data: { message: (e as Error).message } });
     }
