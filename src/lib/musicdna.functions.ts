@@ -976,7 +976,7 @@ export const getMyResult = createServerFn({ method: "GET" })
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase
         .from("sessions")
-        .select("id,started_at,completed_at,interpretation,vector,archetype:archetype_id(id,name,tagline,description)")
+        .select("id,share_token,started_at,completed_at,interpretation,vector,archetype:archetype_id(id,name,tagline,description)")
         .eq("user_id", userId)
         .order("started_at", { ascending: false })
         .limit(20),
