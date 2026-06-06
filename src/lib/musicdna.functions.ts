@@ -579,7 +579,7 @@ export const getMyResult = createServerFn({ method: "GET" })
           chosen: c.chosen!.title, chosenArtist: c.chosen!.artist,
           rejected: c.rejected!.title, rejectedArtist: c.rejected!.artist,
         }));
-      reasoning = reasoningRes.data ?? null;
+      reasoning = (reasoningRes.data as unknown as typeof reasoning) ?? null;
     }
     return { profile, sessions: sessions ?? [], definingChoices, reasoning };
   });
