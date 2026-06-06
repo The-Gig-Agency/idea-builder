@@ -2047,3 +2047,40 @@ export const listChat = createServerFn({ method: "GET" })
       })),
     };
   });
+
+
+// ============================================================
+// Per-round running hypothesis — the "detective board" line.
+// Templated (no LLM): reads the session vector, returns the
+// strongest axis as a one-liner. Client compares topDim across
+// rounds to render forming / holding / revising.
+// ============================================================
+export const currentRead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ sessionId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<{ thesis: string; topDim: string | null; strength: number }> => {
+    const { supabase, userId } = context;
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("vector,user_id")
+      .eq("id", data.sessionId)
+      .single();
+    const s = session as { vector: Record<string, number>; user_id: string } | null;
+    if (!s || s.user_id !== userId) return { thesis: "Still listening.", topDim: null, strength: 0 };
+    const vector = s.vector ?? {};
+    const ranked = (DIMS as readonly string[])
+      .map((d) => ({ d, v: vector[d] ?? 0 }))
+      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+    const top = ranked[0];
+    if (!top || Math.abs(top.v) < 4) {
+      return { thesis: "Too early to call. Keep picking.", topDim: null, strength: 0 };
+    }
+    const phrase = REVEAL[top.d];
+    const pole = top.v >= 0 ? phrase?.hi : phrase?.lo;
+    const thesis = pole
+      ? `You keep choosing ${pole.verdict}.`
+      : `Leaning ${top.d}.`;
+    return { thesis, topDim: top.d, strength: Math.abs(top.v) };
+  });
