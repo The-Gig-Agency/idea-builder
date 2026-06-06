@@ -641,10 +641,12 @@ export type Database = {
           created_at: string
           id: string
           interpretation: string | null
+          is_public: boolean
           lane: string
           lane_confidence: number
           probe_candidate_lanes: string[]
           probe_state: Json
+          share_token: string | null
           started_at: string
           updated_at: string
           user_id: string
@@ -656,10 +658,12 @@ export type Database = {
           created_at?: string
           id?: string
           interpretation?: string | null
+          is_public?: boolean
           lane?: string
           lane_confidence?: number
           probe_candidate_lanes?: string[]
           probe_state?: Json
+          share_token?: string | null
           started_at?: string
           updated_at?: string
           user_id: string
@@ -671,10 +675,12 @@ export type Database = {
           created_at?: string
           id?: string
           interpretation?: string | null
+          is_public?: boolean
           lane?: string
           lane_confidence?: number
           probe_candidate_lanes?: string[]
           probe_state?: Json
+          share_token?: string | null
           started_at?: string
           updated_at?: string
           user_id?: string
