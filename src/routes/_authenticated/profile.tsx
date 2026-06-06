@@ -105,36 +105,33 @@ function ProfilePage() {
 
   async function share() {
     if (!latest) return;
-    const lines = [
-      `My MusicDNA: ${latest.archetype?.name ?? "Unassigned"}`,
-      latest.archetype?.tagline ? `— ${latest.archetype.tagline}` : "",
-      "",
-      latest.interpretation ?? "",
-      "",
-      ...(data.definingChoices?.slice(0, 3).map(
-        (c) => `→ ${c.chosen} over ${c.rejected}`,
-      ) ?? []),
-    ].filter(Boolean).join("\n");
+    const url = `${window.location.origin}/s/${latest.id}`;
+    const title = `MusicDNA: ${latest.archetype?.name ?? "A reading"}`;
+    const text = latest.archetype?.tagline
+      ? `${title} — ${latest.archetype.tagline}`
+      : title;
     logEvent({
       data: { event_type: "result_shared", session_id: latest.id, props: { has_native_share: !!navigator.share } },
     } as never).catch(() => { /* swallow */ });
     try {
       if (navigator.share) {
-        await navigator.share({ title: "My MusicDNA", text: lines });
+        await navigator.share({ title, text, url });
       } else {
-        await navigator.clipboard.writeText(lines);
+        await navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 1800);
+        toast.success("Share link copied");
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(lines);
-        toast.success("Copied to clipboard");
+        await navigator.clipboard.writeText(url);
+        toast.success("Share link copied");
       } catch {
         toast.error("Could not copy");
       }
     }
   }
+
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
