@@ -151,8 +151,14 @@ function Play() {
       await finalize({ data: { sessionId } });
       track({ event_type: "session_completed", session_id: sessionId, props: { rounds: nr } });
       try {
-        const { synthesis } = await synthFn({ data: { sessionId } });
-        setSynthesis(synthesis);
+        const r = await synthFn({ data: { sessionId } }) as {
+          synthesis: string;
+          kept_choosing: Array<{ tradeoff: string; examples: string[]; supporting: number; tested: number }>;
+          counter_reads: Array<{ claim: string; notes: string }>;
+        };
+        setSynthesis(r.synthesis);
+        setKept(r.kept_choosing ?? []);
+        setCounters((r.counter_reads ?? []).map((c) => ({ claim: c.claim, notes: c.notes })));
       } catch { /* fall through */ }
       setDone(true);
       setBusy(false);
