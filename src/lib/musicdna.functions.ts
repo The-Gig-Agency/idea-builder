@@ -1821,7 +1821,10 @@ export const chatTurn = createServerFn({ method: "POST" })
     // history for context). Cap per-turn movement so pairings stay primary.
     const PER_TURN_CAP = 10;          // max |delta| applied to any one axis per turn
     const VECTOR_BOUND = 200;         // overall clamp on |vector[axis]|
-    const recentTurns = (history ?? [])
+    // Skip the extractor pass on short / trivial replies ("ok", "yeah", "lol").
+    // Saves an LLM call and avoids feeding noise into the vector.
+    const EXTRACTOR_MIN_CHARS = 12;
+    const trimmedMsg = data.message.trim();
       .slice(-8)
       .map((m) => `${m.role}: ${m.content}`)
       .join("\n");
