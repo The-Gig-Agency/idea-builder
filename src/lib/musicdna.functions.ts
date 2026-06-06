@@ -112,17 +112,21 @@ export const recordChoice = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const [{ data: pairing, error: pErr }, { data: session, error: sErr }] = await Promise.all([
+    const songCols = "movement,atmosphere,groove,darkness,hope,nostalgia,transformation,complexity,melody,verbal_cleverness,authenticity,romanticism,energy,dreaminess,community";
+    const [pairingRes, sessionRes] = await Promise.all([
       supabase
         .from("pairings")
-        .select(`tests, diagnostic_weight, song_a_id, song_b_id,
-          song_a:songs!pairings_song_a_id_fkey(${DIMS.join(",")}),
-          song_b:songs!pairings_song_b_id_fkey(${DIMS.join(",")})`)
+        .select(`tests, diagnostic_weight, song_a_id, song_b_id, song_a:songs!pairings_song_a_id_fkey(${songCols}), song_b:songs!pairings_song_b_id_fkey(${songCols})`)
         .eq("id", data.pairingId).single(),
       supabase.from("sessions").select("vector,user_id").eq("id", data.sessionId).single(),
     ]);
-    if (pErr || !pairing) throw new Error(pErr?.message ?? "pairing not found");
-    if (sErr || !session) throw new Error(sErr?.message ?? "session not found");
+    const pairing = pairingRes.data as unknown as {
+      tests: string[] | null; diagnostic_weight: number; song_a_id: string; song_b_id: string;
+      song_a: Record<string, number>; song_b: Record<string, number>;
+    } | null;
+    const session = sessionRes.data;
+    if (pairingRes.error || !pairing) throw new Error(pairingRes.error?.message ?? "pairing not found");
+    if (sessionRes.error || !session) throw new Error(sessionRes.error?.message ?? "session not found");
     if (session.user_id !== userId) throw new Error("forbidden");
 
     const chosenIsA = data.chosenSongId === pairing.song_a_id;
