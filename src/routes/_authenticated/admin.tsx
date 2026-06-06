@@ -221,7 +221,7 @@ function EntityTable({ entity, onEdit }: { entity: Entity; onEdit: (row: Row) =>
 }
 
 function columnsFor(e: Entity): string[] {
-  if (e === "songs") return ["title", "artist", "year", "primary_lane", "lane"];
+  if (e === "songs") return ["title", "artist", "year", "primary_lane", "diagnostic_power", "canon_score", "curator_count"];
   if (e === "pairings") return ["user_facing_tradeoff", "hypothesis", "song_a_id", "song_b_id", "lane", "difficulty", "diagnostic_weight", "active"];
   return ["name", "tagline", "description"];
 }
@@ -363,6 +363,16 @@ function fieldsFor(e: Entity): Field[] {
       { key: "year", type: "number", optional: true },
       { key: "primary_lane", type: "text", hint: "alternative · pop · hip_hop · electronic · classic_rock · general" },
       { key: "lane", type: "text", hint: "granular sub-lane, e.g. post_punk_new_wave" },
+      // --- Diagnostic Power Score (DPS): six components, sum = diagnostic_power ---
+      { key: "polarization", type: "number", optional: true, hint: "0–25 — splits the room. 0=everyone agrees · 25=fistfight in the comments" },
+      { key: "tradeoff_richness", type: "number", optional: true, hint: "0–20 — how many real tradeoffs this song surfaces" },
+      { key: "pairing_density", type: "number", optional: true, hint: "0–15 — how many sharp same-lane opponents exist" },
+      { key: "identity_signaling", type: "number", optional: true, hint: "0–15 — picking this says something about you" },
+      { key: "longevity", type: "number", optional: true, hint: "0–10 — still revealing five years from now?" },
+      { key: "cross_genre_mapping", type: "number", optional: true, hint: "0–15 — maps cleanly to opponents in other lanes" },
+      { key: "canon_score", type: "number", optional: true, hint: "0–100 — cultural weight. Billie Jean=99, deep cut=20" },
+      { key: "curator_count", type: "number", optional: true, hint: "how many curators have scored this (drives confidence)" },
+      { key: "diagnostic_power_confidence", type: "number", optional: true, hint: "0.00–1.00 — how much we trust the score" },
       ...dims.map((d) => ({ key: d, type: "number" as const, optional: true, hint: "-10 to +10" })),
     ];
   }

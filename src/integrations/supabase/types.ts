@@ -47,6 +47,42 @@ export type Database = {
         }
         Relationships: []
       }
+      axes: {
+        Row: {
+          analyst_label: string | null
+          created_at: string
+          high_pole: string
+          id: string
+          key: string
+          low_pole: string
+          sort_order: number
+          tradeoff_sentence: string | null
+          updated_at: string
+        }
+        Insert: {
+          analyst_label?: string | null
+          created_at?: string
+          high_pole: string
+          id?: string
+          key: string
+          low_pole: string
+          sort_order?: number
+          tradeoff_sentence?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analyst_label?: string | null
+          created_at?: string
+          high_pole?: string
+          id?: string
+          key?: string
+          low_pole?: string
+          sort_order?: number
+          tradeoff_sentence?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       choices: {
         Row: {
           chosen_song_id: string
@@ -508,6 +544,51 @@ export type Database = {
           },
         ]
       }
+      song_axes: {
+        Row: {
+          axis_id: string
+          created_at: string
+          id: string
+          pole: string
+          song_id: string
+          strength: number
+          updated_at: string
+        }
+        Insert: {
+          axis_id: string
+          created_at?: string
+          id?: string
+          pole?: string
+          song_id: string
+          strength?: number
+          updated_at?: string
+        }
+        Update: {
+          axis_id?: string
+          created_at?: string
+          id?: string
+          pole?: string
+          song_id?: string
+          strength?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "song_axes_axis_id_fkey"
+            columns: ["axis_id"]
+            isOneToOne: false
+            referencedRelation: "axes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "song_axes_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       songs: {
         Row: {
           active: boolean
@@ -515,24 +596,33 @@ export type Database = {
           artist: string
           atmosphere: number
           authenticity: number
+          canon_score: number | null
           community: number
           complexity: number
           created_at: string
+          cross_genre_mapping: number | null
+          curator_count: number
           darkness: number
           diagnostic_power: number
+          diagnostic_power_confidence: number
           dreaminess: number
           energy: number
           groove: number
           hope: number
           id: string
+          identity_signaling: number | null
           lane: string
+          longevity: number | null
           melody: number
           movement: number
           nostalgia: number
+          pairing_density: number | null
+          polarization: number | null
           primary_dimensions: string[]
           primary_lane: string
           romanticism: number
           title: string
+          tradeoff_richness: number | null
           transformation: number
           updated_at: string
           verbal_cleverness: number
@@ -544,24 +634,33 @@ export type Database = {
           artist: string
           atmosphere?: number
           authenticity?: number
+          canon_score?: number | null
           community?: number
           complexity?: number
           created_at?: string
+          cross_genre_mapping?: number | null
+          curator_count?: number
           darkness?: number
           diagnostic_power?: number
+          diagnostic_power_confidence?: number
           dreaminess?: number
           energy?: number
           groove?: number
           hope?: number
           id?: string
+          identity_signaling?: number | null
           lane: string
+          longevity?: number | null
           melody?: number
           movement?: number
           nostalgia?: number
+          pairing_density?: number | null
+          polarization?: number | null
           primary_dimensions?: string[]
           primary_lane?: string
           romanticism?: number
           title: string
+          tradeoff_richness?: number | null
           transformation?: number
           updated_at?: string
           verbal_cleverness?: number
@@ -573,24 +672,33 @@ export type Database = {
           artist?: string
           atmosphere?: number
           authenticity?: number
+          canon_score?: number | null
           community?: number
           complexity?: number
           created_at?: string
+          cross_genre_mapping?: number | null
+          curator_count?: number
           darkness?: number
           diagnostic_power?: number
+          diagnostic_power_confidence?: number
           dreaminess?: number
           energy?: number
           groove?: number
           hope?: number
           id?: string
+          identity_signaling?: number | null
           lane?: string
+          longevity?: number | null
           melody?: number
           movement?: number
           nostalgia?: number
+          pairing_density?: number | null
+          polarization?: number | null
           primary_dimensions?: string[]
           primary_lane?: string
           romanticism?: number
           title?: string
+          tradeoff_richness?: number | null
           transformation?: number
           updated_at?: string
           verbal_cleverness?: number
