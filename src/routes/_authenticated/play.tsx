@@ -135,10 +135,12 @@ function Play() {
 
       // Running hypothesis line.
       let thesis = "Reading you now.";
+      let hook = "";
       let topDim: string | null = null;
       try {
         const r = await readFn({ data: { sessionId } });
         thesis = r.thesis;
+        hook = r.hook ?? "";
         topDim = r.topDim;
       } catch { /* keep default */ }
 
@@ -152,7 +154,8 @@ function Play() {
               : "holding";
       prevTopDim.current = topDim ?? prevTopDim.current;
 
-      const reaction = why ? `${verdict} ${why}` : verdict;
+      // Merge "why" beat onto the reaction with a line break for rhythm.
+      const reaction = why ? `${verdict}\n${why}` : verdict;
 
       const entry: Entry = {
         round: currentRound,
@@ -160,6 +163,7 @@ function Play() {
         chosenSongId: songId,
         reaction,
         thesis,
+        hook,
         direction,
         topDim,
       };
