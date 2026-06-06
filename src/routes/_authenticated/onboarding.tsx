@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { generateOpeningHypothesis } from "@/lib/musicdna.functions";
+import { searchSongs } from "@/lib/songs.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
@@ -9,28 +10,55 @@ export const Route = createFileRoute("/_authenticated/onboarding")({
   component: Onboarding,
 });
 
+type Song = { id: string; title: string; artist: string; year: number | null };
+
 function Onboarding() {
   const fn = useServerFn(generateOpeningHypothesis);
   const navigate = useNavigate();
-  const [songs, setSongs] = useState(["", "", "", "", ""]);
+  const [picks, setPicks] = useState<Array<Song | null>>([null, null, null, null, null]);
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Song[]>([]);
+  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hypothesis, setHypothesis] = useState<string | null>(null);
+  const search = useServerFn(searchSongs);
+  const debounceRef = useRef<number | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (songs.some((s) => s.trim().length < 2)) {
-      toast.error("All five fields required.");
+  useEffect(() => {
+    if (activeIdx === null || query.trim().length < 2) { setResults([]); return; }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(async () => {
+      setSearching(true);
+      try {
+        const { songs } = await search({ data: { q: query.trim() } });
+        setResults(songs as Song[]);
+      } catch { /* ignore */ } finally { setSearching(false); }
+    }, 180);
+  }, [query, activeIdx, search]);
+
+  function choose(s: Song) {
+    if (activeIdx === null) return;
+    if (picks.some((p, i) => p?.id === s.id && i !== activeIdx)) {
+      toast.error("Already picked.");
       return;
     }
+    setPicks(picks.map((p, i) => (i === activeIdx ? s : p)));
+    setActiveIdx(null);
+    setQuery("");
+    setResults([]);
+  }
+
+  async function submit() {
+    if (picks.some((p) => !p)) { toast.error("Pick five songs."); return; }
     setBusy(true);
     try {
-      const { hypothesis } = await fn({ data: { songs: songs.map((s) => s.trim()) } });
+      const labels = picks.map((p) => `${p!.title} — ${p!.artist}`);
+      const { hypothesis } = await fn({ data: { songs: labels } });
       setHypothesis(hypothesis);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to read your songs.");
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   if (hypothesis) {
@@ -57,26 +85,64 @@ function Onboarding() {
       <h1 className="display text-4xl md:text-5xl mb-4">Name five songs you love.</h1>
       <p className="text-sm text-muted-foreground mb-10 max-w-lg">
         Not the most popular ones. The ones that, if you lost them, you'd feel it.
-        Title and artist if possible.
       </p>
-      <form onSubmit={submit} className="space-y-3">
-        {songs.map((s, i) => (
-          <div key={i} className="flex items-center gap-4">
-            <span className="font-mono text-xs text-muted-foreground w-6">{String(i + 1).padStart(2, "0")}</span>
-            <input
-              value={s} onChange={(e) => setSongs(songs.map((x, j) => (i === j ? e.target.value : x)))}
-              placeholder="e.g. Ceremony — New Order"
-              className="flex-1 bg-surface border hairline-strong rounded-sm px-3 py-2.5 text-sm focus:outline-none focus:border-primary"
-            />
-          </div>
+
+      <ol className="space-y-2">
+        {picks.map((p, i) => (
+          <li key={i}>
+            <button
+              onClick={() => { setActiveIdx(i); setQuery(p ? `${p.title} ${p.artist}` : ""); }}
+              className={`w-full text-left flex items-center gap-4 border hairline-strong rounded-sm px-4 py-3 transition-colors ${
+                activeIdx === i ? "border-primary bg-surface" : "bg-surface hover:bg-background"
+              }`}
+            >
+              <span className="font-mono text-xs text-muted-foreground w-6">{String(i + 1).padStart(2, "0")}</span>
+              {p ? (
+                <span className="flex-1 min-w-0">
+                  <span className="font-serif text-lg block truncate">{p.title}</span>
+                  <span className="text-xs text-muted-foreground truncate">{p.artist}{p.year ? ` · ${p.year}` : ""}</span>
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Search the canon…</span>
+              )}
+            </button>
+
+            {activeIdx === i && (
+              <div className="mt-2 border hairline-strong rounded-sm bg-surface overflow-hidden">
+                <input
+                  autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Type a title or artist…"
+                  className="w-full bg-transparent px-4 py-2.5 text-sm focus:outline-none border-b hairline"
+                />
+                <ul className="max-h-72 overflow-y-auto">
+                  {searching && <li className="px-4 py-3 text-xs text-muted-foreground">Searching…</li>}
+                  {!searching && query.length >= 2 && !results.length && (
+                    <li className="px-4 py-3 text-xs text-muted-foreground">No matches in the canon.</li>
+                  )}
+                  {results.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        onClick={() => choose(s)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-background transition-colors"
+                      >
+                        <span className="font-serif text-base block">{s.title}</span>
+                        <span className="text-xs text-muted-foreground">{s.artist}{s.year ? ` · ${s.year}` : ""}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </li>
         ))}
-        <button
-          type="submit" disabled={busy}
-          className="mt-6 bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {busy ? "Reading…" : "Read these"}
-        </button>
-      </form>
+      </ol>
+
+      <button
+        onClick={submit} disabled={busy || picks.some((p) => !p)}
+        className="mt-8 bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
+      >
+        {busy ? "Reading…" : "Read these"}
+      </button>
     </main>
   );
 }

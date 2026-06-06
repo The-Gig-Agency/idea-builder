@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { startSession, nextPairing, recordChoice, finalizeSession } from "@/lib/musicdna.functions";
 import { toast } from "sonner";
 
-const TOTAL_ROUNDS = 20;
+const MAX_ROUNDS = 20;
 
 export const Route = createFileRoute("/_authenticated/play")({
   head: () => ({ meta: [{ title: "Choose one — MusicDNA" }] }),
@@ -59,13 +59,8 @@ function Play() {
           msToDecide: Math.min(600000, Date.now() - startedAt.current),
         },
       });
-      if (round >= TOTAL_ROUNDS) {
-        await finalize({ data: { sessionId } });
-        setDone(true);
-        return;
-      }
-      const { pairing: nxt, round: nr } = await next({ data: { sessionId } });
-      if (!nxt) {
+      const { pairing: nxt, round: nr, done } = await next({ data: { sessionId } });
+      if (done || !nxt || nr > MAX_ROUNDS) {
         await finalize({ data: { sessionId } });
         setDone(true);
         return;
@@ -102,7 +97,7 @@ function Play() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <div className="flex items-center justify-between mb-10">
-        <p className="eyebrow">Round {String(round).padStart(2, "0")} / {TOTAL_ROUNDS}</p>
+        <p className="eyebrow">Round {String(round).padStart(2, "0")} / {MAX_ROUNDS}</p>
         <div className="h-px flex-1 mx-6 bg-border" />
         <p className="eyebrow">{pairing.tests?.join(" · ") || "—"}</p>
       </div>
