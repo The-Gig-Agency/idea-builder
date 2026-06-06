@@ -115,23 +115,73 @@ export const nextPairing = createServerFn({ method: "POST" })
   });
 
 // ============ Record choice ============
-const REVEAL_PHRASE: Record<string, { hi: string; lo: string }> = {
-  movement: { hi: "movement over stillness", lo: "stillness over movement" },
-  atmosphere: { hi: "atmosphere over statement", lo: "statement over atmosphere" },
-  groove: { hi: "groove over arrangement", lo: "arrangement over groove" },
-  darkness: { hi: "darkness over light", lo: "light over darkness" },
-  hope: { hi: "hope over resignation", lo: "resignation over hope" },
-  nostalgia: { hi: "nostalgia over the present", lo: "the present over nostalgia" },
-  transformation: { hi: "transformation over nostalgia", lo: "nostalgia over transformation" },
-  complexity: { hi: "complexity over directness", lo: "directness over complexity" },
-  melody: { hi: "melody over texture", lo: "texture over melody" },
-  verbal_cleverness: { hi: "verbal cleverness over feeling", lo: "feeling over verbal cleverness" },
-  authenticity: { hi: "authenticity over polish", lo: "polish over authenticity" },
-  romanticism: { hi: "romanticism over cool", lo: "cool over romanticism" },
-  energy: { hi: "energy over restraint", lo: "restraint over energy" },
-  dreaminess: { hi: "dreaminess over clarity", lo: "clarity over dreaminess" },
-  community: { hi: "community over solitude", lo: "solitude over community" },
+// Each axis carries a short verdict ("immersion over immediacy") plus a
+// Rolling Stone–voice "why that mattered" line. Keep them punchy, opinionated,
+// one observation per sentence. No platitudes, no genre talk.
+const REVEAL: Record<string, { hi: { verdict: string; why: string }; lo: { verdict: string; why: string } }> = {
+  movement: {
+    hi: { verdict: "movement over stillness", why: "You want the song to take you somewhere. Standing still is for other people." },
+    lo: { verdict: "stillness over movement", why: "You'd rather the song sit you down than drag you forward. Patience as taste." },
+  },
+  atmosphere: {
+    hi: { verdict: "atmosphere over statement", why: "You trust the room more than the lyric. The air around the song is the song." },
+    lo: { verdict: "statement over atmosphere", why: "You want the song to mean something out loud. No hiding behind reverb." },
+  },
+  groove: {
+    hi: { verdict: "groove over arrangement", why: "You're a body-first listener. The pocket is the point; the rest is decoration." },
+    lo: { verdict: "arrangement over groove", why: "You hear the architecture before the pulse. The chart matters more than the kick drum." },
+  },
+  darkness: {
+    hi: { verdict: "darkness over light", why: "You don't flinch. The shadow in the song is the part you came for." },
+    lo: { verdict: "light over darkness", why: "You refuse the easy gloom. You want the song to leave a window open." },
+  },
+  hope: {
+    hi: { verdict: "hope over resignation", why: "You pick the lift every time. Bleakness without a way out bores you." },
+    lo: { verdict: "resignation over hope", why: "You don't need the song to fix anything. Sitting with it is enough." },
+  },
+  nostalgia: {
+    hi: { verdict: "nostalgia over the present", why: "You listen with the rearview mirror on. The ache is half the pleasure." },
+    lo: { verdict: "the present over nostalgia", why: "You don't trade in old feelings. The song has to land now or not at all." },
+  },
+  transformation: {
+    hi: { verdict: "transformation over arrival", why: "You'd rather a song become something than be something. Becoming is the whole bet." },
+    lo: { verdict: "arrival over transformation", why: "You want the song to know what it is from the first bar. No identity crises in your playlist." },
+  },
+  complexity: {
+    hi: { verdict: "complexity over directness", why: "You like the songs that make you work. The third listen is when it starts paying you back." },
+    lo: { verdict: "directness over complexity", why: "You don't need a footnote. A great song shouldn't need a guided tour." },
+  },
+  melody: {
+    hi: { verdict: "melody over texture", why: "You want a tune you can carry home. Hum it or it didn't happen." },
+    lo: { verdict: "texture over melody", why: "You listen to the surface, not the line. The grain of the thing is the thing." },
+  },
+  verbal_cleverness: {
+    hi: { verdict: "language over feeling", why: "You came for the writing. A great line will outrun a great chorus." },
+    lo: { verdict: "feeling over language", why: "Words can get out of the way. You're chasing what the song does, not what it says." },
+  },
+  authenticity: {
+    hi: { verdict: "rawness over polish", why: "You'd take the cracked voice over the perfect take. Sincerity has a sound and you can hear it." },
+    lo: { verdict: "polish over rawness", why: "You don't romanticize the mess. Craft is not the enemy of feeling — it's the delivery system." },
+  },
+  romanticism: {
+    hi: { verdict: "romanticism over cool", why: "You let the big feelings in. Restraint is for people too embarrassed to want anything." },
+    lo: { verdict: "cool over romanticism", why: "You don't trust the swoon. Keep your distance, keep the line dry." },
+  },
+  energy: {
+    hi: { verdict: "energy over restraint", why: "You want the song to mean it physically. If it doesn't move the room, why bother." },
+    lo: { verdict: "restraint over energy", why: "You like a song that holds back. The whisper hits harder than the shout." },
+  },
+  dreaminess: {
+    hi: { verdict: "dreaminess over clarity", why: "You'd rather drift than land. The haze is doing more work than the lyric." },
+    lo: { verdict: "clarity over dreaminess", why: "You want the edges sharp. No fog machine, no fog." },
+  },
+  community: {
+    hi: { verdict: "communion over solitude", why: "You hear songs in rooms full of people. The singalong is the meaning." },
+    lo: { verdict: "solitude over communion", why: "You listen alone, on headphones, on purpose. Crowds dilute the signal." },
+  },
 };
+
+
 
 export const recordChoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
