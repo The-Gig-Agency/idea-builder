@@ -1,0 +1,1 @@
+update public.onboarding_openers set slot_labels = jsonb_set(slot_labels::jsonb, '{2}', '"The one nobody sees coming"'::jsonb);
