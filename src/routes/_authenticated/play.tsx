@@ -29,8 +29,9 @@ type Entry = {
   round: number;
   pairing: Pairing;
   chosenSongId: string;
-  reaction: string;     // verdict + why merged, conversational
-  thesis: string;       // running hypothesis after this pick
+  reaction: string;     // opener + pick + inference, line-broken
+  thesis: string;       // running hypothesis after this pick, line-broken
+  hook: string;         // question/half-promise pulling the next pick
   direction: "forming" | "holding" | "revising";
   topDim: string | null;
 };
