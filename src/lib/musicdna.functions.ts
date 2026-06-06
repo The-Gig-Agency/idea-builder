@@ -772,3 +772,103 @@ export const getMyResult = createServerFn({ method: "GET" })
   });
 
 
+// ============ Instrumentation: events + feedback ============
+
+const EVENT_TYPES = [
+  "onboarding_classified",
+  "pairing_shown",
+  "choice_made",
+  "reveal_shown",
+  "reveal_continued",
+  "session_completed",
+  "result_viewed",
+  "result_shared",
+  "session_quit",
+] as const;
+
+export const recordEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      event_type: z.enum(EVENT_TYPES),
+      session_id: z.string().uuid().nullable().optional(),
+      pairing_id: z.string().uuid().nullable().optional(),
+      choice_id: z.string().uuid().nullable().optional(),
+      response_time_ms: z.number().int().nonnegative().max(600000).nullable().optional(),
+      variant: z.string().max(80).nullable().optional(),
+      experiment_key: z.string().max(80).nullable().optional(),
+      props: z.record(z.unknown()).optional(),
+      client: z.string().max(40).nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase.from("event_log").insert({
+      user_id: userId,
+      event_type: data.event_type,
+      session_id: data.session_id ?? null,
+      pairing_id: data.pairing_id ?? null,
+      choice_id: data.choice_id ?? null,
+      response_time_ms: data.response_time_ms ?? null,
+      variant: data.variant ?? null,
+      experiment_key: data.experiment_key ?? null,
+      props: (data.props ?? {}) as never,
+      client: data.client ?? "web",
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const submitFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      session_id: z.string().uuid(),
+      accuracy: z.enum(["accurate", "not_accurate", "mixed"]).nullable().optional(),
+      rating: z.number().int().min(-1).max(1).nullable().optional(),
+      comment: z.string().max(2000).nullable().optional(),
+      target: z.string().max(120).nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const row = {
+      user_id: userId,
+      session_id: data.session_id,
+      accuracy: data.accuracy ?? null,
+      rating: data.rating ?? null,
+      comment: data.comment ?? null,
+      target: data.target ?? null,
+    };
+    // One feedback row per (user, session, target)
+    const { data: existing } = await supabase
+      .from("result_feedback")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("session_id", data.session_id)
+      .is("target", data.target ?? null)
+      .maybeSingle();
+    if (existing?.id) {
+      const { error } = await supabase.from("result_feedback").update(row).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { id: existing.id, updated: true as const };
+    }
+    const { data: inserted, error } = await supabase
+      .from("result_feedback").insert(row).select("id").single();
+    if (error) throw new Error(error.message);
+    return { id: inserted.id, updated: false as const };
+  });
+
+export const getMyFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ session_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: rows } = await supabase
+      .from("result_feedback")
+      .select("accuracy, rating, comment, target")
+      .eq("user_id", userId)
+      .eq("session_id", data.session_id);
+    return { feedback: rows ?? [] };
+  });
+
