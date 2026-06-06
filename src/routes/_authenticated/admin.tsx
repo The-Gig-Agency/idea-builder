@@ -39,13 +39,13 @@ type Row = Record<string, unknown> & { id: string };
 
 function AdminPage() {
   const check = useServerFn(adminCheck);
-  // Component-level gate beats beforeLoad here: the first server-fn call after
-  // hydration can race the bearer-token attacher; retry once before giving up.
+  // Component-level gate. Retry a few times because the first server-fn call
+  // after hydration can race the bearer-token attacher reading the session.
   const gate = useQuery({
     queryKey: ["admin", "check"],
     queryFn: () => check(),
-    retry: 2,
-    retryDelay: 250,
+    retry: 3,
+    retryDelay: (attempt) => 300 * (attempt + 1),
     staleTime: 60_000,
   });
   const [tab, setTab] = useState<Tab>("songs");
@@ -58,15 +58,36 @@ function AdminPage() {
       </main>
     );
   }
-  if (!gate.data?.isAdmin) {
+  if (gate.isError || !gate.data?.isAdmin) {
+    const errMsg = gate.error instanceof Error ? gate.error.message : null;
+    const looksUnauth = errMsg?.toLowerCase().includes("unauth");
     return (
       <main className="mx-auto max-w-2xl px-6 py-16">
-        <p className="eyebrow mb-3">403</p>
-        <h1 className="display text-3xl mb-3">Not your room.</h1>
+        <p className="eyebrow mb-3">{looksUnauth ? "401" : "403"}</p>
+        <h1 className="display text-3xl mb-3">
+          {looksUnauth ? "Session didn't reach the door." : "Not your room."}
+        </h1>
         <p className="text-sm text-muted-foreground mb-6">
-          This page is admin-only. If you think that's wrong, sign out and back in — sometimes the session takes a beat to catch up.
+          {looksUnauth
+            ? "Your bearer token didn't make it to the server. Usually a stale session — refetch, or sign out and back in."
+            : "This page is admin-only. If you think that's wrong, sign out and back in — sometimes the session takes a beat to catch up."}
         </p>
-        <Link to="/profile" className="text-sm underline">Back to profile</Link>
+        {errMsg && (
+          <pre className="mb-6 max-w-full overflow-x-auto rounded border hairline bg-muted/40 p-3 text-[11px] font-mono text-muted-foreground">
+            {errMsg}
+          </pre>
+        )}
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={() => gate.refetch()}
+            className="bg-primary text-primary-foreground rounded-sm px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            Try again
+          </button>
+          <Link to="/profile" className="text-sm underline">
+            Back to profile
+          </Link>
+        </div>
       </main>
     );
   }
