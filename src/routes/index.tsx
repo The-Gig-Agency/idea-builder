@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import logoAsset from "@/assets/music-dna-logo.png.asset.json";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -38,12 +40,11 @@ function Nav() {
   return (
     <header className="border-b hairline">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Link to="/" className="flex items-center gap-2">
-          <Mark />
-          <span className="font-mono text-xs tracking-[0.22em] uppercase text-foreground">
-            MusicDNA
-          </span>
+        <Link to="/" className="flex items-center gap-3">
+          <img src={logoAsset.url} alt="MusicDNA" className="h-9 w-auto" />
+          <span className="sr-only">MusicDNA</span>
         </Link>
+
         <nav className="flex items-center gap-6">
           <Link
             to="/"
