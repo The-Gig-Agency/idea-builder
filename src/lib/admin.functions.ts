@@ -67,6 +67,10 @@ export const adminList = createServerFn({ method: "POST" })
   });
 
 // Per-table input shape — accept arbitrary JSON, validate critical fields server-side.
+    return { rows: (rows ?? []) as Array<Record<string, unknown>> };
+  });
+
+// Per-table input shape — accept arbitrary JSON, validate critical fields server-side.
 const RowSchema = z.record(z.string(), z.unknown());
 
 export const adminUpsert = createServerFn({ method: "POST" })
