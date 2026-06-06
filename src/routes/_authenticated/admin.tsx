@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -13,10 +13,6 @@ import {
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — MusicDNA" }] }),
-  beforeLoad: async () => {
-    const res = await adminCheck();
-    if (!res.isAdmin) throw redirect({ to: "/profile" });
-  },
   component: AdminPage,
 });
 
@@ -30,8 +26,39 @@ const ENTITIES: { key: Entity; label: string }[] = [
 type Row = Record<string, unknown> & { id: string };
 
 function AdminPage() {
+  const check = useServerFn(adminCheck);
+  // Component-level gate beats beforeLoad here: the first server-fn call after
+  // hydration can race the bearer-token attacher; retry once before giving up.
+  const gate = useQuery({
+    queryKey: ["admin", "check"],
+    queryFn: () => check(),
+    retry: 2,
+    retryDelay: 250,
+    staleTime: 60_000,
+  });
   const [tab, setTab] = useState<Entity>("songs");
   const [editing, setEditing] = useState<{ row: Row | null } | null>(null);
+
+  if (gate.isLoading) {
+    return (
+      <main className="mx-auto max-w-6xl px-6 py-16 text-sm text-muted-foreground">
+        Checking credentials…
+      </main>
+    );
+  }
+  if (!gate.data?.isAdmin) {
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-16">
+        <p className="eyebrow mb-3">403</p>
+        <h1 className="display text-3xl mb-3">Not your room.</h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          This page is admin-only. If you think that's wrong, sign out and back in — sometimes the session takes a beat to catch up.
+        </p>
+        <Link to="/profile" className="text-sm underline">Back to profile</Link>
+      </main>
+    );
+  }
+
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-12">
