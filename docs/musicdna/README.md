@@ -29,6 +29,7 @@ This means `Ceremony` can remain `post_punk_new_wave`, `A Forest` can remain `go
 - `docs/musicdna/lovable_product_notes.md`: Lovable-facing notes for diagnostic tradeoff implementation.
 - `docs/musicdna/lovable_lane_engine_prompt.md`: decision-complete Lovable prompt for the multi-lane engine MVP.
 - `docs/musicdna/diagnostic_scoring_algorithm.md`: scoring model for diagnostic songs, axes, pairings, and future lane generation.
+- `docs/musicdna/product_gotchas.md`: standing risk checklist to keep product, data, and inference claims honest.
 - `docs/musicdna/multi_lane_pairings_seed.md`: notes for the Pop, Hip-Hop, Electronic, and Classic Rock pairing seed.
 - `docs/musicdna/intelligence_layer.md`: evidence-first AI reasoning framework for Analyst and Critic layers.
 - `tools/musicdna/generate_alternative_canon.cjs`: deterministic seed-canon generator.
