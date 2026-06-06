@@ -400,64 +400,44 @@ export const nextPairing = createServerFn({ method: "POST" })
 // one observation per sentence. No platitudes, no genre talk.
 const REVEAL: Record<string, { hi: { verdict: string; why: string }; lo: { verdict: string; why: string } }> = {
   movement: {
-    hi: { verdict: "movement over stillness", why: "You want the song to take you somewhere. Standing still is for other people." },
-    lo: { verdict: "stillness over movement", why: "You'd rather the song sit you down than drag you forward. Patience as taste." },
+    hi: { verdict: "forward motion over stillness", why: "You want the song to take you somewhere. Standing still is for other people." },
+    lo: { verdict: "stillness over forward motion", why: "You'd rather the song sit you down than drag you forward. Patience as taste." },
   },
   atmosphere: {
-    hi: { verdict: "atmosphere over statement", why: "You trust the room more than the lyric. The air around the song is the song." },
-    lo: { verdict: "statement over atmosphere", why: "You want the song to mean something out loud. No hiding behind reverb." },
+    hi: { verdict: "immersive mood over statement", why: "You trust the room more than the lyric. The air around the song is the song." },
+    lo: { verdict: "statement over immersive mood", why: "You want the song to mean something out loud. No hiding behind reverb." },
   },
-  groove: {
-    hi: { verdict: "groove over arrangement", why: "You're a body-first listener. The pocket is the point; the rest is decoration." },
-    lo: { verdict: "arrangement over groove", why: "You hear the architecture before the pulse. The chart matters more than the kick drum." },
+  immersion: {
+    hi: { verdict: "slow reveal over immediacy", why: "You don't need the hook on contact. The third listen is where the song actually lives." },
+    lo: { verdict: "immediacy over slow reveal", why: "If the song doesn't grab you in eight bars it doesn't get a second chance. Hook or move on." },
   },
-  darkness: {
-    hi: { verdict: "darkness over light", why: "You don't flinch. The shadow in the song is the part you came for." },
-    lo: { verdict: "light over darkness", why: "You refuse the easy gloom. You want the song to leave a window open." },
-  },
-  hope: {
-    hi: { verdict: "hope over resignation", why: "You pick the lift every time. Bleakness without a way out bores you." },
-    lo: { verdict: "resignation over hope", why: "You don't need the song to fix anything. Sitting with it is enough." },
-  },
-  nostalgia: {
-    hi: { verdict: "nostalgia over the present", why: "You listen with the rearview mirror on. The ache is half the pleasure." },
-    lo: { verdict: "the present over nostalgia", why: "You don't trade in old feelings. The song has to land now or not at all." },
-  },
-  transformation: {
-    hi: { verdict: "transformation over arrival", why: "You'd rather a song become something than be something. Becoming is the whole bet." },
-    lo: { verdict: "arrival over transformation", why: "You want the song to know what it is from the first bar. No identity crises in your playlist." },
-  },
-  complexity: {
-    hi: { verdict: "complexity over directness", why: "You like the songs that make you work. The third listen is when it starts paying you back." },
-    lo: { verdict: "directness over complexity", why: "You don't need a footnote. A great song shouldn't need a guided tour." },
-  },
-  melody: {
-    hi: { verdict: "melody over texture", why: "You want a tune you can carry home. Hum it or it didn't happen." },
-    lo: { verdict: "texture over melody", why: "You listen to the surface, not the line. The grain of the thing is the thing." },
-  },
-  verbal_cleverness: {
-    hi: { verdict: "language over feeling", why: "You came for the writing. A great line will outrun a great chorus." },
-    lo: { verdict: "feeling over language", why: "Words can get out of the way. You're chasing what the song does, not what it says." },
-  },
-  authenticity: {
-    hi: { verdict: "rawness over polish", why: "You'd take the cracked voice over the perfect take. Sincerity has a sound and you can hear it." },
-    lo: { verdict: "polish over rawness", why: "You don't romanticize the mess. Craft is not the enemy of feeling — it's the delivery system." },
-  },
-  romanticism: {
-    hi: { verdict: "romanticism over cool", why: "You let the big feelings in. Restraint is for people too embarrassed to want anything." },
-    lo: { verdict: "cool over romanticism", why: "You don't trust the swoon. Keep your distance, keep the line dry." },
-  },
-  energy: {
-    hi: { verdict: "energy over restraint", why: "You want the song to mean it physically. If it doesn't move the room, why bother." },
-    lo: { verdict: "restraint over energy", why: "You like a song that holds back. The whisper hits harder than the shout." },
-  },
-  dreaminess: {
-    hi: { verdict: "dreaminess over clarity", why: "You'd rather drift than land. The haze is doing more work than the lyric." },
-    lo: { verdict: "clarity over dreaminess", why: "You want the edges sharp. No fog machine, no fog." },
+  scale: {
+    hi: { verdict: "vast over intimate", why: "You want the song bigger than the room. Cathedral over kitchen, every time." },
+    lo: { verdict: "intimate over vast", why: "You like the song breathing on your neck. No stadiums, no fog machines." },
   },
   community: {
-    hi: { verdict: "communion over solitude", why: "You hear songs in rooms full of people. The singalong is the meaning." },
-    lo: { verdict: "solitude over communion", why: "You listen alone, on headphones, on purpose. Crowds dilute the signal." },
+    hi: { verdict: "communal over solitary", why: "You hear songs in rooms full of people. The singalong is the meaning." },
+    lo: { verdict: "solitary over communal", why: "Headphones, alone, on purpose. Crowds dilute the signal." },
+  },
+  perspective: {
+    hi: { verdict: "witness over feeling", why: "You want the song to show you something, not become you. The storyteller over the screamer." },
+    lo: { verdict: "feeling over witness", why: "You don't want a report from the scene. You want to be inside it." },
+  },
+  confidence: {
+    hi: { verdict: "command over vulnerability", why: "You like a singer who isn't asking. Posture as music." },
+    lo: { verdict: "vulnerability over command", why: "You'd take the cracked admission over the swagger. The flinch is the point." },
+  },
+  tension: {
+    hi: { verdict: "danger over release", why: "You don't want the song to let you off. Pressure all the way down." },
+    lo: { verdict: "release over danger", why: "You want the song to let you breathe. The exhale is the payoff." },
+  },
+  texture: {
+    hi: { verdict: "refinement over rawness", why: "You don't romanticize the mess. Craft is the delivery system, not the enemy of feeling." },
+    lo: { verdict: "rawness over refinement", why: "You'd take the cracked voice over the perfect take. Sincerity has a sound and you can hear it." },
+  },
+  transformation: {
+    hi: { verdict: "takes you somewhere over holds its shape", why: "You want the song to become something it wasn't at the start. Becoming is the whole bet." },
+    lo: { verdict: "holds its shape over takes you somewhere", why: "You want the song to know what it is from the first bar. No identity crises in your playlist." },
   },
 };
 
@@ -472,59 +452,59 @@ const BEAT: Record<string, { hi: { thesis: string; hook: string }; lo: { thesis:
     hi: { thesis: "You trust the room more than the lyric.\nThe air around the song is the song.\nReverb as meaning.", hook: "Wonder if a flat-out statement song changes your mind." },
     lo: { thesis: "You want the song to say it.\nOut loud.\nNo hiding behind reverb.", hook: "Let's see if a haze-bomb still gets through." },
   },
-  groove: {
-    hi: { thesis: "Body first.\nThe pocket is the point.\nEverything else is decoration.", hook: "What does a brain-song do to you?" },
-    lo: { thesis: "You hear the architecture before the pulse.\nThe chart matters.\nThe kick drum doesn't.", hook: "Let's test that with something built on the one." },
+  immersion: {
+    hi: { thesis: "You don't need the hook on contact.\nThird listen, real estate opens up.\nYou wait the song out.", hook: "What does a song that grabs you in eight bars do for you?" },
+    lo: { thesis: "If it doesn't hook you fast it doesn't hook you.\nEight bars or out.\nNo slow reveals.", hook: "Wonder if a sleeper still wins you over." },
   },
-  darkness: {
-    hi: { thesis: "You don't flinch.\nThe shadow is the part you came for.\nNo flinching.", hook: "Wonder what a song with the lights on does for you." },
-    lo: { thesis: "You refuse the easy gloom.\nWant the window open.\nLight gets through.", hook: "Let's see if a real black-hole song still hooks you." },
-  },
-  hope: {
-    hi: { thesis: "You pick the lift every time.\nBleakness without a way out bores you.\nA door has to crack open.", hook: "Curious if a song with no exit still pulls you in." },
-    lo: { thesis: "You don't need the song to fix anything.\nSitting with it is enough.\nNo escape required.", hook: "Wonder if a real lift breaks that." },
-  },
-  nostalgia: {
-    hi: { thesis: "Rearview mirror, always on.\nThe ache is half the pleasure.\nThe past has better songs.", hook: "Let's see if something brand new gets past it." },
-    lo: { thesis: "You don't trade in old feelings.\nThe song has to land now.\nOr not at all.", hook: "Curious if a piece of memory still hits you." },
-  },
-  transformation: {
-    hi: { thesis: "You want the song to become something.\nNot be something.\nBecoming is the whole bet.", hook: "What about a song that arrives fully formed?" },
-    lo: { thesis: "You want the song to know what it is.\nFrom the first bar.\nNo identity crisis.", hook: "Let's try one that morphs on you." },
-  },
-  complexity: {
-    hi: { thesis: "You like the songs that make you work.\nThe third listen is when it pays.\nGreat songs take a minute.", hook: "Wonder what a direct hit does to you." },
-    lo: { thesis: "No footnotes.\nA great song shouldn't need a guided tour.\nClarity as taste.", hook: "Let's see if a maze-song earns its detour." },
-  },
-  melody: {
-    hi: { thesis: "You want a tune you can carry home.\nHum it.\nOr it didn't happen.", hook: "What does a textural song do for you?" },
-    lo: { thesis: "Surface over line.\nGrain over tune.\nThe sound of the thing is the thing.", hook: "Curious if a stone-cold melody still gets you." },
-  },
-  verbal_cleverness: {
-    hi: { thesis: "You came for the writing.\nA great line will outrun a great chorus.\nWords first.", hook: "Wonder if a song that means everything and says nothing still pulls you." },
-    lo: { thesis: "Words can get out of the way.\nYou're chasing what the song does.\nNot what it says.", hook: "Let's see if a smart-mouth lyric flips that." },
-  },
-  authenticity: {
-    hi: { thesis: "Cracked voice over the perfect take.\nEvery time.\nYou want it bleeding, not fixed.", hook: "What does a flawlessly produced one do for you?" },
-    lo: { thesis: "Craft, not mess.\nPolish is the delivery system.\nThe seams should be invisible.", hook: "Wonder if a raw nerve still gets through." },
-  },
-  romanticism: {
-    hi: { thesis: "You let the big feelings in.\nRestraint is for people embarrassed to want anything.\nGo big.", hook: "Curious what a cold-blooded song does to you." },
-    lo: { thesis: "You don't trust the swoon.\nKeep the line dry.\nDistance as taste.", hook: "Let's see if a real swing for the heart connects." },
-  },
-  energy: {
-    hi: { thesis: "You want the song to mean it physically.\nMove the room.\nOr don't bother.", hook: "Wonder if a whisper hits you harder than you think." },
-    lo: { thesis: "You like songs that hold back.\nThe whisper hits harder than the shout.\nRestraint as muscle.", hook: "Let's see if something loud breaks that." },
-  },
-  dreaminess: {
-    hi: { thesis: "You'd rather drift than land.\nThe haze is doing the work.\nNot the lyric.", hook: "Curious if a sharp-edged song wakes you up." },
-    lo: { thesis: "Edges sharp.\nNo fog machine.\nNo fog.", hook: "Let's see if a real reverb-bath pulls you in anyway." },
+  scale: {
+    hi: { thesis: "You want the song bigger than the room.\nCathedral over kitchen.\nMore air.", hook: "What about a song built for one set of headphones?" },
+    lo: { thesis: "Up close.\nIn your ear.\nNo stadiums.", hook: "Let's see if a wall-of-sound moment still pulls you." },
   },
   community: {
     hi: { thesis: "Songs heard in rooms full of people.\nThe singalong is the meaning.\nMusic as gathering.", hook: "What about a song built for one set of headphones?" },
     lo: { thesis: "Headphones. Alone. On purpose.\nCrowds dilute the signal.\nThe song is between you and it.", hook: "Curious if a singalong still moves you." },
   },
+  perspective: {
+    hi: { thesis: "You want the song to show you something.\nNot become you.\nNarrator over screamer.", hook: "What happens with a song that wants you inside it?" },
+    lo: { thesis: "You don't want a report from the scene.\nYou want to be in it.\nFirst person, no distance.", hook: "Let's see if a great storyteller still gets through." },
+  },
+  confidence: {
+    hi: { thesis: "You like a singer who isn't asking.\nPosture as music.\nNo flinching.", hook: "Wonder what a vulnerable one does to you." },
+    lo: { thesis: "The cracked admission over the swagger.\nThe flinch is the point.\nNo armor.", hook: "Curious if a power move still pulls you in." },
+  },
+  tension: {
+    hi: { thesis: "You don't want the song to let you off.\nPressure all the way.\nNo exhale.", hook: "What does a real release do for you?" },
+    lo: { thesis: "You want the song to let you breathe.\nExhale is the payoff.\nRoom to move.", hook: "Let's see if a real squeeze still gets through." },
+  },
+  texture: {
+    hi: { thesis: "Craft, not mess.\nPolish is the delivery system.\nThe seams should be invisible.", hook: "Wonder if a raw nerve still gets through." },
+    lo: { thesis: "Cracked voice over the perfect take.\nEvery time.\nYou want it bleeding, not fixed.", hook: "What does a flawlessly produced one do for you?" },
+  },
+  transformation: {
+    hi: { thesis: "You want the song to become something.\nNot be something.\nBecoming is the whole bet.", hook: "What about a song that arrives fully formed?" },
+    lo: { thesis: "You want the song to know what it is.\nFrom the first bar.\nNo identity crisis.", hook: "Let's try one that morphs on you." },
+  },
 };
+
+// ============ Derived descriptors ============
+// Moods like nostalgic, dreamy, dark, hopeful are NOT stored and NOT scored.
+// They're a READ off the canonical 10 axes — Spotify-style: keep the signal,
+// derive the interpretation. The final synthesis prompt receives these as
+// flavor ("you may call them X if the read supports it"), never as data.
+export function deriveDescriptors(vector: Record<string, number>): string[] {
+  const v = (k: string) => vector[k] ?? 0;
+  const out: string[] = [];
+  if (v("immersion") < -25 && v("tension") < -15 && v("scale") < 0) out.push("nostalgic");
+  if (v("atmosphere") > 25 && v("immersion") > 15 && v("confidence") < 0) out.push("dreamy");
+  if (v("tension") > 25 && v("community") < 0 && v("texture") < -10) out.push("dark");
+  if (v("movement") > 15 && v("tension") < -10 && v("scale") > 0) out.push("hopeful");
+  if (v("confidence") < -15 && v("perspective") < -10 && v("atmosphere") > 0) out.push("romantic");
+  if (v("movement") > 25 && v("confidence") > 15 && v("tension") > 0) out.push("kinetic");
+  if (v("transformation") > 20 && v("scale") > 10) out.push("transporting");
+  if (v("texture") < -20 && v("confidence") < -10) out.push("raw");
+  if (v("scale") < -15 && v("atmosphere") > 10 && v("tension") < 0) out.push("intimate");
+  return out;
+}
 
 
 
