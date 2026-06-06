@@ -1,0 +1,387 @@
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  adminCheck,
+  adminList,
+  adminUpsert,
+  adminDelete,
+  adminSetDiagnosticWeight,
+} from "@/lib/admin.functions";
+
+export const Route = createFileRoute("/_authenticated/admin")({
+  head: () => ({ meta: [{ title: "Admin — MusicDNA" }] }),
+  beforeLoad: async () => {
+    const res = await adminCheck();
+    if (!res.isAdmin) throw redirect({ to: "/profile" });
+  },
+  component: AdminPage,
+});
+
+type Entity = "songs" | "pairings" | "archetypes";
+const ENTITIES: { key: Entity; label: string }[] = [
+  { key: "songs", label: "Songs" },
+  { key: "pairings", label: "Pairings" },
+  { key: "archetypes", label: "Archetypes" },
+];
+
+type Row = Record<string, unknown> & { id: string };
+
+function AdminPage() {
+  const [tab, setTab] = useState<Entity>("songs");
+  const [editing, setEditing] = useState<{ row: Row | null } | null>(null);
+
+  return (
+    <main className="mx-auto max-w-6xl px-6 py-12">
+      <div className="flex items-end justify-between mb-8 gap-6 flex-wrap">
+        <div>
+          <p className="eyebrow mb-3">Admin</p>
+          <h1 className="display text-4xl">Catalog</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Edit songs, pairings, and archetypes. Changes go live immediately.
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing({ row: null })}
+          className="rounded-sm bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
+        >
+          + New {tab.replace(/s$/, "")}
+        </button>
+      </div>
+
+      <nav className="flex gap-1 border-b hairline mb-6">
+        {ENTITIES.map((e) => (
+          <button
+            key={e.key}
+            onClick={() => setTab(e.key)}
+            className={`px-4 py-2 text-sm font-mono uppercase tracking-[0.18em] border-b-2 -mb-px ${
+              tab === e.key
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {e.label}
+          </button>
+        ))}
+      </nav>
+
+      <EntityTable
+        key={tab}
+        entity={tab}
+        onEdit={(row) => setEditing({ row })}
+      />
+
+      {editing && (
+        <EditDrawer
+          entity={tab}
+          row={editing.row}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </main>
+  );
+}
+
+function EntityTable({ entity, onEdit }: { entity: Entity; onEdit: (row: Row) => void }) {
+  const qc = useQueryClient();
+  const list = useServerFn(adminList);
+  const del = useServerFn(adminDelete);
+  const setWeight = useServerFn(adminSetDiagnosticWeight);
+  const [search, setSearch] = useState("");
+  const [lane, setLane] = useState("");
+
+  const query = useQuery({
+    queryKey: ["admin", entity, search, lane],
+    queryFn: () => list({ data: { table: entity, search: search || undefined, lane: lane || undefined } }),
+  });
+
+  const columns = useMemo(() => columnsFor(entity), [entity]);
+
+  return (
+    <div>
+      <div className="flex gap-3 items-center mb-3 flex-wrap">
+        {entity !== "archetypes" && (
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={entity === "songs" ? "Search title or artist…" : "Search…"}
+            className="border hairline rounded-sm bg-background px-3 py-1.5 text-sm w-64"
+          />
+        )}
+        {(entity === "songs" || entity === "pairings") && (
+          <select
+            value={lane}
+            onChange={(e) => setLane(e.target.value)}
+            className="border hairline rounded-sm bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="">All lanes</option>
+            {["alternative", "pop", "hip_hop", "electronic", "classic_rock", "general"].map((l) => (
+              <option key={l} value={l}>{l}</option>
+            ))}
+          </select>
+        )}
+        <span className="text-xs text-muted-foreground ml-auto">
+          {query.data?.rows.length ?? 0} rows{query.isFetching ? " · loading…" : ""}
+        </span>
+      </div>
+
+      <div className="border hairline-strong rounded-sm overflow-x-auto bg-surface">
+        <table className="w-full text-sm">
+          <thead className="bg-background/50">
+            <tr>
+              {columns.map((c) => (
+                <th key={c} className="text-left font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground px-3 py-2">
+                  {c}
+                </th>
+              ))}
+              <th className="w-32" />
+            </tr>
+          </thead>
+          <tbody>
+            {(query.data?.rows as Row[] | undefined)?.map((r) => (
+              <tr key={r.id} className="border-t hairline align-top">
+                {columns.map((c) => (
+                  <td key={c} className="px-3 py-2 max-w-[280px] truncate">
+                    {entity === "pairings" && c === "diagnostic_weight" ? (
+                      <input
+                        type="number"
+                        defaultValue={Number(r[c] ?? 0)}
+                        min={0}
+                        max={100}
+                        onBlur={async (e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (Number.isNaN(v) || v === Number(r[c])) return;
+                          try {
+                            await setWeight({ data: { id: r.id, diagnostic_weight: v } });
+                            toast.success("Weight updated");
+                            qc.invalidateQueries({ queryKey: ["admin", entity] });
+                          } catch (err) {
+                            toast.error((err as Error).message);
+                          }
+                        }}
+                        className="w-16 border hairline rounded-sm bg-background px-2 py-1 text-xs"
+                      />
+                    ) : entity === "pairings" && c === "active" ? (
+                      <input
+                        type="checkbox"
+                        defaultChecked={!!r[c]}
+                        onChange={async (e) => {
+                          try {
+                            await setWeight({ data: { id: r.id, diagnostic_weight: Number(r.diagnostic_weight ?? 0), active: e.target.checked } });
+                            qc.invalidateQueries({ queryKey: ["admin", entity] });
+                          } catch (err) {
+                            toast.error((err as Error).message);
+                          }
+                        }}
+                      />
+                    ) : (
+                      formatCell(r[c])
+                    )}
+                  </td>
+                ))}
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => onEdit(r)}
+                    className="text-xs underline mr-3"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Delete this row? This cannot be undone.")) return;
+                      try {
+                        await del({ data: { table: entity, id: r.id } });
+                        toast.success("Deleted");
+                        qc.invalidateQueries({ queryKey: ["admin", entity] });
+                      } catch (err) {
+                        toast.error((err as Error).message);
+                      }
+                    }}
+                    className="text-xs text-destructive underline"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!query.isLoading && (query.data?.rows.length ?? 0) === 0 && (
+              <tr>
+                <td colSpan={columns.length + 1} className="px-3 py-8 text-center text-muted-foreground">
+                  Nothing here yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function columnsFor(e: Entity): string[] {
+  if (e === "songs") return ["title", "artist", "year", "lane"];
+  if (e === "pairings") return ["hypothesis", "song_a_id", "song_b_id", "lane", "diagnostic_weight", "active"];
+  return ["name", "tagline", "description"];
+}
+
+function formatCell(v: unknown): string {
+  if (v == null) return "—";
+  if (typeof v === "string") return v.length > 120 ? v.slice(0, 117) + "…" : v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    const s = JSON.stringify(v);
+    return s.length > 80 ? s.slice(0, 77) + "…" : s;
+  } catch {
+    return String(v);
+  }
+}
+
+// ============ Edit drawer ============
+function EditDrawer({
+  entity,
+  row,
+  onClose,
+}: {
+  entity: Entity;
+  row: Row | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const upsert = useServerFn(adminUpsert);
+  const fields = useMemo(() => fieldsFor(entity), [entity]);
+  const initial = useMemo(() => {
+    const init: Record<string, string> = {};
+    for (const f of fields) {
+      const v = row?.[f.key];
+      init[f.key] = v == null ? "" : typeof v === "object" ? JSON.stringify(v, null, 2) : String(v);
+    }
+    return init;
+  }, [fields, row]);
+  const [values, setValues] = useState<Record<string, string>>(initial);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {};
+      for (const f of fields) {
+        const raw = values[f.key]?.trim() ?? "";
+        if (raw === "" && f.optional) continue;
+        if (raw === "" && !f.optional) {
+          throw new Error(`Missing required field: ${f.key}`);
+        }
+        if (f.type === "number") {
+          const n = Number(raw);
+          if (Number.isNaN(n)) throw new Error(`${f.key} must be a number`);
+          payload[f.key] = n;
+        } else if (f.type === "boolean") {
+          payload[f.key] = raw === "true";
+        } else if (f.type === "json") {
+          try {
+            payload[f.key] = raw === "" ? null : JSON.parse(raw);
+          } catch {
+            throw new Error(`${f.key} must be valid JSON`);
+          }
+        } else {
+          payload[f.key] = raw;
+        }
+      }
+      await upsert({ data: { table: entity, id: row?.id ?? null, row: payload } });
+      toast.success(row ? "Saved" : "Created");
+      qc.invalidateQueries({ queryKey: ["admin", entity] });
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-stretch justify-end">
+      <div className="w-full max-w-xl bg-background border-l hairline-strong overflow-y-auto">
+        <div className="p-6 border-b hairline flex items-center justify-between">
+          <div>
+            <p className="eyebrow">{row ? "Edit" : "New"}</p>
+            <h2 className="font-serif text-2xl mt-1">{entity.replace(/s$/, "")}</h2>
+          </div>
+          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">Close</button>
+        </div>
+        <div className="p-6 space-y-4">
+          {fields.map((f) => (
+            <label key={f.key} className="block">
+              <span className="block text-xs font-mono uppercase tracking-[0.18em] text-muted-foreground mb-1">
+                {f.key}{f.optional ? "" : " *"}
+              </span>
+              {f.type === "json" || f.long ? (
+                <textarea
+                  rows={f.type === "json" ? 6 : 3}
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  className="w-full border hairline rounded-sm bg-background px-3 py-2 text-sm font-mono"
+                />
+              ) : (
+                <input
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.hint}
+                  className="w-full border hairline rounded-sm bg-background px-3 py-2 text-sm"
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div className="p-6 border-t hairline flex justify-end gap-2 sticky bottom-0 bg-background">
+          <button onClick={onClose} className="text-sm px-4 py-2 border hairline-strong rounded-sm">Cancel</button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="text-sm px-4 py-2 bg-primary text-primary-foreground rounded-sm disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type Field = { key: string; type: "text" | "number" | "boolean" | "json"; optional?: boolean; long?: boolean; hint?: string };
+
+function fieldsFor(e: Entity): Field[] {
+  if (e === "songs") {
+    const dims = [
+      "movement","atmosphere","groove","darkness","hope","nostalgia","transformation",
+      "complexity","melody","verbal_cleverness","authenticity","romanticism","energy",
+      "dreaminess","community",
+    ];
+    return [
+      { key: "title", type: "text" },
+      { key: "artist", type: "text" },
+      { key: "year", type: "number", optional: true },
+      { key: "lane", type: "text", optional: true, hint: "alternative · pop · hip_hop · electronic · classic_rock · general" },
+      ...dims.map((d) => ({ key: d, type: "number" as const, optional: true, hint: "-10 to +10" })),
+    ];
+  }
+  if (e === "pairings") {
+    return [
+      { key: "song_a_id", type: "text", hint: "uuid of song A" },
+      { key: "song_b_id", type: "text", hint: "uuid of song B" },
+      { key: "hypothesis", type: "text", long: true },
+      { key: "why_good", type: "text", long: true, optional: true },
+      { key: "tests", type: "json", optional: true, hint: '["movement","darkness"]' },
+      { key: "lane", type: "text", optional: true, hint: "default: alternative" },
+      { key: "diagnostic_weight", type: "number", hint: "0–100" },
+      { key: "active", type: "boolean", hint: "true / false" },
+    ];
+  }
+  return [
+    { key: "name", type: "text" },
+    { key: "tagline", type: "text", optional: true },
+    { key: "description", type: "text", long: true, optional: true },
+    { key: "signature_axes", type: "json", optional: true, hint: '{"movement":5,"darkness":-3}' },
+    { key: "signature_signals", type: "json", optional: true, hint: '["…"]' },
+  ];
+}
