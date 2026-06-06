@@ -1429,10 +1429,18 @@ export const finalSynthesis = createServerFn({ method: "POST" })
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
       const parsed = JSON.parse(cleaned) as { synthesis?: string };
       const synthesis = typeof parsed.synthesis === "string" && parsed.synthesis.trim() ? parsed.synthesis.trim() : "";
-      return { synthesis: synthesis || fallback.synthesis };
+      const final = synthesis || fallback.synthesis;
+      // Persist as the refined working hypothesis so /me chat reads from the
+      // critic's latest take, not the opener's first sketch.
+      await supabase
+        .from("profiles")
+        .update({ opening_hypothesis: final })
+        .eq("user_id", userId);
+      return { synthesis: final };
     } catch {
       return fallback;
     }
+
   });
 
 
