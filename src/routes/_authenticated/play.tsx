@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { startSession, nextPairing, recordChoice, finalizeSession } from "@/lib/musicdna.functions";
+import { startSession, nextPairing, recordChoice, finalizeSession, recordEvent } from "@/lib/musicdna.functions";
 import { toast } from "sonner";
 
 const MAX_ROUNDS = 20;
