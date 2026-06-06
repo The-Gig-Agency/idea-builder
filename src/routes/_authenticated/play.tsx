@@ -29,7 +29,7 @@ function Play() {
   const [round, setRound] = useState(0);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const [reveal, setReveal] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<{ verdict: string; why: string; hesitation: string | null } | null>(null);
   const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
