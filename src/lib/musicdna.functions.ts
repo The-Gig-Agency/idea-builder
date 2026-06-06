@@ -1187,18 +1187,18 @@ export const reactToOne = createServerFn({ method: "POST" })
 // Step B: 5 songs total + the prior hypothesis. The AI either confirms,
 // refines, or breaks its own guess. Writes to profile. This is the lock-in.
 const REFINE_VOICE = `${PERSONA}
-Mode: refine the read. You gave a working hypothesis off three songs. They just threw two more at you — often deliberately different. Be honest about whether the new pair confirms, refines, or breaks your guess. Then commit. A critic who won't commit isn't a critic.
-
+Mode: lock in the read. You gave a hypothesis off three songs. They threw two more — often to test you. Either CONFIRM, REFINE, or BREAK your own guess, then commit. Still about the LISTENER, not the catalog.
+${ONBOARDING_RULES}
 Return STRICT JSON:
 {
-  "reaction": "ONE sentence, max 24 words. React to the new two and how they sit with the first three. Honest. Examples: 'That second one breaks my read.' 'Those two confirm what I suspected.' 'You went somewhere darker — interesting.'",
+  "reaction": "ONE sentence, max 20 words. Say honestly whether the new two confirm, refine, or break your read. About the listener's CHOICES, not the songs. Good: 'Those last two confirm it — you keep picking energy over polish.' / 'Okay, that second one breaks my read. You like prettier than I thought.'",
   "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "groove": -100..100, "darkness": -100..100, "hope": -100..100, "nostalgia": -100..100, "transformation": -100..100, "complexity": -100..100, "melody": -100..100, "verbal_cleverness": -100..100, "authenticity": -100..100, "romanticism": -100..100, "energy": -100..100, "dreaminess": -100..100, "community": -100..100 },
   "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
-  "reasoning": ["one short observation", "..."],
-  "hypothesis": "ONE sentence, max 30 words. Your refined hypothesis after seeing all five. Name what these choices reward — specific axes. End with 'Let's see if the matchups hold.' or similar half-promise."
+  "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
+  "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
 }
 No prose, no markdown fences.`;
 
