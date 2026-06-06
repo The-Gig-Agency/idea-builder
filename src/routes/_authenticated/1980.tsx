@@ -329,7 +329,7 @@ function NineteenEighty() {
             </div>
           )}
 
-          {pending.stage === "observation" && (
+          {pending.stage === "observation" && pending.final && (
             <div className="pt-4 animate-in fade-in duration-500">
               <button
                 onClick={commitAndAdvance}
@@ -340,6 +340,7 @@ function NineteenEighty() {
               </button>
             </div>
           )}
+
         </section>
       )}
 
