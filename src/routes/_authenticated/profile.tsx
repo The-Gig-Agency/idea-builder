@@ -154,12 +154,23 @@ function ProfilePage() {
                 </>
               )}
             </div>
-            <button
-              onClick={share}
-              className="shrink-0 border hairline-strong rounded-sm px-4 py-2 text-xs font-medium hover:bg-surface"
-            >
-              {copied ? "Copied" : "Share"}
-            </button>
+            <div className="shrink-0 flex flex-col items-end gap-2">
+              <button
+                onClick={share}
+                className="border hairline-strong rounded-sm px-4 py-2 text-xs font-medium hover:bg-surface"
+              >
+                {copied ? "Copied" : "Share / challenge a friend"}
+              </button>
+              <a
+                href={`/s/${latest.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+              >
+                Preview share card →
+              </a>
+            </div>
+
           </div>
 
           {latest.interpretation && (
