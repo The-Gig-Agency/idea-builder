@@ -42,7 +42,13 @@ export const adminList = createServerFn({ method: "POST" })
     const admin = await assertAdminAndGetClient(context.userId);
     const table = data.table as AdminTable;
 
-    let q = admin.from(table).select("*").limit(500);
+    // Cast through unknown because the table is dynamic across a union; the
+    // supabase-js generic typing collapses to the intersection of columns.
+    let q = admin.from(table).select("*").limit(500) as unknown as {
+      order: (col: string, opts?: { ascending?: boolean }) => typeof q;
+      or: (filter: string) => typeof q;
+      eq: (col: string, val: unknown) => typeof q;
+    } & PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
     if (table === "songs") {
       q = q.order("artist", { ascending: true }).order("title", { ascending: true });
       if (data.search) q = q.or(`title.ilike.%${data.search}%,artist.ilike.%${data.search}%`);
@@ -55,6 +61,7 @@ export const adminList = createServerFn({ method: "POST" })
     }
 
     const { data: rows, error } = await q;
+
     if (error) throw new Error(error.message);
     return { rows: rows ?? [] };
   });
