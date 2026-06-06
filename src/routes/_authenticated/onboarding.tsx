@@ -73,6 +73,17 @@ function Onboarding() {
       const labels = picks.map((p) => `${p!.title} — ${p!.artist}`);
       const result = await fn({ data: { songs: labels } });
       setAnalysis(result as Analysis);
+      logEvent({
+        data: {
+          event_type: "onboarding_classified",
+          props: {
+            lane: result.lane,
+            confidence: result.confidence,
+            secondary_lanes: result.secondary_lanes,
+            song_count: labels.length,
+          },
+        },
+      } as never).catch(() => { /* swallow */ });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to read your songs.");
     } finally { setBusy(false); }
