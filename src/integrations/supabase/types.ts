@@ -461,6 +461,8 @@ export type Database = {
           interpretation: string | null
           lane: string
           lane_confidence: number
+          probe_candidate_lanes: string[]
+          probe_state: Json
           started_at: string
           updated_at: string
           user_id: string
@@ -474,6 +476,8 @@ export type Database = {
           interpretation?: string | null
           lane?: string
           lane_confidence?: number
+          probe_candidate_lanes?: string[]
+          probe_state?: Json
           started_at?: string
           updated_at?: string
           user_id: string
@@ -487,6 +491,8 @@ export type Database = {
           interpretation?: string | null
           lane?: string
           lane_confidence?: number
+          probe_candidate_lanes?: string[]
+          probe_state?: Json
           started_at?: string
           updated_at?: string
           user_id?: string
