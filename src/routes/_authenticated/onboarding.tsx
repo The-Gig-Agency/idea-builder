@@ -92,6 +92,7 @@ function Onboarding() {
   }, [busy, pending, idx]);
 
   // Reveal choreography: once the reaction is in, walk through preamble → observation
+  // → (auto-commit if not final). Final turns hold and wait for the user to click.
   useEffect(() => {
     if (!pending) return;
     if (pending.stage === "thinking" && pending.reaction) {
@@ -102,7 +103,17 @@ function Onboarding() {
       const t2 = setTimeout(() => setPending((p) => (p ? { ...p, stage: "observation" } : p)), 750);
       return () => clearTimeout(t2);
     }
+    // Auto-advance once the observation has had a beat to breathe — but only
+    // for non-final turns. Final waits for the user to tap "See what I think".
+    if (pending.stage === "observation" && pending.reaction && !pending.final) {
+      // give the reader time proportional to the line length, clamped
+      const wordCount = (pending.reaction + " " + (pending.hypothesis ?? "")).split(/\s+/).length;
+      const ms = Math.min(4200, Math.max(1800, 350 * wordCount));
+      const t3 = setTimeout(() => commitAndAdvance(), ms);
+      return () => clearTimeout(t3);
+    }
   }, [pending]);
+
 
   async function handleSubmit() {
     const value = input.trim();
