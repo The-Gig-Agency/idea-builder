@@ -463,6 +463,71 @@ const REVEAL: Record<string, { hi: { verdict: string; why: string }; lo: { verdi
   },
 };
 
+// Fragmented beats for the running thesis — three short lines and a hook
+// question/half-promise that pulls the next pick.
+const BEAT: Record<string, { hi: { thesis: string; hook: string }; lo: { thesis: string; hook: string } }> = {
+  movement: {
+    hi: { thesis: "You keep choosing songs that move.\nNot fast.\nJust forward.", hook: "What happens if I throw you something that stands still?" },
+    lo: { thesis: "You keep picking the still ones.\nThe ones that sit you down.\nNo rush.", hook: "Curious if a propulsive one breaks that." },
+  },
+  atmosphere: {
+    hi: { thesis: "You trust the room more than the lyric.\nThe air around the song is the song.\nReverb as meaning.", hook: "Wonder if a flat-out statement song changes your mind." },
+    lo: { thesis: "You want the song to say it.\nOut loud.\nNo hiding behind reverb.", hook: "Let's see if a haze-bomb still gets through." },
+  },
+  groove: {
+    hi: { thesis: "Body first.\nThe pocket is the point.\nEverything else is decoration.", hook: "What does a brain-song do to you?" },
+    lo: { thesis: "You hear the architecture before the pulse.\nThe chart matters.\nThe kick drum doesn't.", hook: "Let's test that with something built on the one." },
+  },
+  darkness: {
+    hi: { thesis: "You don't flinch.\nThe shadow is the part you came for.\nNo flinching.", hook: "Wonder what a song with the lights on does for you." },
+    lo: { thesis: "You refuse the easy gloom.\nWant the window open.\nLight gets through.", hook: "Let's see if a real black-hole song still hooks you." },
+  },
+  hope: {
+    hi: { thesis: "You pick the lift every time.\nBleakness without a way out bores you.\nA door has to crack open.", hook: "Curious if a song with no exit still pulls you in." },
+    lo: { thesis: "You don't need the song to fix anything.\nSitting with it is enough.\nNo escape required.", hook: "Wonder if a real lift breaks that." },
+  },
+  nostalgia: {
+    hi: { thesis: "Rearview mirror, always on.\nThe ache is half the pleasure.\nThe past has better songs.", hook: "Let's see if something brand new gets past it." },
+    lo: { thesis: "You don't trade in old feelings.\nThe song has to land now.\nOr not at all.", hook: "Curious if a piece of memory still hits you." },
+  },
+  transformation: {
+    hi: { thesis: "You want the song to become something.\nNot be something.\nBecoming is the whole bet.", hook: "What about a song that arrives fully formed?" },
+    lo: { thesis: "You want the song to know what it is.\nFrom the first bar.\nNo identity crisis.", hook: "Let's try one that morphs on you." },
+  },
+  complexity: {
+    hi: { thesis: "You like the songs that make you work.\nThe third listen is when it pays.\nGreat songs take a minute.", hook: "Wonder what a direct hit does to you." },
+    lo: { thesis: "No footnotes.\nA great song shouldn't need a guided tour.\nClarity as taste.", hook: "Let's see if a maze-song earns its detour." },
+  },
+  melody: {
+    hi: { thesis: "You want a tune you can carry home.\nHum it.\nOr it didn't happen.", hook: "What does a textural song do for you?" },
+    lo: { thesis: "Surface over line.\nGrain over tune.\nThe sound of the thing is the thing.", hook: "Curious if a stone-cold melody still gets you." },
+  },
+  verbal_cleverness: {
+    hi: { thesis: "You came for the writing.\nA great line will outrun a great chorus.\nWords first.", hook: "Wonder if a song that means everything and says nothing still pulls you." },
+    lo: { thesis: "Words can get out of the way.\nYou're chasing what the song does.\nNot what it says.", hook: "Let's see if a smart-mouth lyric flips that." },
+  },
+  authenticity: {
+    hi: { thesis: "Cracked voice over the perfect take.\nEvery time.\nYou want it bleeding, not fixed.", hook: "What does a flawlessly produced one do for you?" },
+    lo: { thesis: "Craft, not mess.\nPolish is the delivery system.\nThe seams should be invisible.", hook: "Wonder if a raw nerve still gets through." },
+  },
+  romanticism: {
+    hi: { thesis: "You let the big feelings in.\nRestraint is for people embarrassed to want anything.\nGo big.", hook: "Curious what a cold-blooded song does to you." },
+    lo: { thesis: "You don't trust the swoon.\nKeep the line dry.\nDistance as taste.", hook: "Let's see if a real swing for the heart connects." },
+  },
+  energy: {
+    hi: { thesis: "You want the song to mean it physically.\nMove the room.\nOr don't bother.", hook: "Wonder if a whisper hits you harder than you think." },
+    lo: { thesis: "You like songs that hold back.\nThe whisper hits harder than the shout.\nRestraint as muscle.", hook: "Let's see if something loud breaks that." },
+  },
+  dreaminess: {
+    hi: { thesis: "You'd rather drift than land.\nThe haze is doing the work.\nNot the lyric.", hook: "Curious if a sharp-edged song wakes you up." },
+    lo: { thesis: "Edges sharp.\nNo fog machine.\nNo fog.", hook: "Let's see if a real reverb-bath pulls you in anyway." },
+  },
+  community: {
+    hi: { thesis: "Songs heard in rooms full of people.\nThe singalong is the meaning.\nMusic as gathering.", hook: "What about a song built for one set of headphones?" },
+    lo: { thesis: "Headphones. Alone. On purpose.\nCrowds dilute the signal.\nThe song is between you and it.", hook: "Curious if a singalong still moves you." },
+  },
+};
+
 
 
 export const recordChoice = createServerFn({ method: "POST" })
