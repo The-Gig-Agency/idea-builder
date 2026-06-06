@@ -18,10 +18,12 @@ The current strongest candidate dimension expansion is `immersion`: immediacy vs
 - `docs/musicdna/canon_workflow.md`: step-by-step curation process.
 - `docs/musicdna/lovable_product_notes.md`: Lovable-facing notes for diagnostic tradeoff implementation.
 - `docs/musicdna/lovable_lane_engine_prompt.md`: decision-complete Lovable prompt for the multi-lane engine MVP.
+- `docs/musicdna/multi_lane_pairings_seed.md`: notes for the Pop, Hip-Hop, Electronic, and Classic Rock pairing seed.
 - `docs/musicdna/intelligence_layer.md`: evidence-first AI reasoning framework for Analyst and Critic layers.
 - `tools/musicdna/generate_alternative_canon.cjs`: deterministic seed-canon generator.
 - `tools/musicdna/validate_canon.cjs`: CSV-aware canon validator.
 - `data/musicdna/alternative_diagnostic_canon_seed.csv`: generated Alternative/Post-Punk diagnostic canon seed.
+- `data/musicdna/multi_lane_pairings_seed.tsv`: 20 diagnostic pairings each for Pop, Hip-Hop, Electronic, and Classic Rock.
 
 ## Next Step
 
