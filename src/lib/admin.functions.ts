@@ -24,14 +24,19 @@ async function assertAdminAndGetClient(userId: string) {
 
 export const adminCheck = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    try {
-      await assertAdminAndGetClient(context.userId);
-      return { isAdmin: true };
-    } catch {
-      return { isAdmin: false };
-    }
+  .handler(async ({ context }): Promise<{ isAdmin: boolean; userId: string; reason?: string }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (error) return { isAdmin: false, userId: context.userId, reason: `db: ${error.message}` };
+    if (!data) return { isAdmin: false, userId: context.userId, reason: "no admin row for this user_id" };
+    return { isAdmin: true, userId: context.userId };
   });
+
 
 export const adminList = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
