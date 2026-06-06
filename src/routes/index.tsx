@@ -3,17 +3,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "MusicDNA — a catalog of revealing decisions" },
+      { title: "MusicDNA — Why do you love the songs you love?" },
       {
         name: "description",
         content:
-          "Most music apps measure what you listen to. MusicDNA measures what you choose under constraint. Begin a short ritual of forced choices and see what your taste reveals.",
+          "The Myers-Briggs of music. Twenty song matchups. Three minutes. Discover what your taste reveals about you.",
       },
       { property: "og:title", content: "MusicDNA" },
       {
         property: "og:description",
         content:
-          "Music is the language. Identity is the destination.",
+          "The Myers-Briggs of music. Choose between songs. Discover the hidden patterns in your taste.",
       },
     ],
   }),
@@ -25,8 +25,9 @@ function Landing() {
     <main className="min-h-screen bg-background text-foreground">
       <Nav />
       <Hero />
-      <Manifesto />
-      <Layers />
+      <Reveal />
+      <HowItWorks />
+      <Proof />
       <CTA />
       <Footer />
     </main>
@@ -46,13 +47,7 @@ function Nav() {
         <nav className="flex items-center gap-6">
           <Link
             to="/"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Thesis
-          </Link>
-          <Link
-            to="/"
-            hash="layers"
+            hash="how-it-works"
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             How it works
@@ -61,7 +56,7 @@ function Nav() {
             to="/auth"
             className="inline-flex items-center gap-2 rounded-sm border hairline-strong px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-secondary"
           >
-            Begin
+            Start
             <ArrowRight />
           </Link>
         </nav>
@@ -74,132 +69,147 @@ function Hero() {
   return (
     <section className="border-b hairline">
       <div className="mx-auto max-w-6xl px-6 pt-24 pb-28">
-        <p className="eyebrow mb-8">A new kind of music product · V0</p>
-        <h1 className="display text-5xl text-foreground sm:text-7xl md:text-[5.5rem]">
-          We are not building <br />
-          a catalog of songs. <br />
-          <span className="italic text-muted-foreground">
-            We are building a catalog of revealing decisions.
-          </span>
+        <h1 className="display max-w-3xl text-5xl text-foreground sm:text-7xl md:text-[5.5rem]">
+          Why do you love the songs you love?
         </h1>
-        <div className="mt-12 grid grid-cols-1 gap-10 md:grid-cols-12">
-          <p className="md:col-span-7 md:col-start-1 text-lg leading-relaxed text-muted-foreground">
-            Spotify measures listening. MusicDNA measures decision-making.
-            Listening is consumption. Choosing under constraint reveals values.
-            What you choose, when you can only choose one, is who you are.
+        <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
+          Twenty choices. Three minutes. One surprisingly accurate answer.
+        </p>
+        <div className="mt-10 flex flex-col items-start gap-4">
+          <Link
+            to="/auth"
+            className="group inline-flex items-center gap-3 rounded-sm bg-primary px-6 py-4 text-base font-medium text-primary-foreground transition-all hover:opacity-90"
+          >
+            Start your MusicDNA
+            <ArrowRight />
+          </Link>
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Free · No signup required
           </p>
-          <div className="md:col-span-4 md:col-start-9 flex flex-col items-start gap-4">
-            <Link
-              to="/auth"
-              className="group inline-flex items-center gap-3 rounded-sm bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
-            >
-              Begin your MusicDNA
-              <ArrowRight />
-            </Link>
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              ~3 minutes · 20 choices · 1 reading
-            </p>
-          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function Manifesto() {
-  const rows = [
+function Reveal() {
+  const examples = [
     {
-      a: "Spotify knows",
-      b: "Alan listened to Ceremony 72 times.",
-      tone: "muted",
+      a: "Ceremony",
+      b: "Dreaming of Me",
+      insight: "transformation over nostalgia",
     },
     {
-      a: "MusicDNA knows",
-      b: "Alan chose Ceremony over Dreaming of Me, Never Let Me Down Again, Blue Monday, and The Killing Moon.",
-      tone: "primary",
+      a: "A Forest",
+      b: "The Killing Moon",
+      insight: "movement over grandeur",
     },
   ];
   return (
     <section className="border-b hairline">
       <div className="mx-auto max-w-6xl px-6 py-24">
-        <p className="eyebrow mb-10">The core principle</p>
+        <p className="eyebrow mb-10">What your choices reveal</p>
         <div className="space-y-px overflow-hidden rounded-sm border hairline">
-          {rows.map((row, i) => (
+          {examples.map((ex, i) => (
             <div
               key={i}
               className="grid grid-cols-1 gap-2 bg-surface px-6 py-8 md:grid-cols-12 md:gap-8"
             >
-              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground md:col-span-3 md:pt-1">
-                {row.a}
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground md:col-span-4 md:pt-1">
+                {ex.a} <span className="text-muted-foreground/50">vs</span>{" "}
+                {ex.b}
               </p>
-              <p
-                className={
-                  "md:col-span-9 font-serif text-2xl leading-snug md:text-3xl " +
-                  (row.tone === "primary"
-                    ? "text-foreground"
-                    : "text-muted-foreground")
-                }
-              >
-                {row.b}
+              <p className="md:col-span-8 font-serif text-2xl leading-snug md:text-3xl text-foreground">
+                People who choose{" "}
+                <span className="italic text-muted-foreground">{ex.a}</span>{" "}
+                often value{" "}
+                <span className="text-primary">{ex.insight}</span>.
               </p>
             </div>
           ))}
         </div>
         <p className="mt-10 max-w-2xl text-sm text-muted-foreground">
-          Those are fundamentally different signals. One tracks consumption.
-          The other measures preference under constraint — the closest thing
-          we have to revealed values.
+          Every matchup is designed to probe a hidden dimension of your taste.
+          Not genres. Not playlists. Just choices — and what they say about
+          who you are.
         </p>
       </div>
     </section>
   );
 }
 
-function Layers() {
-  const layers = [
+function HowItWorks() {
+  const steps = [
     {
       n: "01",
-      kicker: "Conversational discovery",
-      title: "Tell me five songs you love.",
-      body: "The system reads them as a hypothesis. \"You seem to favor movement, atmosphere, and emotional lift over melody and lyrical cleverness. Let's test that.\"",
+      title: "Pick your first five songs",
+      body: "Start with the songs you already love. This builds a hypothesis about what you value in music.",
     },
     {
       n: "02",
-      kicker: "Diagnostic matchups",
-      title: "Choose one.",
-      body: "Each pair is built to probe a latent dimension. Temptation vs This Charming Man tests groove against verbal precision. Every matchup must answer one question — what are we testing? — or it doesn't exist.",
+      kicker: "The matchups",
+      title: "Choose one song, again and again",
+      body: "Each pair is built to test a hidden dimension of your taste. Temptation vs This Charming Man. A Forest vs The Killing Moon. Every choice reveals something.",
     },
     {
       n: "03",
-      kicker: "Interpretation",
-      title: "Here is what your choices reveal.",
-      body: "Not \"you like alternative rock.\" Instead: you consistently reward movement over polish, atmosphere over verbal cleverness, transformation over nostalgia. The reading should feel annoyingly accurate.",
+      kicker: "The reading",
+      title: "See what your taste says about you",
+      body: "Not "you like alternative rock." Instead: you consistently reward atmosphere over verbal cleverness, movement over polish, transformation over nostalgia. It feels annoyingly accurate.",
     },
   ];
   return (
-    <section id="layers" className="border-b hairline">
+    <section id="how-it-works" className="border-b hairline">
       <div className="mx-auto max-w-6xl px-6 py-24">
-        <p className="eyebrow mb-10">Three layers</p>
+        <p className="eyebrow mb-10">How it works</p>
         <div className="grid grid-cols-1 gap-px overflow-hidden rounded-sm border hairline md:grid-cols-3">
-          {layers.map((l) => (
+          {steps.map((s) => (
             <article
-              key={l.n}
+              key={s.n}
               className="flex flex-col gap-6 bg-surface p-8 md:p-10"
             >
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs text-muted-foreground">
-                  {l.n}
+                  {s.n}
                 </span>
-                <span className="eyebrow">{l.kicker}</span>
+                {s.kicker && <span className="eyebrow">{s.kicker}</span>}
               </div>
               <h3 className="display text-2xl text-foreground md:text-[1.75rem]">
-                {l.title}
+                {s.title}
               </h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                {l.body}
+                {s.body}
               </p>
             </article>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Proof() {
+  return (
+    <section className="border-b hairline">
+      <div className="mx-auto max-w-6xl px-6 py-24">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-12">
+          <div className="md:col-span-5">
+            <p className="eyebrow mb-6">The moment it clicks</p>
+            <h2 className="display text-4xl text-foreground md:text-5xl">
+              "You hear songs from the bottom up."
+            </h2>
+          </div>
+          <div className="md:col-span-6 md:col-start-7 flex flex-col gap-6">
+            <p className="text-lg leading-relaxed text-muted-foreground">
+              That's the magic. Not "you listened to this 72 times." Instead:
+              you consistently choose songs that transform rather than console.
+              You value movement over grandeur. Atmosphere over verbal
+              cleverness.
+            </p>
+            <p className="text-lg leading-relaxed text-muted-foreground">
+              This thing understands you.
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -212,11 +222,12 @@ function CTA() {
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="grid grid-cols-1 items-end gap-10 md:grid-cols-12">
           <div className="md:col-span-8">
-            <p className="eyebrow mb-6">North star</p>
+            <p className="eyebrow mb-6">The Myers-Briggs of music</p>
             <h2 className="display text-4xl text-foreground md:text-5xl">
-              People do not return because they want more songs. <br />
+              Not a playlist generator.
+              <br />
               <span className="italic text-muted-foreground">
-                They return because they want more insight.
+                A mirror for your taste.
               </span>
             </h2>
           </div>
@@ -225,7 +236,7 @@ function CTA() {
               to="/auth"
               className="inline-flex items-center gap-3 rounded-sm bg-primary px-6 py-4 text-base font-medium text-primary-foreground transition-all hover:opacity-90"
             >
-              Begin
+              Start
               <ArrowRight />
             </Link>
           </div>
