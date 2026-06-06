@@ -77,6 +77,12 @@ function AdminPage() {
             {errMsg}
           </pre>
         )}
+        {!errMsg && gate.data && (
+          <pre className="mb-6 max-w-full overflow-x-auto rounded border hairline bg-muted/40 p-3 text-[11px] font-mono text-muted-foreground">
+            {`server saw userId: ${gate.data.userId}\nreason: ${gate.data.reason ?? "unknown"}`}
+          </pre>
+        )}
+
         <div className="flex gap-3 items-center">
           <button
             onClick={() => gate.refetch()}
