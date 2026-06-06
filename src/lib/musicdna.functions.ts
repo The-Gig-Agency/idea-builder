@@ -221,20 +221,39 @@ export const analyzeOpeningSongs = createServerFn({ method: "POST" })
 export const generateOpeningHypothesis = analyzeOpeningSongs;
 
 // ============ Start session ============
+const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock"];
+
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const { data: profile } = await supabase
       .from("profiles")
-      .select("opening_lane, opening_lane_confidence")
+      .select("opening_lane, opening_lane_confidence, opening_analysis_json")
       .eq("user_id", userId)
       .maybeSingle();
     const lane = ((profile?.opening_lane as Lane | null) ?? "general") as Lane;
     const lane_confidence = Number(profile?.opening_lane_confidence ?? 0);
+
+    // Seed probe candidates: secondary lanes from opening analysis, then a wildcard.
+    const analysis = (profile?.opening_analysis_json ?? {}) as { secondary_lanes?: string[] };
+    const secondaries = (analysis.secondary_lanes ?? []).filter((l): l is Lane =>
+      (ALL_LANES as readonly string[]).includes(l) && l !== lane,
+    );
+    const wildcardPool = ALL_LANES.filter((l) => l !== lane && !secondaries.includes(l));
+    const wildcard = wildcardPool[Math.floor(Math.random() * wildcardPool.length)];
+    const probe_candidate_lanes = Array.from(new Set([...secondaries, wildcard].filter(Boolean) as Lane[])).slice(0, 3);
+
     const { data, error } = await supabase
       .from("sessions")
-      .insert({ user_id: userId, vector: {}, lane, lane_confidence })
+      .insert({
+        user_id: userId,
+        vector: {},
+        lane,
+        lane_confidence,
+        probe_candidate_lanes,
+        probe_state: { probes_shown: [], pending: {}, lane_alignment: {}, flips: [] },
+      })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -242,6 +261,17 @@ export const startSession = createServerFn({ method: "POST" })
   });
 
 // ============ Next pairing ============
+// Probe schedule: at these rounds we silently inject a pairing from a
+// candidate lane (not the user's current lane) to see if the user resonates.
+const PROBE_ROUNDS = new Set([4, 9, 14]);
+
+type ProbeState = {
+  probes_shown: Array<{ round: number; pairing_id: string; lane: Lane }>;
+  pending: Record<string, Lane>; // pairing_id → probe lane (not yet recorded)
+  lane_alignment: Record<string, { wins: number; total: number; magnitude: number; cosine_sum: number }>;
+  flips: Array<{ round: number; from: Lane; to: Lane; reason: string }>;
+};
+
 export const nextPairing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
@@ -249,9 +279,19 @@ export const nextPairing = createServerFn({ method: "POST" })
     const { supabase } = context;
     const [usedRes, sessionRes] = await Promise.all([
       supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
-      supabase.from("sessions").select("vector, lane").eq("id", data.sessionId).single(),
+      supabase
+        .from("sessions")
+        .select("vector, lane, probe_candidate_lanes, probe_state")
+        .eq("id", data.sessionId)
+        .single(),
     ]);
     const sessionLane = (sessionRes.data?.lane as Lane | null) ?? "general";
+    const probeCandidates = (sessionRes.data?.probe_candidate_lanes as Lane[] | null) ?? [];
+    const probeState = (sessionRes.data?.probe_state ?? {}) as ProbeState;
+    probeState.probes_shown = probeState.probes_shown ?? [];
+    probeState.pending = probeState.pending ?? {};
+    probeState.lane_alignment = probeState.lane_alignment ?? {};
+    probeState.flips = probeState.flips ?? [];
 
     const pairingSelect = `
       id, tests, hypothesis, why_good, diagnostic_weight, lane,
@@ -259,30 +299,56 @@ export const nextPairing = createServerFn({ method: "POST" })
       song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,primary_lane,lane)
     `;
 
-    // Primary fetch: lane-scoped (or all active when lane is 'general').
+    const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
+    const round = usedIds.size;
+    const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
+    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
+    const confidence = confidentAxes / DIMS.length;
+    const canStop = round >= 12 && confidence >= 0.6;
+    if (canStop) {
+      return { pairing: null, round, confidence, done: true as const };
+    }
+
+    // -------- Probe injection (silent) --------
+    // At scheduled rounds, try a pairing from a candidate lane the user hasn't
+    // been tested on yet. Skip lanes we already probed.
+    const probedLanes = new Set(probeState.probes_shown.map((p) => p.lane));
+    const probeLane = PROBE_ROUNDS.has(round)
+      ? probeCandidates.find((l) => !probedLanes.has(l) && l !== sessionLane)
+      : undefined;
+
+    if (probeLane) {
+      const probeRes = await supabase
+        .from("pairings")
+        .select(pairingSelect)
+        .eq("active", true)
+        .eq("lane", probeLane)
+        .order("diagnostic_weight", { ascending: false })
+        .limit(20);
+      if (!probeRes.error) {
+        const probePool = (probeRes.data ?? []).filter((p) => !usedIds.has(p.id));
+        if (probePool.length) {
+          const pick = probePool[Math.floor(Math.random() * Math.min(3, probePool.length))];
+          probeState.pending[pick.id] = probeLane;
+          await supabase.from("sessions").update({ probe_state: probeState as never }).eq("id", data.sessionId);
+          return { pairing: pick, round: round + 1, confidence, done: false as const };
+        }
+      }
+    }
+
+    // -------- Normal lane-scoped fetch --------
     let pairingsRes = sessionLane === "general"
       ? await supabase.from("pairings").select(pairingSelect).eq("active", true)
       : await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", sessionLane);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
 
-    const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
     let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
-
-    // Fallback to general only if lane-scoped pool is exhausted and lane wasn't already general.
     if (!pool.length && sessionLane !== "general") {
       pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
       if (pairingsRes.error) throw new Error(pairingsRes.error.message);
       pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
     }
-
-    const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
-    const round = usedIds.size;
-
-    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
-    const confidence = confidentAxes / DIMS.length;
-    const canStop = round >= 12 && confidence >= 0.6;
-
-    if (!pool.length || canStop) {
+    if (!pool.length) {
       return { pairing: null, round, confidence, done: true as const };
     }
 
@@ -298,6 +364,7 @@ export const nextPairing = createServerFn({ method: "POST" })
     const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
     return { pairing: pick.p, round: round + 1, confidence, done: false as const };
   });
+
 
 // ============ Record choice ============
 // Each axis carries a short verdict ("immersion over immediacy") plus a
@@ -386,14 +453,14 @@ export const recordChoice = createServerFn({ method: "POST" })
         .from("pairings")
         .select(`tests, diagnostic_weight, song_a_id, song_b_id, song_a:songs!pairings_song_a_id_fkey(${songCols}), song_b:songs!pairings_song_b_id_fkey(${songCols})`)
         .eq("id", data.pairingId).single(),
-      supabase.from("sessions").select("vector,user_id").eq("id", data.sessionId).single(),
+      supabase.from("sessions").select("vector,user_id,lane,probe_state").eq("id", data.sessionId).single(),
     ]);
     const pairing = pairingRes.data as unknown as {
       tests: string[] | null; diagnostic_weight: number; song_a_id: string; song_b_id: string;
       song_a: Record<string, number> & { id: string; title: string; artist: string };
       song_b: Record<string, number> & { id: string; title: string; artist: string };
     } | null;
-    const session = sessionRes.data;
+    const session = sessionRes.data as { vector: Record<string, number>; user_id: string; lane: Lane; probe_state: ProbeState | null } | null;
     if (pairingRes.error || !pairing) throw new Error(pairingRes.error?.message ?? "pairing not found");
     if (sessionRes.error || !session) throw new Error(sessionRes.error?.message ?? "session not found");
     if (session.user_id !== userId) throw new Error("forbidden");
@@ -403,14 +470,17 @@ export const recordChoice = createServerFn({ method: "POST" })
     const loser = chosenIsA ? pairing.song_b : pairing.song_a;
     const rejectedSongId = chosenIsA ? pairing.song_b_id : pairing.song_a_id;
     const w = (pairing.diagnostic_weight || 50) / 100;
-    const vec: Record<string, number> = { ...(session.vector as Record<string, number>) };
+    const priorVec: Record<string, number> = { ...(session.vector as Record<string, number>) };
+    const vec: Record<string, number> = { ...priorVec };
     const tests: string[] = pairing.tests?.length ? pairing.tests : (DIMS as readonly string[]).slice();
     let topDim = tests[0] ?? "movement";
     let topDelta = 0;
+    const deltaVec: Record<string, number> = {};
     for (const dim of tests) {
       const a = (winner as Record<string, number>)?.[dim] ?? 50;
       const b = (loser as Record<string, number>)?.[dim] ?? 50;
       const delta = a - b;
+      deltaVec[dim] = delta;
       vec[dim] = (vec[dim] ?? 0) + delta * w;
       if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
@@ -433,10 +503,83 @@ export const recordChoice = createServerFn({ method: "POST" })
       ms_to_decide: data.msToDecide ?? null,
     });
     if (cErr) throw new Error(cErr.message);
-    const { error: uErr } = await supabase.from("sessions").update({ vector: vec }).eq("id", data.sessionId);
+
+    // -------- Probe scoring & silent lane flip --------
+    const probeState: ProbeState = {
+      probes_shown: session.probe_state?.probes_shown ?? [],
+      pending: session.probe_state?.pending ?? {},
+      lane_alignment: session.probe_state?.lane_alignment ?? {},
+      flips: session.probe_state?.flips ?? [],
+    };
+    let nextLane: Lane = session.lane;
+    const probeLane = probeState.pending[data.pairingId];
+    if (probeLane) {
+      // Cosine alignment between this choice's delta and the user's running vector.
+      // High positive cosine = the probe lane "rewards what you already reward".
+      const keys = Object.keys(deltaVec);
+      let dot = 0, magD = 0, magV = 0;
+      for (const k of keys) {
+        const d = deltaVec[k] ?? 0;
+        const v = priorVec[k] ?? 0;
+        dot += d * v; magD += d * d; magV += v * v;
+      }
+      const cosine = magD > 0 && magV > 0 ? dot / (Math.sqrt(magD) * Math.sqrt(magV)) : 0;
+      const magnitude = tests.reduce((s, dim) => s + Math.abs(deltaVec[dim] ?? 0), 0);
+      const win = cosine >= 0.2 ? 1 : 0;
+
+      const prev = probeState.lane_alignment[probeLane] ?? { wins: 0, total: 0, magnitude: 0, cosine_sum: 0 };
+      probeState.lane_alignment[probeLane] = {
+        wins: prev.wins + win,
+        total: prev.total + 1,
+        magnitude: prev.magnitude + magnitude,
+        cosine_sum: prev.cosine_sum + cosine,
+      };
+      probeState.probes_shown.push({ round: probeState.probes_shown.length + 1, pairing_id: data.pairingId, lane: probeLane });
+      delete probeState.pending[data.pairingId];
+
+      // Flip rule: ≥2 probes in this lane, win rate ≥ 0.75, avg cosine ≥ 0.3,
+      // and current lane confidence isn't already overwhelming.
+      const tally = probeState.lane_alignment[probeLane];
+      const winRate = tally.total ? tally.wins / tally.total : 0;
+      const avgCos = tally.total ? tally.cosine_sum / tally.total : 0;
+      if (tally.total >= 2 && winRate >= 0.75 && avgCos >= 0.3 && !probeState.flips.find((f) => f.to === probeLane)) {
+        const reason = `probe lane ${probeLane}: ${tally.wins}/${tally.total} wins, avg cosine ${avgCos.toFixed(2)}`;
+        probeState.flips.push({
+          round: probeState.probes_shown.length,
+          from: session.lane,
+          to: probeLane,
+          reason,
+        });
+        nextLane = probeLane;
+        // Fire-and-forget event log; never block the response.
+        supabase.from("event_log").insert({
+          user_id: userId,
+          session_id: data.sessionId,
+          event_type: "lane_flipped",
+          pairing_id: data.pairingId,
+          props: { from: session.lane, to: probeLane, win_rate: winRate, avg_cosine: avgCos } as never,
+          client: "server",
+        }).then(() => undefined, () => undefined);
+      } else {
+        supabase.from("event_log").insert({
+          user_id: userId,
+          session_id: data.sessionId,
+          event_type: "lane_probed",
+          pairing_id: data.pairingId,
+          props: { lane: probeLane, cosine, magnitude, win } as never,
+          client: "server",
+        }).then(() => undefined, () => undefined);
+      }
+    }
+
+    const { error: uErr } = await supabase
+      .from("sessions")
+      .update({ vector: vec, lane: nextLane, probe_state: probeState as never })
+      .eq("id", data.sessionId);
     if (uErr) throw new Error(uErr.message);
     return { vector: vec, verdict, why, hesitation, dim: topDim, delta: topDelta };
   });
+
 
 
 
@@ -809,7 +952,10 @@ const EVENT_TYPES = [
   "result_viewed",
   "result_shared",
   "session_quit",
+  "lane_probed",
+  "lane_flipped",
 ] as const;
+
 
 export const recordEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
