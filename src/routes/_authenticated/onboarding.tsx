@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { analyzeOpeningSongs } from "@/lib/musicdna.functions";
+import { analyzeOpeningSongs, recordEvent } from "@/lib/musicdna.functions";
 import { searchSongs } from "@/lib/songs.functions";
 import { toast } from "sonner";
 
