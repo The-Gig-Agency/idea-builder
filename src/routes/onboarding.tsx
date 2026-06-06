@@ -422,3 +422,21 @@ function RankedChecklist({
     </ul>
   );
 }
+
+// Render a multi-line headline; italicize the last line for typographic punch.
+function renderHeadline(headline: string) {
+  const lines = headline.split("\n");
+  return (
+    <>
+      {lines.map((line, i) => (
+        <span key={i} className="block">
+          {i === lines.length - 1 && lines.length > 1 ? (
+            <span className="italic text-muted-foreground">{line}</span>
+          ) : (
+            line
+          )}
+        </span>
+      ))}
+    </>
+  );
+}
