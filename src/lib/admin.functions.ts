@@ -61,12 +61,7 @@ export const adminList = createServerFn({ method: "POST" })
     }
 
     const { data: rows, error } = await q;
-
     if (error) throw new Error(error.message);
-    return { rows: rows ?? [] };
-  });
-
-// Per-table input shape — accept arbitrary JSON, validate critical fields server-side.
     return { rows: (rows ?? []) as Array<Record<string, unknown>> };
   });
 
