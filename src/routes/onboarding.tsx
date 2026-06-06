@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { reactToThree, refineWithTwoMore, recordEvent } from "@/lib/musicdna.functions";
+import { getOnboardingOpener, type OnboardingOpener } from "@/lib/onboarding-openers.functions";
 import { ensureAnonSession } from "@/lib/anon-auth";
 import { toast } from "sonner";
 
@@ -49,6 +50,7 @@ function Onboarding() {
   const reactThreeFn = useServerFn(reactToThree);
   const refineFn = useServerFn(refineWithTwoMore);
   const logEvent = useServerFn(recordEvent);
+  const getOpenerFn = useServerFn(getOnboardingOpener);
   const navigate = useNavigate();
 
   const [stage, setStage] = useState<Stage>("rank3");
@@ -58,11 +60,27 @@ function Onboarding() {
   const [threeRead, setThreeRead] = useState<ThreeReact | null>(null);
   const [done, setDone] = useState<Refined | null>(null);
   const [revealStep, setRevealStep] = useState<0 | 1 | 2>(0);
+  const [opener, setOpener] = useState<OnboardingOpener | null>(null);
 
   // Boot an anonymous session up front so every server fn has auth.
   const [bootError, setBootError] = useState<string | null>(null);
   useEffect(() => {
-    ensureAnonSession().catch((e) => setBootError(e instanceof Error ? e.message : String(e)));
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureAnonSession();
+        const o = (await getOpenerFn()) as OnboardingOpener;
+        if (cancelled) return;
+        setOpener(o);
+        // Log a view tied to the variant so we can compute conversion later.
+        logEvent({
+          data: { event_type: "onboarding_viewed", variant: o.variant_key },
+        } as never).catch(() => {});
+      } catch (e) {
+        setBootError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Reveal choreography
