@@ -124,8 +124,8 @@ function Play() {
       response_time_ms: dwellMs,
     });
     try {
-      // After rounds 3, 6, 9 — try for an insight before the next pairing.
-      if ([3, 6, 9].includes(round)) {
+      // One mid-test insight at round 3 — break up the survey feel.
+      if (round === 3) {
         try {
           const ins = await insightFn({ data: { sessionId, round } });
           if (ins) {
