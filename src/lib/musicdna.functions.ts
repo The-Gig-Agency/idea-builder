@@ -274,7 +274,32 @@ export const recordChoice = createServerFn({ method: "POST" })
 
 
 
-// ============ Finalize session: pick archetype, write interpretation ============
+// ============================================================
+// ANALYST (deterministic) + CRITIC (AI) pipeline.
+// The Analyst builds observations, patterns, and counter-hypotheses from
+// stored choices and song vectors. Only claims clearing the evidence
+// threshold are handed to the Critic, who is told — in no uncertain terms —
+// that he is a music critic, not a therapist.
+// ============================================================
+
+const BANNED_WORDS = [
+  "dreamer","seeker","old soul","empath","creative spirit","destiny",
+  "wound","soul","trauma","secretly","you are the kind of person who",
+  "energy","aura","journey of self","authentic self","true self",
+];
+
+const CRITIC_VOICE = `You are a music critic writing for an old, edgy Rolling Stone. \
+You are not a therapist, astrologer, psychologist, or life coach. \
+You are not diagnosing the user. You are identifying patterns in their choices. \
+Voice: punchy, opinionated, music-literate. Sharp sentences, vivid verbs, \
+slightly irreverent. One observation per sentence. Never flatter. \
+Every claim must reference the evidence you were given. \
+Acknowledge uncertainty where the evidence is thin. \
+Do not invent claims that are not in the allowed_claims list. \
+Banned words: ${BANNED_WORDS.join(", ")}. \
+Prefer: "across these choices", "this suggests", "you repeatedly favored", \
+"the strongest evidence is", "a weaker reading would be".`;
+
 export const finalizeSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
@@ -285,12 +310,147 @@ export const finalizeSession = createServerFn({ method: "POST" })
     if (sErr || !session) throw new Error(sErr?.message ?? "session not found");
     if (session.user_id !== userId) throw new Error("forbidden");
 
-    const vector = (session.vector ?? {}) as Record<string, number>;
-    const { data: archetypes } = await supabase.from("archetypes").select("id,name,tagline,signature_axes");
+    const songCols = "id,title,artist,year,lane,movement,atmosphere,groove,darkness,hope,nostalgia,transformation,complexity,melody,verbal_cleverness,authenticity,romanticism,energy,dreaminess,community";
 
-    // cosine similarity vs each archetype's signature_axes
+    // -------- Pull raw evidence --------
+    const [archRes, choicesRes] = await Promise.all([
+      supabase.from("archetypes").select("id,name,tagline,signature_axes"),
+      supabase
+        .from("choices")
+        .select(`
+          ms_to_decide,
+          pairing:pairing_id(tests, diagnostic_weight),
+          chosen:chosen_song_id(${songCols}),
+          rejected:rejected_song_id(${songCols})
+        `)
+        .eq("session_id", data.sessionId),
+    ]);
+    const archetypes = archRes.data ?? [];
+    type SongRow = Record<string, number | string | null> & { id: string; title: string; artist: string; year: number | null; lane: string };
+    type ChoiceRow = {
+      ms_to_decide: number | null;
+      pairing: { tests: string[] | null; diagnostic_weight: number | null } | null;
+      chosen: SongRow | null;
+      rejected: SongRow | null;
+    };
+    const choices = ((choicesRes.data ?? []) as unknown as ChoiceRow[]).filter((c) => c.chosen && c.rejected);
+
+    // -------- Layer 1: Observations --------
+    const observations = choices.map((c) => ({
+      chosen: c.chosen!.title,
+      chosen_artist: c.chosen!.artist,
+      rejected: c.rejected!.title,
+      rejected_artist: c.rejected!.artist,
+      tested_dimensions: c.pairing?.tests ?? [],
+      ms_to_decide: c.ms_to_decide,
+    }));
+
+    // -------- Layer 2: Patterns (per axis) --------
+    type PatternAcc = {
+      chosen_dir: number;      // +1 each time chosen side > rejected on this axis
+      rejected_dir: number;    // +1 each time rejected side > chosen
+      magnitude: number;       // sum of |delta|, weighted by diagnostic_weight
+      supporting: number;      // count of choices where this axis was tested
+      examples: Array<{ chosen: string; rejected: string; delta: number }>;
+    };
+    const acc: Record<string, PatternAcc> = {};
+    for (const c of choices) {
+      const tests = c.pairing?.tests?.length ? c.pairing.tests : (DIMS as readonly string[]).slice();
+      const w = ((c.pairing?.diagnostic_weight ?? 50) / 100);
+      for (const dim of tests) {
+        const a = Number(c.chosen![dim] ?? 50);
+        const b = Number(c.rejected![dim] ?? 50);
+        const delta = a - b;
+        if (!acc[dim]) acc[dim] = { chosen_dir: 0, rejected_dir: 0, magnitude: 0, supporting: 0, examples: [] };
+        acc[dim].supporting += 1;
+        acc[dim].magnitude += Math.abs(delta) * w;
+        if (delta > 5) acc[dim].chosen_dir += 1;
+        else if (delta < -5) acc[dim].rejected_dir += 1;
+        if (Math.abs(delta) > 15 && acc[dim].examples.length < 3) {
+          acc[dim].examples.push({ chosen: c.chosen!.title, rejected: c.rejected!.title, delta });
+        }
+      }
+    }
+
+    const patterns = Object.entries(acc).map(([dim, p]) => {
+      const direction: "hi" | "lo" = p.chosen_dir >= p.rejected_dir ? "hi" : "lo";
+      const supporting_choices = direction === "hi" ? p.chosen_dir : p.rejected_dir;
+      const label = DIM_LABEL[dim];
+      // confidence = directional consistency * magnitude factor
+      const consistency = p.supporting > 0 ? supporting_choices / p.supporting : 0;
+      const magnitudeFactor = Math.min(1, p.magnitude / (p.supporting * 30 || 1));
+      const confidence = Number((consistency * 0.7 + magnitudeFactor * 0.3).toFixed(3));
+      return {
+        dimension: dim,
+        preferred: direction === "hi" ? label?.hi : label?.lo,
+        opposed: direction === "hi" ? label?.lo : label?.hi,
+        supporting_choices,
+        tested_total: p.supporting,
+        confidence,
+        examples: p.examples,
+        tradeoff: `${direction === "hi" ? label?.hi : label?.lo} over ${direction === "hi" ? label?.lo : label?.hi}`,
+      };
+    }).sort((x, y) => y.confidence - x.confidence);
+
+    // -------- Layer 3: Counter-hypotheses --------
+    const counterarguments: Array<{ claim: string; impact: "low" | "medium" | "high"; notes: string }> = [];
+    const artistCount: Record<string, number> = {};
+    const eraCount: Record<string, number> = {};
+    const laneCount: Record<string, number> = {};
+    let fastPicks = 0;
+    for (const c of choices) {
+      const artist = c.chosen!.artist;
+      artistCount[artist] = (artistCount[artist] ?? 0) + 1;
+      const year = Number(c.chosen!.year);
+      if (year) {
+        const decade = `${Math.floor(year / 10) * 10}s`;
+        eraCount[decade] = (eraCount[decade] ?? 0) + 1;
+      }
+      const lane = String(c.chosen!.lane ?? "");
+      if (lane) laneCount[lane] = (laneCount[lane] ?? 0) + 1;
+      if ((c.ms_to_decide ?? 99999) < 2000) fastPicks += 1;
+    }
+    for (const [artist, n] of Object.entries(artistCount)) {
+      if (n >= 3) counterarguments.push({
+        claim: `User may simply prefer ${artist}.`,
+        impact: n >= 5 ? "high" : "medium",
+        notes: `${n} of ${choices.length} winning songs are by ${artist}.`,
+      });
+    }
+    for (const [decade, n] of Object.entries(eraCount)) {
+      if (n >= Math.max(4, Math.ceil(choices.length * 0.5))) counterarguments.push({
+        claim: `User may be selecting on era (${decade}) rather than the tested dimensions.`,
+        impact: "medium",
+        notes: `${n} winning songs come from the ${decade}.`,
+      });
+    }
+    for (const [lane, n] of Object.entries(laneCount)) {
+      if (n >= Math.max(4, Math.ceil(choices.length * 0.6))) counterarguments.push({
+        claim: `User may be selecting on lane (${lane}) rather than diagnostic tradeoffs.`,
+        impact: "medium",
+        notes: `${n} winning songs share the ${lane} lane.`,
+      });
+    }
+    if (choices.length >= 8 && fastPicks / choices.length >= 0.6) counterarguments.push({
+      claim: "Many picks were snap decisions. Familiarity may be driving choice as much as taste.",
+      impact: "medium",
+      notes: `${fastPicks} of ${choices.length} choices resolved in under 2 seconds.`,
+    });
+
+    // -------- Layer 4: Evidence threshold --------
+    const MIN_SUPPORT = 3;
+    const MIN_CONFIDENCE = 0.65;
+    const allowed_claims = patterns
+      .filter((p) => p.supporting_choices >= MIN_SUPPORT && p.confidence >= MIN_CONFIDENCE)
+      .slice(0, 5);
+    const blocked_claims = patterns
+      .filter((p) => !(p.supporting_choices >= MIN_SUPPORT && p.confidence >= MIN_CONFIDENCE))
+      .slice(0, 5);
+
+    // -------- Archetype (cosine over vector) --------
+    const vector = (session.vector ?? {}) as Record<string, number>;
     let best = { id: null as string | null, name: "", score: -Infinity };
-    for (const a of archetypes ?? []) {
+    for (const a of archetypes) {
       const axes = (a.signature_axes ?? {}) as Record<string, number>;
       const keys = Object.keys(axes);
       if (!keys.length) continue;
@@ -305,24 +465,62 @@ export const finalizeSession = createServerFn({ method: "POST" })
       if (score > best.score) best = { id: a.id, name: a.name, score };
     }
 
-    const top = Object.entries(vector).sort((x, y) => y[1] - x[1]).slice(0, 4);
-    const bottom = Object.entries(vector).sort((x, y) => x[1] - y[1]).slice(0, 2);
-    const interpretation = await ai([
-      { role: "system", content: VOICE },
+    // -------- Layer 5: Critic (AI narrative, constrained) --------
+    const evidenceBlock = allowed_claims.length
+      ? allowed_claims.map((c) =>
+          `- ${c.tradeoff} (${c.supporting_choices}/${c.tested_total} relevant matchups, confidence ${c.confidence}). Examples: ${c.examples.map((e) => `${e.chosen} > ${e.rejected}`).join("; ") || "—"}`
+        ).join("\n")
+      : "- (no claims cleared the evidence threshold)";
+    const counterBlock = counterarguments.length
+      ? counterarguments.map((c) => `- ${c.claim} (${c.impact} impact — ${c.notes})`).join("\n")
+      : "- (none)";
+    const narrative = await ai([
+      { role: "system", content: CRITIC_VOICE },
       {
         role: "user",
-        content: `Archetype: ${best.name || "Unassigned"}.\nTop dimensions (with magnitudes): ${top.map(([k, v]) => `${k} ${v.toFixed(1)}`).join(", ")}.\nLow dimensions: ${bottom.map(([k, v]) => `${k} ${v.toFixed(1)}`).join(", ")}.\n\nWrite a 3-sentence reading of this listener. Sentence 1: the central pattern (specific, not "you like X"). Sentence 2: what they consistently refuse. Sentence 3: the cost — what this taste closes off. No genre names, no compliments.`,
+        content: `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
+Cite the evidence inline (e.g. "across 7 of 12 matchups"). If a strong counter-hypothesis exists, name it. \
+If no claims cleared the threshold, say so plainly — do not invent.
+
+ALLOWED CLAIMS:
+${evidenceBlock}
+
+COUNTER-HYPOTHESES TO ACKNOWLEDGE:
+${counterBlock}
+
+Archetype assigned by cosine match: ${best.name || "Unassigned"}.`,
       },
     ]);
 
+    // -------- Persist --------
+    const reasoningRow = {
+      session_id: data.sessionId,
+      user_id: userId,
+      observations,
+      patterns,
+      counterarguments,
+      allowed_claims,
+      blocked_claims,
+      evidence_thresholds: { supporting_choices: MIN_SUPPORT, confidence_threshold: MIN_CONFIDENCE },
+      narrative,
+    };
+    await supabase.from("session_reasoning").upsert(reasoningRow, { onConflict: "session_id" });
     await supabase.from("sessions").update({
       archetype_id: best.id,
-      interpretation,
+      interpretation: narrative,
       completed_at: new Date().toISOString(),
     }).eq("id", data.sessionId);
 
-    return { archetypeId: best.id, archetypeName: best.name, interpretation, vector };
+    return {
+      archetypeId: best.id,
+      archetypeName: best.name,
+      interpretation: narrative,
+      vector,
+      allowed_claims,
+      counterarguments,
+    };
   });
+
 
 // ============ Get latest profile + session for /profile page ============
 export const getMyResult = createServerFn({ method: "GET" })
