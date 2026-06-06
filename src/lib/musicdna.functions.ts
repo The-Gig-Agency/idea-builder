@@ -88,9 +88,17 @@ export const nextPairing = createServerFn({ method: "POST" })
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
     const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
     const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
+    const round = usedIds.size;
+
+    // confidence: fraction of 15 axes with |signal| >= 30
+    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
+    const confidence = confidentAxes / DIMS.length;
+    const canStop = round >= 12 && confidence >= 0.6;
 
     const pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
-    if (!pool.length) return { pairing: null, round: usedIds.size };
+    if (!pool.length || canStop) {
+      return { pairing: null, round, confidence, done: true as const };
+    }
 
     // axis-aware: boost pairings testing axes with little signal so far.
     const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
@@ -103,7 +111,7 @@ export const nextPairing = createServerFn({ method: "POST" })
     const total = scored.reduce((s, x) => s + x.w, 0);
     let r = Math.random() * total;
     const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
-    return { pairing: pick.p, round: usedIds.size + 1 };
+    return { pairing: pick.p, round: round + 1, confidence, done: false as const };
   });
 
 // ============ Record choice ============
