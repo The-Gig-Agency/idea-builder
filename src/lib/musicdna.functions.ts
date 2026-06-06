@@ -949,6 +949,8 @@ export const getMyResult = createServerFn({ method: "GET" })
 // ============ Instrumentation: events + feedback ============
 
 const EVENT_TYPES = [
+  "onboarding_viewed",
+  "onboarding_three_submitted",
   "onboarding_classified",
   "pairing_shown",
   "choice_made",

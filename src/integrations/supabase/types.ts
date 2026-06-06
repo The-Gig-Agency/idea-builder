@@ -396,6 +396,48 @@ export type Database = {
           },
         ]
       }
+      onboarding_openers: {
+        Row: {
+          created_at: string
+          cta: string
+          eyebrow: string
+          headline: string
+          id: string
+          is_active: boolean
+          slot_labels: Json
+          sub: string | null
+          updated_at: string
+          variant_key: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          cta?: string
+          eyebrow?: string
+          headline: string
+          id?: string
+          is_active?: boolean
+          slot_labels: Json
+          sub?: string | null
+          updated_at?: string
+          variant_key: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          cta?: string
+          eyebrow?: string
+          headline?: string
+          id?: string
+          is_active?: boolean
+          slot_labels?: Json
+          sub?: string | null
+          updated_at?: string
+          variant_key?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       pairings: {
         Row: {
           active: boolean

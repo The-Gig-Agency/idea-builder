@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { reactToThree, refineWithTwoMore, recordEvent } from "@/lib/musicdna.functions";
+import { getOnboardingOpener, type OnboardingOpener } from "@/lib/onboarding-openers.functions";
 import { ensureAnonSession } from "@/lib/anon-auth";
 import { toast } from "sonner";
 
@@ -49,6 +50,7 @@ function Onboarding() {
   const reactThreeFn = useServerFn(reactToThree);
   const refineFn = useServerFn(refineWithTwoMore);
   const logEvent = useServerFn(recordEvent);
+  const getOpenerFn = useServerFn(getOnboardingOpener);
   const navigate = useNavigate();
 
   const [stage, setStage] = useState<Stage>("rank3");
@@ -58,11 +60,27 @@ function Onboarding() {
   const [threeRead, setThreeRead] = useState<ThreeReact | null>(null);
   const [done, setDone] = useState<Refined | null>(null);
   const [revealStep, setRevealStep] = useState<0 | 1 | 2>(0);
+  const [opener, setOpener] = useState<OnboardingOpener | null>(null);
 
   // Boot an anonymous session up front so every server fn has auth.
   const [bootError, setBootError] = useState<string | null>(null);
   useEffect(() => {
-    ensureAnonSession().catch((e) => setBootError(e instanceof Error ? e.message : String(e)));
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureAnonSession();
+        const o = (await getOpenerFn()) as OnboardingOpener;
+        if (cancelled) return;
+        setOpener(o);
+        // Log a view tied to the variant so we can compute conversion later.
+        logEvent({
+          data: { event_type: "onboarding_viewed", variant: o.variant_key },
+        } as never).catch(() => {});
+      } catch (e) {
+        setBootError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Reveal choreography
@@ -91,6 +109,12 @@ function Onboarding() {
       setThree(cleaned);
       setThreeRead(r);
       setStage("reveal3");
+      logEvent({
+        data: {
+          event_type: "onboarding_three_submitted",
+          variant: opener?.variant_key ?? "fallback",
+        },
+      } as never).catch(() => {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't read those.");
     } finally {
@@ -142,14 +166,20 @@ function Onboarding() {
       {stage === "rank3" && (
         <section className="space-y-10 animate-in fade-in duration-500">
           <header className="space-y-3">
-            <p className="eyebrow">three songs · ranked</p>
-            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight">
-              Name three songs you love.
-              <br />
-              <span className="italic text-muted-foreground">Rank them.</span>
+            <p className="eyebrow">{opener?.eyebrow ?? "three songs · ranked"}</p>
+            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight whitespace-pre-line">
+              {opener
+                ? renderHeadline(opener.headline)
+                : (
+                  <>
+                    Name three songs you love.
+                    <br />
+                    <span className="italic text-muted-foreground">Rank them.</span>
+                  </>
+                )}
             </h1>
             <p className="text-sm text-muted-foreground max-w-md">
-              The order matters. Your #1 says more than you think.
+              {opener?.sub ?? "The order matters. Your #1 says more than you think."}
             </p>
           </header>
 
@@ -158,7 +188,7 @@ function Onboarding() {
               <RankedInput
                 key={i}
                 rank={i + 1}
-                label={SLOT1_LABELS[i]}
+                label={(opener?.slot_labels?.[i]) ?? SLOT1_LABELS[i]}
                 value={three[i]}
                 placeholder={PLACEHOLDERS[i]}
                 onChange={(v) => {
@@ -178,7 +208,7 @@ function Onboarding() {
               disabled={busy || three.some((s) => s.trim().length < 2)}
               className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
             >
-              {busy ? "Reading…" : "See what I think →"}
+              {busy ? "Reading…" : (opener?.cta ?? "See what I think →")}
             </button>
           </div>
         </section>
@@ -390,5 +420,23 @@ function RankedChecklist({
         </li>
       ))}
     </ul>
+  );
+}
+
+// Render a multi-line headline; italicize the last line for typographic punch.
+function renderHeadline(headline: string) {
+  const lines = headline.split("\n");
+  return (
+    <>
+      {lines.map((line, i) => (
+        <span key={i} className="block">
+          {i === lines.length - 1 && lines.length > 1 ? (
+            <span className="italic text-muted-foreground">{line}</span>
+          ) : (
+            line
+          )}
+        </span>
+      ))}
+    </>
   );
 }
