@@ -499,11 +499,19 @@ export const recordChoice = createServerFn({ method: "POST" })
 
     const phrase = REVEAL[topDim];
     const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
-    const verdict = direction
-      ? `You chose ${winner.title} over ${loser.title}. That's ${direction.verdict}.`
-      : `You chose ${winner.title} over ${loser.title}.`;
-    const why = direction?.why ?? "";
     const ms = data.msToDecide ?? null;
+    // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
+    const OPENERS = ["Nice.", "OK.", "Interesting.", "Hm.", "Cool pick.", "Alright then.", "Good one."];
+    const hash = data.pairingId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const opener = OPENERS[hash % OPENERS.length];
+    const speedBeat =
+      ms == null ? "" : ms < 2500 ? " Snap call — no hesitation." : ms > 12000 ? " You sat with that one." : "";
+    // Conversational reaction: lead with reaction to the pick, then the inference, lightly.
+    const verdict = direction
+      ? `${opener} ${winner.title} over ${loser.title} — that's the ${direction.verdict} move.${speedBeat}`
+      : `${opener} ${winner.title} over ${loser.title}.${speedBeat}`;
+    const why = direction?.why ?? "";
+    // Kept for back-compat with any older callers; the new UI folds speed into `verdict` above.
     const hesitation =
       ms == null ? null : ms < 2500 ? "Snap verdict." : ms > 12000 ? "You stared this one down." : null;
 
@@ -2038,4 +2046,41 @@ export const listChat = createServerFn({ method: "GET" })
         created_at: r.created_at,
       })),
     };
+  });
+
+
+// ============================================================
+// Per-round running hypothesis — the "detective board" line.
+// Templated (no LLM): reads the session vector, returns the
+// strongest axis as a one-liner. Client compares topDim across
+// rounds to render forming / holding / revising.
+// ============================================================
+export const currentRead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ sessionId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<{ thesis: string; topDim: string | null; strength: number }> => {
+    const { supabase, userId } = context;
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("vector,user_id")
+      .eq("id", data.sessionId)
+      .single();
+    const s = session as { vector: Record<string, number>; user_id: string } | null;
+    if (!s || s.user_id !== userId) return { thesis: "Still listening.", topDim: null, strength: 0 };
+    const vector = s.vector ?? {};
+    const ranked = (DIMS as readonly string[])
+      .map((d) => ({ d, v: vector[d] ?? 0 }))
+      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+    const top = ranked[0];
+    if (!top || Math.abs(top.v) < 4) {
+      return { thesis: "Too early to call. Keep picking.", topDim: null, strength: 0 };
+    }
+    const phrase = REVEAL[top.d];
+    const pole = top.v >= 0 ? phrase?.hi : phrase?.lo;
+    const thesis = pole
+      ? `You keep choosing ${pole.verdict}.`
+      : `Leaning ${top.d}.`;
+    return { thesis, topDim: top.d, strength: Math.abs(top.v) };
   });
