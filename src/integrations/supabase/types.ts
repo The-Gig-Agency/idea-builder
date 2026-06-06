@@ -263,6 +263,7 @@ export type Database = {
           diagnostic_weight: number
           hypothesis: string | null
           id: string
+          lane: string
           song_a_id: string
           song_b_id: string
           tests: string[]
@@ -275,6 +276,7 @@ export type Database = {
           diagnostic_weight?: number
           hypothesis?: string | null
           id?: string
+          lane?: string
           song_a_id: string
           song_b_id: string
           tests?: string[]
@@ -287,6 +289,7 @@ export type Database = {
           diagnostic_weight?: number
           hypothesis?: string | null
           id?: string
+          lane?: string
           song_a_id?: string
           song_b_id?: string
           tests?: string[]
@@ -314,7 +317,10 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string | null
+          opening_analysis_json: Json
           opening_hypothesis: string | null
+          opening_lane: string | null
+          opening_lane_confidence: number | null
           opening_songs: Json | null
           updated_at: string
           user_id: string
@@ -322,7 +328,10 @@ export type Database = {
         Insert: {
           created_at?: string
           display_name?: string | null
+          opening_analysis_json?: Json
           opening_hypothesis?: string | null
+          opening_lane?: string | null
+          opening_lane_confidence?: number | null
           opening_songs?: Json | null
           updated_at?: string
           user_id: string
@@ -330,7 +339,10 @@ export type Database = {
         Update: {
           created_at?: string
           display_name?: string | null
+          opening_analysis_json?: Json
           opening_hypothesis?: string | null
+          opening_lane?: string | null
+          opening_lane_confidence?: number | null
           opening_songs?: Json | null
           updated_at?: string
           user_id?: string
@@ -441,6 +453,8 @@ export type Database = {
           created_at: string
           id: string
           interpretation: string | null
+          lane: string
+          lane_confidence: number
           started_at: string
           updated_at: string
           user_id: string
@@ -452,6 +466,8 @@ export type Database = {
           created_at?: string
           id?: string
           interpretation?: string | null
+          lane?: string
+          lane_confidence?: number
           started_at?: string
           updated_at?: string
           user_id: string
@@ -463,6 +479,8 @@ export type Database = {
           created_at?: string
           id?: string
           interpretation?: string | null
+          lane?: string
+          lane_confidence?: number
           started_at?: string
           updated_at?: string
           user_id?: string

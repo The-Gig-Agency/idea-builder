@@ -50,40 +50,170 @@ async function ai(messages: Array<{ role: string; content: string }>) {
   return (json.choices?.[0]?.message?.content ?? "").trim();
 }
 
-// ============ Opening hypothesis ============
-export const generateOpeningHypothesis = createServerFn({ method: "POST" })
+// ============ Lane classifier ============
+const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "general"] as const;
+type Lane = (typeof LANES)[number];
+
+// Map catalog sub-lanes (currently all alternative sub-genres) to top-level lanes.
+function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
+  if (!sub) return null;
+  const s = sub.toLowerCase();
+  if (
+    s.includes("post_punk") || s.includes("post-punk") ||
+    s.includes("shoegaze") || s.includes("dreampop") || s.includes("britpop") ||
+    s.includes("indie") || s.includes("madchester") || s.includes("manchester") ||
+    s.includes("grunge") || s.includes("alt-rock") || s.includes("altrock") ||
+    s.includes("goth") || s.includes("darkwave") || s.includes("noise") ||
+    s.includes("artrock") || s.includes("punk") || s.includes("sophistipop")
+  ) return "alternative";
+  if (s.includes("electronic")) return "electronic";
+  return null;
+}
+
+const CLASSIFIER_VOICE = `You are a music librarian routing songs to one of these lanes: \
+alternative, pop, hip_hop, electronic, classic_rock. \
+"alternative" = post-punk, indie, shoegaze, britpop, grunge, goth, college rock. \
+"pop" = mainstream pop, contemporary chart pop, pop-rock (Swift, Eilish, Beyoncé pop work). \
+"hip_hop" = rap, hip-hop, trap. \
+"electronic" = techno, house, IDM, drum'n'bass, EDM. \
+"classic_rock" = 60s-70s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac). \
+Respond ONLY with valid JSON, no prose.`;
+
+type OpeningAnalysis = {
+  lane: Lane;
+  confidence: number;
+  secondary_lanes: Lane[];
+  reasoning: string[];
+  hypothesis: string;
+  per_song: Array<{ input: string; lane: Lane | "unknown"; source: "catalog" | "llm" }>;
+};
+
+async function classifyLane(
+  songs: string[],
+  supabase: { from: (t: string) => { select: (c: string) => { ilike: (col: string, v: string) => { limit: (n: number) => Promise<{ data: Array<{ lane: string; title: string; artist: string }> | null }> } } } },
+): Promise<OpeningAnalysis> {
+  const perSong: OpeningAnalysis["per_song"] = [];
+  const votes: Record<string, number> = {};
+  const unresolved: string[] = [];
+
+  for (const raw of songs) {
+    const [titlePart, artistPart] = raw.split("—").map((s) => s.trim());
+    const title = titlePart || raw;
+    let matchedLane: Lane | null = null;
+    if (title) {
+      try {
+        const { data } = await supabase.from("songs").select("lane,title,artist").ilike("title", title).limit(5);
+        if (data && data.length) {
+          const best = artistPart
+            ? data.find((r) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? data[0]
+            : data[0];
+          matchedLane = catalogLaneToTopLane(best.lane);
+        }
+      } catch { /* ignore catalog miss */ }
+    }
+    if (matchedLane) {
+      perSong.push({ input: raw, lane: matchedLane, source: "catalog" });
+      votes[matchedLane] = (votes[matchedLane] ?? 0) + 1;
+    } else {
+      unresolved.push(raw);
+      perSong.push({ input: raw, lane: "unknown", source: "catalog" });
+    }
+  }
+
+  if (unresolved.length) {
+    try {
+      const txt = await ai([
+        { role: "system", content: CLASSIFIER_VOICE },
+        {
+          role: "user",
+          content: `Classify each song into one lane. Return JSON: {"results":[{"input":"...","lane":"..."}]}.\n\nSongs:\n${unresolved.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
+        },
+      ]);
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { results?: Array<{ input: string; lane: string }> };
+      for (const r of parsed.results ?? []) {
+        const lane = (LANES as readonly string[]).includes(r.lane) && r.lane !== "general"
+          ? (r.lane as Lane)
+          : null;
+        const idx = perSong.findIndex((p) => p.input === r.input && p.lane === "unknown");
+        if (idx >= 0) {
+          perSong[idx] = { input: r.input, lane: lane ?? "unknown", source: "llm" };
+          if (lane) votes[lane] = (votes[lane] ?? 0) + 1;
+        }
+      }
+    } catch { /* swallow — falls through to general */ }
+  }
+
+  const sorted = Object.entries(votes).sort((a, b) => b[1] - a[1]);
+  const topVotes = sorted[0]?.[1] ?? 0;
+  const lane: Lane = topVotes > 0 ? (sorted[0][0] as Lane) : "general";
+  const confidence = Math.max(0, Math.min(1, topVotes / songs.length));
+  const secondary = sorted.slice(1).filter((s) => s[1] >= 2).map((s) => s[0] as Lane);
+  const finalLane: Lane = confidence < 0.6 ? "general" : lane;
+
+  const reasoning: string[] = [];
+  if (topVotes > 0) reasoning.push(`${topVotes} of ${songs.length} opening songs read as ${lane}.`);
+  if (secondary.length) reasoning.push(`Secondary signal: ${secondary.join(", ")}.`);
+  if (finalLane === "general" && lane !== "general") reasoning.push(`Low confidence (${confidence.toFixed(2)}); routing to general.`);
+  if (finalLane === "general" && lane === "general") reasoning.push("No clear lane signal from the five songs.");
+
+  let hypothesis = "Five songs is a sketch, not a portrait. Let's see if the matchups hold.";
+  try {
+    hypothesis = await ai([
+      { role: "system", content: VOICE },
+      {
+        role: "user",
+        content: `Five songs the user named as ones they love:\n${songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nWrite ONE sentence (max 30 words) that names what these choices reveal about their taste — specific dimensions like movement, atmosphere, transformation, melody, verbal cleverness. End with a half-promise: "Let's see if that holds."`,
+      },
+    ]);
+  } catch { /* keep fallback */ }
+
+  return { lane: finalLane, confidence, secondary_lanes: secondary, reasoning, hypothesis, per_song: perSong };
+}
+
+export const analyzeOpeningSongs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z.object({ songs: z.array(z.string().min(1).max(160)).length(5) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const text = await ai([
-      { role: "system", content: VOICE },
-      {
-        role: "user",
-        content: `Five songs the user named as ones they love:\n${data.songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nWrite ONE sentence (max 30 words) that names what these choices reveal about their taste — specific dimensions like movement, atmosphere, transformation, melody, verbal cleverness. End with a half-promise: "Let's see if that holds."`,
-      },
-    ]);
+    const analysis = await classifyLane(data.songs, supabase as never);
     await supabase
       .from("profiles")
-      .update({ opening_songs: data.songs, opening_hypothesis: text })
+      .update({
+        opening_songs: data.songs,
+        opening_hypothesis: analysis.hypothesis,
+        opening_lane: analysis.lane,
+        opening_lane_confidence: analysis.confidence,
+        opening_analysis_json: JSON.parse(JSON.stringify(analysis)),
+      })
       .eq("user_id", userId);
-    return { hypothesis: text };
+    return analysis;
   });
+
+// Back-compat alias — old call sites keep working.
+export const generateOpeningHypothesis = analyzeOpeningSongs;
 
 // ============ Start session ============
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("opening_lane, opening_lane_confidence")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const lane = ((profile?.opening_lane as Lane | null) ?? "general") as Lane;
+    const lane_confidence = Number(profile?.opening_lane_confidence ?? 0);
     const { data, error } = await supabase
       .from("sessions")
-      .insert({ user_id: userId, vector: {} })
+      .insert({ user_id: userId, vector: {}, lane, lane_confidence })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { sessionId: data.id };
+    return { sessionId: data.id, lane, lane_confidence };
   });
 
 // ============ Next pairing ============
@@ -92,34 +222,45 @@ export const nextPairing = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const [usedRes, sessionRes, pairingsRes] = await Promise.all([
+    const [usedRes, sessionRes] = await Promise.all([
       supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
-      supabase.from("sessions").select("vector").eq("id", data.sessionId).single(),
-      supabase
-        .from("pairings")
-        .select(`
-          id, tests, hypothesis, why_good, diagnostic_weight,
-          song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
-          song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
-        `)
-        .eq("active", true),
+      supabase.from("sessions").select("vector, lane").eq("id", data.sessionId).single(),
     ]);
+    const sessionLane = (sessionRes.data?.lane as Lane | null) ?? "general";
+
+    const pairingSelect = `
+      id, tests, hypothesis, why_good, diagnostic_weight, lane,
+      song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
+      song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
+    `;
+
+    // Primary fetch: lane-scoped (or all active when lane is 'general').
+    let pairingsRes = sessionLane === "general"
+      ? await supabase.from("pairings").select(pairingSelect).eq("active", true)
+      : await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", sessionLane);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
+
     const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
+    let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+
+    // Fallback to general only if lane-scoped pool is exhausted and lane wasn't already general.
+    if (!pool.length && sessionLane !== "general") {
+      pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
+      if (pairingsRes.error) throw new Error(pairingsRes.error.message);
+      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+    }
+
     const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
     const round = usedIds.size;
 
-    // confidence: fraction of 15 axes with |signal| >= 30
     const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
     const confidence = confidentAxes / DIMS.length;
     const canStop = round >= 12 && confidence >= 0.6;
 
-    const pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
     if (!pool.length || canStop) {
       return { pairing: null, round, confidence, done: true as const };
     }
 
-    // axis-aware: boost pairings testing axes with little signal so far.
     const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
     const scored = pool.map((p) => {
       const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
