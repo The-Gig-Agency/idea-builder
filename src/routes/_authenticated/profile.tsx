@@ -171,6 +171,69 @@ function ProfilePage() {
             </blockquote>
           )}
 
+          {/* ---- Feedback strip ---- */}
+          <section className="mt-6 mb-12 border hairline-strong rounded-sm bg-surface px-5 py-4 max-w-2xl">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <p className="eyebrow">Was this accurate?</p>
+              <div className="flex items-center gap-2">
+                {(["accurate", "mixed", "not_accurate"] as const).map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => { setAccuracy(a); saveFeedback({ accuracy: a }); }}
+                    disabled={feedbackSaving}
+                    className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
+                      accuracy === a
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hairline-strong hover:bg-background"
+                    }`}
+                  >
+                    {a === "accurate" ? "Nailed it" : a === "mixed" ? "Mixed" : "Way off"}
+                  </button>
+                ))}
+                <div className="w-px h-5 bg-border mx-1" />
+                <button
+                  onClick={() => { const v = rating === 1 ? null : 1; setRating(v); saveFeedback({ rating: v }); }}
+                  disabled={feedbackSaving}
+                  className={`text-xs px-2.5 py-1.5 rounded-sm border transition-colors ${
+                    rating === 1 ? "border-primary bg-primary text-primary-foreground" : "hairline-strong hover:bg-background"
+                  }`}
+                  aria-label="Thumbs up"
+                >👍</button>
+                <button
+                  onClick={() => { const v = rating === -1 ? null : -1; setRating(v); saveFeedback({ rating: v }); }}
+                  disabled={feedbackSaving}
+                  className={`text-xs px-2.5 py-1.5 rounded-sm border transition-colors ${
+                    rating === -1 ? "border-primary bg-primary text-primary-foreground" : "hairline-strong hover:bg-background"
+                  }`}
+                  aria-label="Thumbs down"
+                >👎</button>
+                <button
+                  onClick={() => setFeedbackOpen((v) => !v)}
+                  className="text-xs px-3 py-1.5 rounded-sm border hairline-strong hover:bg-background"
+                >
+                  {feedbackOpen ? "Close" : "Note"}
+                </button>
+              </div>
+            </div>
+            {feedbackOpen && (
+              <div className="mt-3 flex flex-col gap-2">
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  onBlur={() => saveFeedback({ comment })}
+                  placeholder="What did we miss? What landed?"
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full bg-background border hairline rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                />
+                <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-muted-foreground">
+                  {feedbackSaving ? "Saving…" : existing ? "Saved" : "Autosaves on blur"}
+                </p>
+              </div>
+            )}
+          </section>
+
+
           {data.definingChoices?.length ? (
             <section className="mt-12 mb-12">
               <p className="eyebrow mb-5">Defining choices</p>
