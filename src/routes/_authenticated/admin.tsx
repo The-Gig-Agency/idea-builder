@@ -10,17 +10,28 @@ import {
   adminDelete,
   adminSetDiagnosticWeight,
 } from "@/lib/admin.functions";
+import {
+  listDecadePrompts,
+  updateDecadePromptText,
+  setActiveDecadePrompt,
+  createDecadePrompt,
+  deleteDecadePrompt,
+  DECADES,
+  type Decade,
+  type DecadePrompt,
+} from "@/lib/decade-prompts.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — MusicDNA" }] }),
   component: AdminPage,
 });
 
-type Entity = "songs" | "pairings" | "archetypes";
+type Entity = "songs" | "pairings" | "archetypes" | "decade_prompts";
 const ENTITIES: { key: Entity; label: string }[] = [
   { key: "songs", label: "Songs" },
   { key: "pairings", label: "Pairings" },
   { key: "archetypes", label: "Archetypes" },
+  { key: "decade_prompts", label: "Decade Prompts" },
 ];
 
 type Row = Record<string, unknown> & { id: string };
