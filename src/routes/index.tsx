@@ -7,13 +7,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "The Myers-Briggs of music. Twenty song matchups. Three minutes. Discover what your taste reveals about you.",
+          "Twenty song matchups. Three minutes. Discover what your taste reveals about you.",
       },
       { property: "og:title", content: "MusicDNA" },
       {
         property: "og:description",
         content:
-          "The Myers-Briggs of music. Choose between songs. Discover the hidden patterns in your taste.",
+          "Choose between songs. Discover the hidden patterns in your taste.",
       },
     ],
   }),
@@ -153,7 +153,7 @@ function HowItWorks() {
     {
       n: "03",
       title: "See what your choices reveal",
-      body: "Your favorite songs aren't random. Hidden inside your choices are patterns you probably never noticed: what moves you, what you value, and why certain songs stay with you long after others fade away. Think of it as a personality test written by your record collection.",
+      body: "Discover the hidden patterns in your taste. Hidden inside your choices are patterns you probably never noticed: what moves you, what you value, and why certain songs stay with you long after others fade away. Think of it as a personality test written by your record collection.",
     },
   ];
   return (
@@ -217,7 +217,7 @@ function CTA() {
       <div className="mx-auto max-w-6xl px-6 py-24">
         <div className="grid grid-cols-1 items-end gap-10 md:grid-cols-12">
           <div className="md:col-span-8">
-            <p className="eyebrow mb-6">The Myers-Briggs of music</p>
+            <p className="eyebrow mb-6">Your music, decoded</p>
             <h2 className="display text-4xl text-foreground md:text-5xl">
               Not a playlist generator.
               <br />
