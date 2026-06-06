@@ -29,7 +29,7 @@ function Play() {
   const [round, setRound] = useState(0);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const [reveal, setReveal] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<{ verdict: string; why: string; hesitation: string | null } | null>(null);
   const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
@@ -55,13 +55,14 @@ function Play() {
     if (!pairing || !sessionId || busy) return;
     setBusy(true);
     try {
-      const { reveal: rev } = await choose({
+      const { verdict, why, hesitation } = await choose({
         data: {
           sessionId, pairingId: pairing.id, chosenSongId: songId,
           msToDecide: Math.min(600000, Date.now() - startedAt.current),
         },
       });
-      setReveal(rev);
+      setReveal({ verdict, why, hesitation });
+
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Choice failed.");
       setBusy(false);
@@ -112,8 +113,17 @@ function Play() {
   if (reveal) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-32 text-center">
-        <p className="eyebrow mb-8">What that choice said</p>
-        <p className="font-serif text-2xl md:text-3xl leading-snug mb-12 text-foreground">{reveal}</p>
+        <p className="eyebrow mb-8">The verdict</p>
+        <p className="font-serif text-2xl md:text-3xl leading-snug mb-10 text-foreground">{reveal.verdict}</p>
+        {reveal.why && (
+          <>
+            <p className="eyebrow mb-4">Why that mattered</p>
+            <p className="font-serif italic text-xl md:text-2xl leading-snug mb-8 text-muted-foreground">{reveal.why}</p>
+          </>
+        )}
+        {reveal.hesitation && (
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground mb-10">{reveal.hesitation}</p>
+        )}
         <button
           onClick={advance} disabled={finishing}
           className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-50"
@@ -123,6 +133,7 @@ function Play() {
       </main>
     );
   }
+
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
