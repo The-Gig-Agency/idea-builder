@@ -81,15 +81,17 @@ function AdminPage() {
             Edit songs, pairings, and archetypes. Changes go live immediately.
           </p>
         </div>
-        <button
-          onClick={() => setEditing({ row: null })}
-          className="rounded-sm bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
-        >
-          + New {tab.replace(/s$/, "")}
-        </button>
+        {tab !== "decade_prompts" && (
+          <button
+            onClick={() => setEditing({ row: null })}
+            className="rounded-sm bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            + New {tab.replace(/s$/, "")}
+          </button>
+        )}
       </div>
 
-      <nav className="flex gap-1 border-b hairline mb-6">
+      <nav className="flex gap-1 border-b hairline mb-6 flex-wrap">
         {ENTITIES.map((e) => (
           <button
             key={e.key}
@@ -105,15 +107,19 @@ function AdminPage() {
         ))}
       </nav>
 
-      <EntityTable
-        key={tab}
-        entity={tab}
-        onEdit={(row) => setEditing({ row })}
-      />
+      {tab === "decade_prompts" ? (
+        <DecadePromptsEditor />
+      ) : (
+        <EntityTable
+          key={tab}
+          entity={tab as Exclude<Entity, "decade_prompts">}
+          onEdit={(row) => setEditing({ row })}
+        />
+      )}
 
-      {editing && (
+      {editing && tab !== "decade_prompts" && (
         <EditDrawer
-          entity={tab}
+          entity={tab as Exclude<Entity, "decade_prompts">}
           row={editing.row}
           onClose={() => setEditing(null)}
         />
