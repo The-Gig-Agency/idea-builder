@@ -1106,7 +1106,9 @@ async function nudgeCriticFromFeedback(
     provocation_appetite: p.provocation_appetite,
     move_tally: p.move_tally,
     forbidden_moves: p.forbidden_moves.slice(0, 8),
-    turns_observed: p.turns_observed,
+    // Count an explicit feedback event as one "observed" tick so the voice
+    // modulation gate (turns_observed >= 2) can trip from feedback alone.
+    turns_observed: p.turns_observed + 1,
   }, { onConflict: "user_id" });
 }
 
@@ -1819,6 +1821,10 @@ export const chatTurn = createServerFn({ method: "POST" })
     // history for context). Cap per-turn movement so pairings stay primary.
     const PER_TURN_CAP = 10;          // max |delta| applied to any one axis per turn
     const VECTOR_BOUND = 200;         // overall clamp on |vector[axis]|
+    // Skip the extractor pass on short / trivial replies ("ok", "yeah", "lol").
+    // Saves an LLM call and avoids feeding noise into the vector.
+    const EXTRACTOR_MIN_CHARS = 12;
+    const trimmedMsg = data.message.trim();
     const recentTurns = (history ?? [])
       .slice(-8)
       .map((m) => `${m.role}: ${m.content}`)
@@ -1829,7 +1835,7 @@ Only include dimensions the message clearly speaks to. Positive = high pole, neg
 ${(DIMS as readonly string[]).map((d) => `- ${d}: +${DIM_LABEL[d]?.hi} / -${DIM_LABEL[d]?.lo}`).join("\n")}
 Rules: at most 5 dimensions per reply. Skip dimensions the reply doesn't actually address. If the reply is empty, hostile filler, or off-topic, return {"deltas": {}}.
 No prose, no markdown fences.`;
-    try {
+    if (trimmedMsg.length >= EXTRACTOR_MIN_CHARS) try {
       const extractTxt = await ai([
         { role: "system", content: extractorVoice },
         { role: "user", content: `Recent turns:\n${recentTurns || "(none)"}\n\nLatest user reply:\n${data.message}\n\nReturn the JSON now.` },
@@ -1923,8 +1929,12 @@ No prose, no markdown fences.`;
 
     // -------- Update critic profile from this exchange --------
     // The user's reply is feedback on the critic's PRIOR assistant turn (the
-    // one before this new reply). Use that pair to extract tone/move signals.
-    try {
+    // one before this new reply). Note: `history` was fetched AFTER we inserted
+    // the new user message but BEFORE the new assistant reply, so the last
+    // assistant entry in it is correctly the one the user just reacted to —
+    // don't reorder those statements.
+    // Skip on short / trivial replies — no real signal, just LLM spend.
+    if (trimmedMsg.length >= EXTRACTOR_MIN_CHARS) try {
       const priorAssistant = [...(history ?? [])]
         .reverse()
         .find((m) => m.role === "assistant")?.content as string | undefined;
