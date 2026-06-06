@@ -538,14 +538,27 @@ export const getMyResult = createServerFn({ method: "GET" })
     ]);
     const latest = sessions?.[0];
     let definingChoices: Array<{ chosen: string; chosenArtist: string; rejected: string; rejectedArtist: string }> = [];
+    let reasoning: {
+      allowed_claims: unknown;
+      blocked_claims: unknown;
+      counterarguments: unknown;
+      patterns: unknown;
+    } | null = null;
     if (latest) {
-      const { data: choices } = await supabase
-        .from("choices")
-        .select("created_at, ms_to_decide, chosen:chosen_song_id(title,artist), rejected:rejected_song_id(title,artist)")
-        .eq("session_id", latest.id)
-        .order("ms_to_decide", { ascending: true, nullsFirst: false })
-        .limit(5);
-      definingChoices = ((choices ?? []) as unknown as Array<{
+      const [choicesRes, reasoningRes] = await Promise.all([
+        supabase
+          .from("choices")
+          .select("created_at, ms_to_decide, chosen:chosen_song_id(title,artist), rejected:rejected_song_id(title,artist)")
+          .eq("session_id", latest.id)
+          .order("ms_to_decide", { ascending: true, nullsFirst: false })
+          .limit(5),
+        supabase
+          .from("session_reasoning")
+          .select("allowed_claims, blocked_claims, counterarguments, patterns")
+          .eq("session_id", latest.id)
+          .maybeSingle(),
+      ]);
+      definingChoices = ((choicesRes.data ?? []) as unknown as Array<{
         chosen: { title: string; artist: string } | null;
         rejected: { title: string; artist: string } | null;
       }>)
@@ -554,7 +567,9 @@ export const getMyResult = createServerFn({ method: "GET" })
           chosen: c.chosen!.title, chosenArtist: c.chosen!.artist,
           rejected: c.rejected!.title, rejectedArtist: c.rejected!.artist,
         }));
+      reasoning = reasoningRes.data ?? null;
     }
-    return { profile, sessions: sessions ?? [], definingChoices };
+    return { profile, sessions: sessions ?? [], definingChoices, reasoning };
   });
+
 
