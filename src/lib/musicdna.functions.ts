@@ -588,7 +588,14 @@ export const recordChoice = createServerFn({ method: "POST" })
       rejected_song_id: rejectedSongId,
       ms_to_decide: data.msToDecide ?? null,
     });
-    if (cErr) throw new Error(cErr.message);
+    if (cErr) {
+      // 23505 = unique_violation — same pairing already recorded for this session.
+      // Surface a clean error instead of letting a replay distort the vector.
+      if ((cErr as { code?: string }).code === "23505") {
+        throw new Error("this pairing has already been answered for this session");
+      }
+      throw new Error(cErr.message);
+    }
 
     // -------- Probe scoring & silent lane flip --------
     const probeState: ProbeState = {
