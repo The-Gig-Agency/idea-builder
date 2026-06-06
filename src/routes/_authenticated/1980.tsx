@@ -110,7 +110,14 @@ function NineteenEighty() {
       const t2 = setTimeout(() => setPending((p) => (p ? { ...p, stage: "observation" } : p)), 750);
       return () => clearTimeout(t2);
     }
+    if (pending.stage === "observation" && pending.reaction && !pending.final) {
+      const wordCount = (pending.reaction + " " + (pending.hypothesis ?? "")).split(/\s+/).length;
+      const ms = Math.min(4200, Math.max(1800, 350 * wordCount));
+      const t3 = setTimeout(() => commitAndAdvance(), ms);
+      return () => clearTimeout(t3);
+    }
   }, [pending]);
+
 
   async function handleSubmit() {
     const value = input.trim();
@@ -322,7 +329,7 @@ function NineteenEighty() {
             </div>
           )}
 
-          {pending.stage === "observation" && (
+          {pending.stage === "observation" && pending.final && (
             <div className="pt-4 animate-in fade-in duration-500">
               <button
                 onClick={commitAndAdvance}
@@ -333,6 +340,7 @@ function NineteenEighty() {
               </button>
             </div>
           )}
+
         </section>
       )}
 
