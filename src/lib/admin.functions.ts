@@ -57,7 +57,12 @@ export const adminList = createServerFn({ method: "POST" })
     let q: any = (admin as any).from(table).select("*").limit(500);
     if (table === "songs") {
       q = q.order("artist", { ascending: true }).order("title", { ascending: true });
-      if (data.search) q = q.or(`title.ilike.%${data.search}%,artist.ilike.%${data.search}%`);
+      if (data.search) {
+        // Strip LIKE wildcards and PostgREST .or() syntax characters so user
+        // input can't escape into another filter expression.
+        const s = data.search.replace(/[%_,()."*\\]/g, "").trim();
+        if (s) q = q.or(`title.ilike.%${s}%,artist.ilike.%${s}%`);
+      }
       if (data.lane) q = q.eq("primary_lane", data.lane);
     } else if (table === "pairings") {
       q = q.order("diagnostic_weight", { ascending: false });
