@@ -1,68 +1,87 @@
-
 ## Goal
 
-One canonical taste vocabulary — the 9 axes already in the `axes` table:
-**movement, atmosphere, immersion, scale, community, perspective, confidence, tension, texture**.
+Replace the current "type all 3, then 2 more" onboarding with a **three-song, one-at-a-time ranked interview**. Each pick gets a short, pithy critic reaction before the next slot opens. No "best/coolest/favorite" language — the ranking itself is the instruction. After song #3, hand off to pairings (no separate "refine with 2 more" step).
 
-Moods like *nostalgic*, *dreamy*, *dark*, *hopeful*, *romantic*, *energetic* stop being scored. They become **derived descriptors** — adjectives the critic earns from combinations of the 9. Same architecture Spotify uses: store the signal, derive the read.
+## Conversational shape
 
-## What changes
+**Cold open** — one screen, one input slot, one line:
+- Eyebrow: `three songs · ranked`
+- Headline: `Three songs. Ranked.` / italic: `That's all I need.`
+- Sub: `Start with #1 — the one at the top.`
+- Single input (#1) + Enter / `→` button.
 
-### 1. Schema (one migration)
+**After #1 submits** — short reaction (≤ ~12 words), then slot #2 reveals inline:
+- Reaction beat lands fast (350ms). Voice: pithy, intrigued, no flattery.
+  - Examples (LLM-generated, not templated): `"Bold opener."` · `"Not where I expected to start. Keep going."` · `"OK. That tells me something."`
+- Slot #2 appears below with prompt: `Now #2.`
+- Goal of this reaction: **make the user feel the conversation is interesting**, not classify them yet.
 
-`songs` table:
-- **Drop 12 columns** (no longer scored anywhere): `groove`, `darkness`, `hope`, `nostalgia`, `transformation`, `complexity`, `melody`, `verbal_cleverness`, `authenticity`, `romanticism`, `energy`, `dreaminess`.
-- **Keep 3** that map 1:1 to the canonical 9: `movement`, `atmosphere`, `community`.
-- **Add 6 new** smallint columns (0–100, default null): `immersion`, `scale`, `perspective`, `confidence`, `tension`, `texture`.
+**After #2 submits** — second reaction, slightly more relational (still short, ≤ ~20 words):
+- The critic now reacts to #2 **in light of #1**: contrast, confirm, or call out tension.
+  - Examples: `"After [#1], that's a swerve. Interesting swerve."` · `"OK, you're staying in one room. Tighter than I thought."`
+- Slot #3 reveals: `And the third.`
 
-`pairings` table:
-- Reset every row's `tests` to `ARRAY[]::text[]` (the old tags reference dropped columns; empty array makes the engine fall back to the canonical 9 until pairings are re-tagged).
+**After #3 submits** — synthesis beat (longer, ~1–2 sentences) + working hypothesis + lane lock:
+- One opinionated read of the trio, then the working hypothesis quote, then auto-handoff to pairings.
+- No "refine your read →" button; pairings start on a short timer once the hypothesis is rendered (matches current `r5Step === 2` auto-start).
 
-### 2. Code: `src/lib/musicdna.functions.ts` (the canonical rewrite)
+**Unknown songs**: the critic still reacts — even with surprise (`"Don't know that one. Tell me with #2."`). Never bail.
 
-Replace these in place — same file, same exports, no API change:
+**Edits**: once submitted, a slot is locked. The user can repeat or refine intent later through pairings/chat. No edit-#1 affordance.
 
-- **`DIMS`** → the 9 axis keys.
-- **`DIM_LABEL`** → 9 entries with the DB's exact low/high poles (stillness↔forward motion, statement↔immersive mood, immediacy↔slow reveal, intimate↔vast, solitary↔communal, feeling↔witness, vulnerability↔command, release↔danger, rawness↔refinement).
-- **`REVEAL`** (the per-axis "verdict + why" copy) → 9 entries, Rolling Stone voice, written fresh for the 6 new axes.
-- **`BEAT`** (the per-axis thesis fragments + hook question) → 9 entries, same voice.
-- **Two `SELECT` column lists** (lines 545, 720) → swap to the 9-axis projection.
-- **Four LLM prompts** that enumerate dimensions (`CLASSIFIER_VOICE`, `REACT_VOICE`'s `suspected_dimensions`, `REFINE_VOICE`'s `candidate_dimensions`, the chat-turn `extractorVoice`) → list the 9, drop the 15.
+## Background work
 
-### 3. New: `deriveDescriptors(vector)` — the mood layer
+- **#1**: react off the typed string alone (LLM + critic voice). No DB resolve required for the reaction.
+- **#2 + #3**: while the user reads each reaction, kick off a background `resolveSong` for the just-submitted title so by #3's reaction we have era/lane/tags for at least #1 and probably #2. Reactions still degrade gracefully if resolve hasn't returned — they're text-only.
+- After #3: same `startSession` / `nextPairing` chain as today; pairings begin auto-scrolled into view.
 
-A small pure function added to `musicdna.functions.ts`. Takes a session vector keyed by the 9 axes, returns an array of earned adjectives. No LLM call, no stored field. Examples of the rules:
+## Server changes
 
-- **nostalgic** ← strong negative `immersion` (slow reveal) + low `tension` + low `scale`
-- **dreamy** ← high `atmosphere` + high `immersion` + low `confidence`
-- **dark** ← high `tension` + low `community` + high `texture` toward rawness
-- **hopeful** ← positive `movement` + low `tension` + high `scale`
-- **romantic** ← low `confidence` (vulnerability) + low `perspective` (feeling) + high `atmosphere`
-- **kinetic** ← high `movement` + high `confidence` + high `tension`
+Replace the two-call shape (`reactToThree` + `refineWithTwoMore`) with a single per-slot endpoint:
 
-The derived adjectives get passed into the **final synthesis prompt** as flavor ("you may call them *X* if the read supports it"), never as scored fields. The critic uses them; the database never sees them.
+- `reactToSong({ rank: 1|2|3, songs: string[] })` — returns `{ reaction: string, hypothesis?: string, lane?: string, confidence?: number }`.
+  - `rank=1`: returns only `reaction` (short, ≤ ~12 words).
+  - `rank=2`: returns `reaction` (relational, ≤ ~20 words).
+  - `rank=3`: returns `reaction` (1–2 sentences) + `hypothesis` + `lane` + `confidence`. This is what currently comes back from `refineWithTwoMore` but on 3 songs instead of 5.
+- System prompt enforces: no superlatives ("best", "coolest", "favorite", "amazing"), no genre-naming flattery, no questions back. Reactions are observations, not interviews of the user.
+- Token caps in the route handler enforce length; if the model overshoots, hard-truncate at the last sentence boundary.
+- Background `resolveSong({ title })` already exists in spirit via `searchSongs` — reuse it; if not, add a thin server fn that returns `{ id, lane, year } | null` and is called fire-and-forget from the client after each submit.
 
-### 4. Backfill: rescore 412 songs on the 9 axes
+Profile fields that currently store `opening_songs` of length 5 become length 3. Existing rows are not migrated (read code already tolerates variable length); new sessions will simply store 3.
 
-New admin server fn `backfillSongAxes` (in a new `src/lib/admin.functions.ts`). Batches ~20 songs per LLM call, returns 9 integers (0–100) per song, writes to the new columns. Idempotent — only touches rows where the new axes are still null. Triggered once from the existing `/admin` page via a new button. ~25 LLM calls total.
+## Client changes (`src/routes/onboarding.tsx`)
 
-`movement`, `atmosphere`, `community` keep their existing values; only the 6 net-new axes need scoring.
+- Collapse `Phase` from `ranking3 | ranking2 | playing | done` to `slot1 | slot2 | slot3 | playing | done`.
+- Replace `three: [string, string, string]` + `two: [string, string]` with `songs: string[]` (length 0→3).
+- Replace `threeRead` / `refined` with `reactions: Array<{ rank: number, reaction: string }>` plus a single `finalRead: { reaction, hypothesis, lane, confidence } | null` after #3.
+- Render is a continuous vertical transcript:
+  1. Locked rank chip + song (for each submitted slot).
+  2. Reaction line under each (fade-in 350ms, then settle).
+  3. Active slot input at the bottom, autofocused.
+- Remove `SLOT2_LABELS` and the entire "two more · still ranked" block.
+- Keep the `r5Step`-style choreography for the final synthesis (eyebrow → reaction → hypothesis → auto-start pairings on `step === 2`), now triggered off `finalRead`.
+- Auto-scroll the next slot input into view after each reaction settles.
+- Track existing events but rename payloads: `onboarding_three_submitted` → fired once after slot #3; add per-slot `onboarding_slot_submitted` with `{ rank }`.
 
-## What stays unchanged
+## Voice / copy rules (for system prompts and any UI strings)
 
-- Session vector semantics, recordChoice math, finalize/synthesis pipeline structure.
-- Lane logic, probes, within-lane invariant.
-- All UI surfaces (onboarding transcript, /me, /admin). The vocabulary inside the prompts changes, the screens don't.
+- No "best", "coolest", "favorite", "greatest", "amazing", "perfect".
+- No "tell me about yourself", no "what's your vibe", no genre naming as flattery.
+- Use observation verbs: `signals`, `says`, `tells me`, `reads as`, `bets on`.
+- Reactions punch; one beat per reaction. Em-dashes and short sentences are fine. Avoid emoji.
 
-## Order of operations
+## Out of scope for this change
 
-1. Re-run the migration (last attempt failed on `pairings.tests` NOT NULL — fix is `ARRAY[]::text[]`).
-2. Rewrite `musicdna.functions.ts` against the new schema.
-3. Add `deriveDescriptors` and wire it into the final synthesis prompt.
-4. Add `backfillSongAxes` + an admin button.
-5. Run the backfill once.
+- Pairings logic, finalization, synthesis page — untouched.
+- Profile schema — no migration; just shorter `opening_songs` going forward.
+- Chat flow on `/me` — untouched.
 
-## Out of scope (flag for later)
+## Acceptance check
 
-- Re-tagging pairings with new `tests` arrays. Empty `tests` works — the engine just uses the full 9 as the test set per pairing. Worth a follow-up pass to make pairings axis-specific again, but not blocking.
-- Mood-derivation rules will need tuning once real sessions run. Treat the v1 rules above as a starting point, not a contract.
+- Opening screen shows one input slot, not three.
+- After #1, a short reaction appears in < ~1s, then slot #2 reveals beneath it.
+- After #2, a second reaction appears that references #1 textually (contrast/confirm), then slot #3 reveals.
+- After #3, the synthesis + hypothesis renders and pairings auto-start with no extra button.
+- Submitting an unrecognizable song still produces a reaction (no error toast, no bail).
+- No "best/coolest/favorite" copy anywhere in headlines, slot labels, or LLM reactions.
+- Submitted slots are not editable; the input below stays focused after each submit.
