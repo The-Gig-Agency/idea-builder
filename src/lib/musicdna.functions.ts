@@ -1111,6 +1111,40 @@ export const reactToThree = createServerFn({ method: "POST" })
     }
   });
 
+// Per-song micro-reaction. One short sentence in the critic voice, used
+// during the conversational onboarding right after the user submits a song.
+const MICRO_REACT_VOICE = `${PERSONA}
+Mode: micro-reaction. The listener just named ONE song. React in ONE sentence, max 14 words. Be specific about THIS song or how it sits next to the ones they already named. Examples: "Interesting — not many people start there." "Now we're somewhere." "Bold. That song fights its own chorus." "Mm. Patient choice." Never analyze, never explain. Never repeat the song title. No emojis. No quotes. No period-stacking.`;
+
+export const reactToOne = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      song: z.string().trim().min(1).max(200),
+      index: z.number().int().min(0).max(20),
+      priorSongs: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+    }).parse(d),
+  )
+  .handler(async ({ data }): Promise<{ text: string }> => {
+    const fallbacks = ["Interesting.", "Noted.", "Mm.", "Okay.", "Now we're talking."];
+    try {
+      const prior = data.priorSongs.length
+        ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
+        : "";
+      const txt = await ai([
+        { role: "system", content: MICRO_REACT_VOICE },
+        { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n\nReturn ONLY the one-sentence reaction. No JSON. No quotes.` },
+      ]);
+      const cleaned = txt.replace(/^["'`\s]+|["'`\s]+$/g, "").split("\n")[0].trim();
+      if (!cleaned) return { text: fallbacks[data.index % fallbacks.length] };
+      // hard length cap so it stays micro
+      const capped = cleaned.length > 160 ? cleaned.slice(0, 157) + "…" : cleaned;
+      return { text: capped };
+    } catch {
+      return { text: fallbacks[data.index % fallbacks.length] };
+    }
+  });
+
 // Step B: 5 songs total + the prior hypothesis. The AI either confirms,
 // refines, or breaks its own guess. Writes to profile. This is the lock-in.
 const REFINE_VOICE = `${PERSONA}
