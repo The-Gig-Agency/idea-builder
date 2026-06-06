@@ -1465,6 +1465,127 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
 
 
 // ============================================================
+// commitOpeningThree — lock-in read after the 3rd ranked song.
+// 3-song one-at-a-time variant of refineWithTwoMore.
+// ============================================================
+
+const COMMIT_THREE_VOICE = `${PERSONA}
+Mode: lock in the read after three ranked songs. You've already reacted to #1 and #2 — now they've named #3 and the picture should snap into focus. Either CONFIRM, REFINE, or BREAK what was forming. Still about the LISTENER, not the catalog.
+${ONBOARDING_RULES}
+Return STRICT JSON:
+{
+  "reaction": "ONE or TWO short sentences, max 28 words. An opinionated read on the trio's CHOICES — about the listener. Good: 'Three picks, one stance: you reward the song that earns its hook instead of buying one.' Bad: any genre/scene/era/artist/production talk.",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "confidence": 0.0-1.0,
+  "secondary_lanes": [lane, ...],
+  "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
+  "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
+  "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
+}
+No prose, no markdown fences.`;
+
+export const commitOpeningThree = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      songs: z.array(z.string().trim().min(1).max(200)).length(3),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const allThree = data.songs;
+    let llm: OpeningAnalysis & { reaction: string } = {
+      ...FALLBACK,
+      reaction: "Three picks, ranked. Enough to start. Let's see if the matchups hold.",
+      per_song: allThree.map((s) => ({ input: s, lane: "unknown", source: "llm" })),
+    };
+    try {
+      const txt = await ai([
+        { role: "system", content: COMMIT_THREE_VOICE },
+        { role: "user", content: `Three songs, ranked top to bottom:\n${allThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
+      ]);
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & { reaction: string }>;
+      const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
+      const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+      const secondary = Array.isArray(parsed.secondary_lanes)
+        ? parsed.secondary_lanes.filter((l): l is Lane => (LANES as readonly string[]).includes(l as string) && l !== lane && l !== "general")
+        : [];
+      const dims: LlmDimensions = {};
+      if (parsed.candidate_dimensions && typeof parsed.candidate_dimensions === "object") {
+        for (const d of DIMS) {
+          const v = (parsed.candidate_dimensions as Record<string, unknown>)[d];
+          if (typeof v === "number" && Number.isFinite(v)) dims[d] = Math.max(-100, Math.min(100, Math.round(v)));
+        }
+      }
+      const perSong = allThree.map((input) => {
+        const match = Array.isArray(parsed.per_song) ? parsed.per_song.find((p) => p?.input === input) : null;
+        const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
+        return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
+      });
+      llm = {
+        lane: confidence < 0.4 ? "general" : lane,
+        confidence,
+        secondary_lanes: secondary,
+        reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
+        hypothesis: typeof parsed.hypothesis === "string" && parsed.hypothesis.trim() ? parsed.hypothesis.trim() : FALLBACK.hypothesis,
+        candidate_dimensions: dims,
+        per_song: perSong,
+        canon_matches: [],
+        reaction: typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Locked in.",
+      };
+    } catch { /* keep fallback */ }
+
+    // Hidden canon enrichment.
+    for (let i = 0; i < allThree.length; i++) {
+      const raw = allThree[i];
+      const [titlePart, artistPart] = raw.split(/—|–|-/).map((s) => s.trim());
+      const title = titlePart || raw;
+      if (!title) continue;
+      try {
+        const { data: rows } = await supabase
+          .from("songs")
+          .select("id,primary_lane,lane,title,artist")
+          .ilike("title", title)
+          .limit(5);
+        if (!rows?.length) continue;
+        const best = artistPart
+          ? rows.find((r: { artist?: string | null }) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? rows[0]
+          : rows[0];
+        const topLane = catalogLaneToTopLane(best.primary_lane ?? best.lane);
+        llm.canon_matches.push({
+          input: raw,
+          song_id: best.id,
+          title: best.title,
+          artist: best.artist,
+          primary_lane: best.primary_lane ?? best.lane,
+        });
+        if (llm.per_song[i]) {
+          llm.per_song[i] = { ...llm.per_song[i], source: "catalog", canon_id: best.id, lane: topLane ?? llm.per_song[i].lane };
+        }
+      } catch { /* swallow */ }
+    }
+
+    await supabase
+      .from("profiles")
+      .update({
+        opening_songs: allThree,
+        opening_hypothesis: llm.hypothesis,
+        opening_lane: llm.lane,
+        opening_lane_confidence: llm.confidence,
+        opening_analysis_json: JSON.parse(JSON.stringify(llm)),
+      })
+      .eq("user_id", userId);
+
+    return llm;
+  });
+
+
+
+
+
+// ============================================================
 // Round insights — interleaved observations during pairings.
 // Called by the client after rounds 3, 6, 9. Reads current vector
 // + recent choices and returns a short Rolling Stone–voice line.
