@@ -293,49 +293,62 @@ export const nextPairing = createServerFn({ method: "POST" })
     probeState.lane_alignment = probeState.lane_alignment ?? {};
     probeState.flips = probeState.flips ?? [];
 
-
-// ============ Next pairing ============
-export const nextPairing = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    const [usedRes, sessionRes] = await Promise.all([
-      supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
-      supabase.from("sessions").select("vector, lane").eq("id", data.sessionId).single(),
-    ]);
-    const sessionLane = (sessionRes.data?.lane as Lane | null) ?? "general";
-
     const pairingSelect = `
       id, tests, hypothesis, why_good, diagnostic_weight, lane,
       song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,primary_lane,lane),
       song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,primary_lane,lane)
     `;
 
-    // Primary fetch: lane-scoped (or all active when lane is 'general').
+    const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
+    const round = usedIds.size;
+    const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
+    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
+    const confidence = confidentAxes / DIMS.length;
+    const canStop = round >= 12 && confidence >= 0.6;
+    if (canStop) {
+      return { pairing: null, round, confidence, done: true as const };
+    }
+
+    // -------- Probe injection (silent) --------
+    // At scheduled rounds, try a pairing from a candidate lane the user hasn't
+    // been tested on yet. Skip lanes we already probed.
+    const probedLanes = new Set(probeState.probes_shown.map((p) => p.lane));
+    const probeLane = PROBE_ROUNDS.has(round)
+      ? probeCandidates.find((l) => !probedLanes.has(l) && l !== sessionLane)
+      : undefined;
+
+    if (probeLane) {
+      const probeRes = await supabase
+        .from("pairings")
+        .select(pairingSelect)
+        .eq("active", true)
+        .eq("lane", probeLane)
+        .order("diagnostic_weight", { ascending: false })
+        .limit(20);
+      if (!probeRes.error) {
+        const probePool = (probeRes.data ?? []).filter((p) => !usedIds.has(p.id));
+        if (probePool.length) {
+          const pick = probePool[Math.floor(Math.random() * Math.min(3, probePool.length))];
+          probeState.pending[pick.id] = probeLane;
+          await supabase.from("sessions").update({ probe_state: probeState as never }).eq("id", data.sessionId);
+          return { pairing: pick, round: round + 1, confidence, done: false as const };
+        }
+      }
+    }
+
+    // -------- Normal lane-scoped fetch --------
     let pairingsRes = sessionLane === "general"
       ? await supabase.from("pairings").select(pairingSelect).eq("active", true)
       : await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", sessionLane);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
 
-    const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
     let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
-
-    // Fallback to general only if lane-scoped pool is exhausted and lane wasn't already general.
     if (!pool.length && sessionLane !== "general") {
       pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
       if (pairingsRes.error) throw new Error(pairingsRes.error.message);
       pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
     }
-
-    const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
-    const round = usedIds.size;
-
-    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
-    const confidence = confidentAxes / DIMS.length;
-    const canStop = round >= 12 && confidence >= 0.6;
-
-    if (!pool.length || canStop) {
+    if (!pool.length) {
       return { pairing: null, round, confidence, done: true as const };
     }
 
@@ -351,6 +364,7 @@ export const nextPairing = createServerFn({ method: "POST" })
     const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
     return { pairing: pick.p, round: round + 1, confidence, done: false as const };
   });
+
 
 // ============ Record choice ============
 // Each axis carries a short verdict ("immersion over immediacy") plus a
