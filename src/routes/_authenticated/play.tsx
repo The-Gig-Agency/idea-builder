@@ -55,13 +55,14 @@ function Play() {
     if (!pairing || !sessionId || busy) return;
     setBusy(true);
     try {
-      const { reveal: rev } = await choose({
+      const { verdict, why, hesitation } = await choose({
         data: {
           sessionId, pairingId: pairing.id, chosenSongId: songId,
           msToDecide: Math.min(600000, Date.now() - startedAt.current),
         },
       });
-      setReveal(rev);
+      setReveal({ verdict, why, hesitation });
+
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Choice failed.");
       setBusy(false);
