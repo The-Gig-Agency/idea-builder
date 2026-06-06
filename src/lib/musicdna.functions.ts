@@ -222,34 +222,45 @@ export const nextPairing = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const [usedRes, sessionRes, pairingsRes] = await Promise.all([
+    const [usedRes, sessionRes] = await Promise.all([
       supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
-      supabase.from("sessions").select("vector").eq("id", data.sessionId).single(),
-      supabase
-        .from("pairings")
-        .select(`
-          id, tests, hypothesis, why_good, diagnostic_weight,
-          song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
-          song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
-        `)
-        .eq("active", true),
+      supabase.from("sessions").select("vector, lane").eq("id", data.sessionId).single(),
     ]);
+    const sessionLane = (sessionRes.data?.lane as Lane | null) ?? "general";
+
+    const pairingSelect = `
+      id, tests, hypothesis, why_good, diagnostic_weight, lane,
+      song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
+      song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
+    `;
+
+    // Primary fetch: lane-scoped (or all active when lane is 'general').
+    let pairingsRes = sessionLane === "general"
+      ? await supabase.from("pairings").select(pairingSelect).eq("active", true)
+      : await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", sessionLane);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
+
     const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
+    let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+
+    // Fallback to general only if lane-scoped pool is exhausted and lane wasn't already general.
+    if (!pool.length && sessionLane !== "general") {
+      pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
+      if (pairingsRes.error) throw new Error(pairingsRes.error.message);
+      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+    }
+
     const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
     const round = usedIds.size;
 
-    // confidence: fraction of 15 axes with |signal| >= 30
     const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
     const confidence = confidentAxes / DIMS.length;
     const canStop = round >= 12 && confidence >= 0.6;
 
-    const pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
     if (!pool.length || canStop) {
       return { pairing: null, round, confidence, done: true as const };
     }
 
-    // axis-aware: boost pairings testing axes with little signal so far.
     const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
     const scored = pool.map((p) => {
       const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
