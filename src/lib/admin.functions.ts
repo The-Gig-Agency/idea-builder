@@ -5,6 +5,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const ADMIN_TABLES = ["songs", "pairings", "archetypes"] as const;
 type AdminTable = (typeof ADMIN_TABLES)[number];
 
+// JSON value tree that TanStack's serializer accepts.
+type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
+type JsonRow = { [k: string]: Json };
+
 async function assertAdminAndGetClient(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
