@@ -1924,6 +1924,15 @@ export const chatTurn = createServerFn({ method: "POST" })
       sessionId = anchor.sessionId;
       profile = anchor.profile;
     } else {
+      // Caller-supplied sessionId — verify it actually belongs to this user
+      // before we write any chat rows against it.
+      const { data: owned, error: ownErr } = await supabase
+        .from("sessions")
+        .select("user_id")
+        .eq("id", sessionId)
+        .maybeSingle();
+      if (ownErr) throw new Error(ownErr.message);
+      if (!owned || owned.user_id !== userId) throw new Error("forbidden");
       const { data: p } = await supabase
         .from("profiles")
         .select("opening_songs, opening_hypothesis, opening_lane, opening_analysis_json")
