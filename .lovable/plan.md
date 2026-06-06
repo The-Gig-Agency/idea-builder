@@ -1,120 +1,71 @@
-Got it. This is no longer "onboarding" — it's a continuous interview. The product is the conversation; the report is just a checkpoint. Below is the plan to build that arc end-to-end, with auth showing up only when the user is invested enough to want history.
+## Goal
 
-## The arc
+Make the play loop feel like a chat with a curious critic, not a quiz with verdicts. Shipping Option A as an experiment first: one route, no backend changes, swap the centered card-flip flow for a stacked transcript where every pick adds a reaction *and* an evolving hypothesis line. If this lands, we collapse `/onboarding` and `/play` into one continuous transcript (Option B) next.
 
-```text
-RANK 3  →  REACT  →  RANK 2 MORE  →  REFINE  →  VOTE (3–4 pairs)  →  REFINE  →  CHAT  →  [REPORT anytime]
-                                                                                   ↓
-                                                                       SAVE-TO-CONTINUE prompt
-                                                                                   ↓
-                                                                       MORE VOTES / NEW DIMENSIONS / MORE CHAT
-                                                                              (forever)
-```
+## What changes (Option A — this pass)
 
-The user is never "done." After the first chat exchange we surface a **"Save your read — keep exploring"** moment that converts anon → full account.
+### 1. `/play` becomes a transcript, not a card stack
+Today: pairing → reveal screen ("THE VERDICT" / "WHY THAT MATTERED") → next pairing, each one replacing the last.
 
-## Routes
-
-- **`/`** (renamed from `/onboarding`) — the interview. One route, multiple stages, all in-place transitions. No URL changes between stages.
-- **`/1980`** — kept, but rewritten as a marketing/landing variant: same interview, decade-scoped framing, social-share-ready meta. Same backend.
-- **`/me`** (new, replaces `/profile`) — the living report. Hypothesis, dimensions, evidence, "explore more" CTAs that pull the user back into the interview.
-- **`/play`** — fold into `/` as the "vote" stage. Don't keep a separate game.
-- **`/s/:sessionId`** — already exists for share; keep.
-
-## Anonymous-first auth (the key unlock)
-
-Today everything is behind `_authenticated`. Switch to **Supabase anonymous sign-ins**:
-
-- On first visit to `/`, if no session, call `supabase.auth.signInAnonymously()`. This mints a real `auth.users` row with `is_anonymous = true`, so all existing RLS / `user_id` FKs keep working unchanged.
-- The interview saves to `sessions`, `choices`, `event_log` etc. as that anon user.
-- After the first chat message (or whenever they hit the "save your read" CTA), prompt for email+password. Use `supabase.auth.updateUser({ email, password })` to **link the anon account to a real account** — same `user_id`, all data follows. No migration, no flush.
-- Move `/` and `/me` out from under `_authenticated/`. Keep `/admin` authenticated and role-gated.
-- Supabase setting required: enable anonymous sign-ins (Auth → Providers → Anonymous). User-facing one-click.
-
-This is the single biggest piece. It's what makes "never done onboarding" actually work — no friction wall, but everything persists.
-
-## Stage by stage
-
-### Stage 1 — Rank 3 (the entry)
-
-Three numbered slots. Slot label = the signal:
+New: a single scrolling column. Each round appends three blocks and stays on screen:
 
 ```text
-#1   The one you'd save first  →  [____________________]
-#2   The one right after        →  [____________________]
-#3   And one more               →  [____________________]
+Round 01 — Ceremony vs. Fool's Gold        [you picked Ceremony]
+"Nice — cracked voice over the perfect take.
+ Tells me you trust friction more than polish."
+
+▸ My read so far: you reward atmosphere over immediacy.   (confidence ↑)
+
+[ next pairing renders below ]
 ```
 
-- All three required. No advance until all filled.
-- On submit: call `reactToThree` (already exists) but pass rank explicitly. Update the prompt so the AI can reference rank: *"Your #1 is X but your #3 is Y — that's the gap I want to understand."*
+The current pairing renders at the bottom of the transcript. After a pick, the pairing's two buttons collapse into a "you picked X" line, the reaction streams in beneath it, the hypothesis line updates, and the next pairing appears below. The page auto-scrolls to the new pairing. No full-screen reveal interstitial.
 
-### Stage 2 — React + Rank 2 more
+### 2. Conversational reveal copy
+Kill the "The verdict / Why that mattered / Hesitation" labels. The reveal becomes one short paragraph in the critic's voice, no headers:
 
-- Show the reaction + hypothesis_v1 from `reactToThree`.
-- Below: *"Throw me two more — try to break my read."* Two more numbered slots (#4, #5).
-- On submit: call `refineWithTwoMore` (exists), still rank-aware.
+> "Very cool — you took the cracked voice over the perfect take. Says you'd rather hear someone mean it than nail it. Let's see if that holds."
 
-### Stage 3 — Vote (side-by-side pairings)
+Server-side: tweak the `recordChoice` reveal prompt in `musicdna.functions.ts` so the model returns a single 1–2 sentence reaction string instead of the structured `{ verdict, why, hesitation }`. Keep the field names for compatibility but collapse them into one `reaction` string in the response (verdict + why merged, hesitation dropped or folded in only when it adds something). Same persona, shorter, warmer, leads with reaction to the pick before the inference.
 
-This is the existing `/play` engine folded inline.
+### 3. Evolving hypothesis line (the detective board)
+After each pick, render a one-liner showing the model's current read and whether it's firming or shifting:
 
-- Pick 3–4 pairings from `pairings` table, prioritized by the dimensions the AI flagged as `suspected_dimensions` and the current `lane`. Use the existing scoring code; don't rebuild.
-- After each vote: a one-sentence micro-reaction (new server fn `reactToVote`) — same 4-moves rule set as the onboarding LLM (notice / compare / hypothesize / challenge).
-- After the batch: call a new `refineAfterVotes` server fn — takes prior hypothesis + the votes + dimension deltas, returns a sharpened hypothesis and an updated dimension vector to write into `sessions.vector`.
+- Round 1: *"First guess: you value atmosphere over immediacy."*
+- Round 2: *"Holding. Atmosphere still leads."*
+- Round 3: *"Revising — this might be propulsion, not atmosphere."*
 
-### Stage 4 — Chat (free-form)
+Add a tiny server fn `currentRead(sessionId)` (or extend `roundInsight`) that returns `{ thesis: string, direction: "forming" | "holding" | "revising" }` based on the running dimension vector and the delta from the previous round. Called after every pick, not just round 3. Cheap prompt, one sentence out.
 
-- AI SDK `useChat` against a new server route `src/routes/api/chat.ts`.
-- System prompt is composed from: the listener's 5 songs (with ranks), every vote, current hypothesis, current dimension vector, and the same 4-moves rules.
-- Each user message also gets persisted to a new `chat_messages` table tied to `session_id`.
-- After the first user message: surface the **save-your-read** modal (email + password, calls `updateUser`). Non-blocking — they can dismiss and keep chatting, but the prompt comes back.
+The mid-test full-screen `roundInsight` interstitial goes away — its job is now done by the inline hypothesis line on every round.
 
-### Stage 5 — Report (`/me`)
+### 4. Round count + final report
+Keep at 6 rounds. Keep the existing flipped report (evidence → thesis → counter-reads) — it already matches the new voice. The "Choose one." centered headline and the round counter chrome stay, but render inline at the top of the next pairing card, not as a separate header bar.
 
-- Renders hypothesis, dimensions (with confidence), evidence (songs ranked, votes won/lost by dimension), and three CTAs:
-  - **"Vote on a few more"** → back to Stage 3 with a fresh pairing batch (different dimensions to explore).
-  - **"Push me on this"** → back to Stage 4 chat with a seeded prompt.
-  - **"Share my read"** → existing `/s/:sessionId`.
+## What does NOT change this pass
 
-The report is a view of state, not an exit screen.
+- `/onboarding` route untouched. The user goes through onboarding → `/play` as today. Merging into one continuous route is Option B, next pass.
+- No schema changes. No new tables. No new pairings.
+- `recordChoice`, `nextPairing`, `finalSynthesis` signatures stay the same. Only the reveal prompt's output shape narrows (still returns the existing fields, just shorter / merged).
+- Persona block (`PERSONA` / `VOICE` in `musicdna.functions.ts`) stays — we just dial the reveal prompt toward warmer, shorter, lead-with-reaction.
 
-## Data model changes
+## Files touched
 
-Two migrations:
+- `src/routes/_authenticated/play.tsx` — rewrite the render layer. Replace the three discrete screens (pairing / reveal / insight) with a single transcript that accumulates `RoundEntry` items in state. Remove the reveal-as-page block. Keep the `done` report screen as-is.
+- `src/lib/musicdna.functions.ts` — rewrite the reveal prompt inside `recordChoice` to return one short conversational reaction. Add (or extend) a function that returns the current hypothesis one-liner + direction after every pick. Loosen the round-3-only gate on `roundInsight` or replace its call site with the new per-round fn.
 
-1. **`session_choices` rank column** — add `rank smallint` to whatever table stores the 5 opener songs (currently writes go through `refineWithTwoMore` into `sessions`/`choices`; check and either add `rank` to `choices` or store ordered array in `sessions.probe_state`).
-2. **`chat_messages`** — new table: `id`, `session_id` (fk), `user_id` (fk), `role` ('user' | 'assistant'), `content text`, `created_at`. RLS scoped to `auth.uid()`. Standard grants. Indexed on `(session_id, created_at)`.
+## Technical notes
 
-No changes to `pairings`, `songs`, `song_axes`, `axes`, `archetypes`.
+- Transcript state: `entries: Array<{ round, pairing, chosenSongId, reaction, hypothesis, direction }>`. Append on each pick. Render in order.
+- Auto-scroll: `useEffect` on `entries.length`, scroll the newest pairing into view (`scrollIntoView({ block: "center", behavior: "smooth" })`).
+- Hypothesis pill styling: small monospace eyebrow ("my read so far") + one-line serif italic + a subtle ↑ / → / ↻ glyph for forming / holding / revising. Reuse existing tokens (`eyebrow`, `font-serif`, `text-muted-foreground`, `border-l-2 border-primary/40`).
+- Past pairings collapse to a compact one-line summary ("Ceremony vs. Fool's Gold — you picked Ceremony") so the transcript stays scannable as it grows.
+- No new dependencies.
 
-## Server functions (new + changed)
+## Why this order
 
-- **`reactToThree`** — add `ranks: number[]` to input; update prompt to reference rank.
-- **`refineWithTwoMore`** — same.
-- **`reactToVote`** (new) — input: `pairing_id`, `chosen_song_id`, `rejected_song_id`, current hypothesis. Output: one-sentence reaction, same rules.
-- **`refineAfterVotes`** (new) — input: prior hypothesis, votes, dimension deltas. Output: new hypothesis, updated dimension vector. Writes to `sessions.vector` and `sessions.interpretation`.
-- **Chat server route** `src/routes/api/chat.ts` — AI SDK `streamText` against Lovable AI Gateway (`google/gemini-3-flash-preview`). Persists user + assistant messages on `onFinish`.
+Option A is one file's worth of UI rewrite plus a prompt tweak. It directly tests the user's hypothesis ("if they can watch the model think after every pick, does the burden disappear?") with near-zero engineering risk. If it lands, we know merging `/onboarding` and `/play` into one continuous transcript (Option B) is worth the route-restructure work. If it doesn't, we've learned that cheaply.
 
-All LLM prompts inherit the `ONBOARDING_RULES` block (4 moves, no genre/scene/era/artist/production talk, listener-as-subject) — already in `musicdna.functions.ts`.
+## Open question
 
-## UI principles
-
-- Single route, stage-machine in component state. Each stage transitions in place with the same eyebrow/counter/serif language the current onboarding has.
-- The chat stage uses AI Elements (`Conversation`, `Message`, `MessageResponse`, `PromptInput`) — assistant has no bubble background, user bubble uses `primary` / `primary-foreground`.
-- The save-your-read prompt is a small inline card, not a blocking modal — *"Want to keep this and pick it up later? Email + password and we'll save your read."*
-
-## What stays out of this pass
-
-- No new pairings, no new songs, no new dimensions — the engine is already there.
-- No notifications / email digests / "we have a new question for you" — that's the next phase once retention is real.
-- No multi-decade comparison or cross-lane logic (still within-lane per memory).
-- Admin UI unchanged.
-
-## Open question I want your call on before I build
-
-**Where does the save-your-read prompt fire?** Three reasonable triggers:
-1. After the first vote batch (highest engagement, before chat).
-2. After the first chat message (most invested moment).
-3. Whenever the user tries to leave / refresh (annoying but converts).
-
-My default is **2**, with a soft inline CTA already visible on the report. If you want a different trigger, say so and I'll wire it.
+After this ships and we feel it, do we go straight to Option B (collapse `/onboarding` into the same transcript so the rank-3 reveal, rank-2 refine, and vote rounds are all one scroll), or do we sit with A for a beat and gather reactions first?
