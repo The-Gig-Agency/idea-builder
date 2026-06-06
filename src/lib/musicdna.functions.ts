@@ -1825,7 +1825,6 @@ export const chatTurn = createServerFn({ method: "POST" })
     // Saves an LLM call and avoids feeding noise into the vector.
     const EXTRACTOR_MIN_CHARS = 12;
     const trimmedMsg = data.message.trim();
-    const trimmedMsg = data.message.trim();
     const recentTurns = (history ?? [])
       .slice(-8)
       .map((m) => `${m.role}: ${m.content}`)
