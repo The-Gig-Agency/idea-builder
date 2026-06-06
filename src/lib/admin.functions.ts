@@ -56,7 +56,7 @@ export const adminList = createServerFn({ method: "POST" })
     if (table === "songs") {
       q = q.order("artist", { ascending: true }).order("title", { ascending: true });
       if (data.search) q = q.or(`title.ilike.%${data.search}%,artist.ilike.%${data.search}%`);
-      if (data.lane) q = q.eq("primary_lane", data.lane);
+      if (data.lane) q = q.eq("lane", data.lane);
     } else if (table === "pairings") {
       q = q.order("diagnostic_weight", { ascending: false });
       if (data.lane) q = q.eq("lane", data.lane);
