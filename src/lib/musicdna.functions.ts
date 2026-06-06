@@ -695,7 +695,7 @@ export const finalizeSession = createServerFn({ method: "POST" })
     if (sErr || !session) throw new Error(sErr?.message ?? "session not found");
     if (session.user_id !== userId) throw new Error("forbidden");
 
-    const songCols = "id,title,artist,year,lane,movement,atmosphere,groove,darkness,hope,nostalgia,transformation,complexity,melody,verbal_cleverness,authenticity,romanticism,energy,dreaminess,community";
+    const songCols = "id,title,artist,year,lane,movement,atmosphere,immersion,scale,community,perspective,confidence,tension,texture,transformation";
 
     // -------- Pull raw evidence --------
     const [archRes, choicesRes] = await Promise.all([
