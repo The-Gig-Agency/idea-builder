@@ -753,8 +753,11 @@ export const finalizeSession = createServerFn({ method: "POST" })
     });
 
     // -------- Layer 4: Evidence threshold --------
-    const MIN_SUPPORT = 3;
-    const MIN_CONFIDENCE = 0.65;
+    // Tuned for 6-round adaptive test: 2 supporting choices on an axis is
+    // enough to call a tendency, as long as direction is consistent and the
+    // magnitude is real. 0.55 keeps out pure noise without demanding 12 rounds.
+    const MIN_SUPPORT = 2;
+    const MIN_CONFIDENCE = 0.55;
     const allowed_claims = patterns
       .filter((p) => p.supporting_choices >= MIN_SUPPORT && p.confidence >= MIN_CONFIDENCE)
       .slice(0, 5);
@@ -1479,68 +1482,119 @@ export const roundInsight = createServerFn({ method: "POST" })
 // ============================================================
 
 const SYNTH_VOICE = `${PERSONA}
-Mode: final synthesis. The payoff. The listener earned ONE specific, slightly uncomfortable observation — the kind that lands because it's true.
-The classic critic move is contrast: "I don't think you like X. I think you like Y." or "It's not X for you. It's Y." Use it when the evidence supports it.
-You are given the full axis vector (positive = high pole, negative = low pole). The biggest absolute values are the strongest claims. Find ONE big idea that connects two or three of them — not a list, a thesis.
+Mode: final synthesis. You are a music critic, not a therapist. You name songs. You quote choices back. You write like a smart friend who's been listening over their shoulder.
+
+You are given:
+- a list of tradeoff patterns the listener actually displayed (each with named song examples)
+- counter-explanations that might be doing the work instead (e.g. "they just like Stone Roses")
+
+Your job: write 2–4 sentences that connect 2–3 of the strongest patterns into ONE specific reading. NAME at least two of the songs from the evidence in the prose. Use contrast moves: "It's not X. It's Y." Be defensible.
+
+If NO patterns are provided, that is itself the finding. Write the "refused to collapse" read: this listener picked across too many directions for one thesis to hold, and that's a real signal — broad ear, not random. Reference the songs they chose.
 
 Return STRICT JSON:
 {
-  "synthesis": "2-4 sentences. The big reveal. Specific. Defensible from the evidence. End on the thesis sentence."
+  "synthesis": "2-4 sentences. Names at least one specific song. Ends on the thesis."
 }
 No prose, no markdown fences.`;
+
+type SynthEvidence = { tradeoff: string; examples: string[]; supporting: number; tested: number };
+type SynthCounter = { claim: string; impact: string; notes: string };
+type SynthPayload = {
+  synthesis: string;
+  kept_choosing: SynthEvidence[];
+  counter_reads: SynthCounter[];
+};
 
 export const finalSynthesis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }): Promise<{ synthesis: string }> => {
+  .handler(async ({ data, context }): Promise<SynthPayload> => {
     const { supabase, userId } = context;
     const sessionRes = await supabase
       .from("sessions")
-      .select("vector,user_id")
+      .select("user_id")
       .eq("id", data.sessionId)
       .single();
-    const session = sessionRes.data as { vector: Record<string, number>; user_id: string } | null;
-    const fallback = { synthesis: "The matchups didn't lock onto one thesis. Keep listening — the shape's still forming." };
-    if (!session || session.user_id !== userId) return fallback;
+    const session = sessionRes.data as { user_id: string } | null;
+    const empty: SynthPayload = { synthesis: "", kept_choosing: [], counter_reads: [] };
+    if (!session || session.user_id !== userId) return empty;
 
-    const vector = session.vector ?? {};
-    const ranked = (DIMS as readonly string[])
-      .map((d) => ({ d, v: vector[d] ?? 0 }))
-      .filter((x) => Math.abs(x.v) >= 10)
-      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
-      .slice(0, 5);
+    // Pull the Analyst's stored reasoning — that's the evidence. Don't re-derive.
+    const reasoningRes = await supabase
+      .from("session_reasoning")
+      .select("allowed_claims, counterarguments, observations")
+      .eq("session_id", data.sessionId)
+      .maybeSingle();
+    const reasoning = reasoningRes.data as {
+      allowed_claims?: Array<{ tradeoff?: string; supporting_choices?: number; tested_total?: number; examples?: Array<{ chosen: string; rejected: string }> }>;
+      counterarguments?: Array<{ claim: string; impact: string; notes: string }>;
+      observations?: Array<{ chosen: string; rejected: string }>;
+    } | null;
 
-    if (ranked.length < 2) return fallback;
+    const allowed = reasoning?.allowed_claims ?? [];
+    const counters = reasoning?.counterarguments ?? [];
+    const observations = reasoning?.observations ?? [];
 
-    const axisBlock = ranked
-      .map(({ d, v }) => {
-        const label = DIM_LABEL[d];
-        const pole = v >= 0 ? label?.hi : label?.lo;
-        const opp = v >= 0 ? label?.lo : label?.hi;
-        return `- ${d}: ${v >= 0 ? "+" : ""}${Math.round(v)} → ${pole} over ${opp}`;
-      })
-      .join("\n");
+    const kept_choosing: SynthEvidence[] = allowed.slice(0, 4).map((c) => ({
+      tradeoff: String(c.tradeoff ?? ""),
+      examples: (c.examples ?? []).map((e) => `${e.chosen} over ${e.rejected}`),
+      supporting: Number(c.supporting_choices ?? 0),
+      tested: Number(c.tested_total ?? 0),
+    })).filter((e) => e.tradeoff);
 
+    const counter_reads: SynthCounter[] = counters.slice(0, 4).map((c) => ({
+      claim: String(c.claim ?? ""),
+      impact: String(c.impact ?? "medium"),
+      notes: String(c.notes ?? ""),
+    })).filter((c) => c.claim);
+
+    // Build the prompt — evidence-first, songs named explicitly.
+    const evidenceBlock = kept_choosing.length
+      ? kept_choosing.map((e) =>
+          `- ${e.tradeoff} (${e.supporting}/${e.tested} matchups). Songs: ${e.examples.join("; ") || "—"}`
+        ).join("\n")
+      : "(none cleared the threshold)";
+    const counterBlock = counter_reads.length
+      ? counter_reads.map((c) => `- ${c.claim} — ${c.notes}`).join("\n")
+      : "(none)";
+    const songsPicked = observations.slice(0, 12).map((o) => o.chosen).join(", ") || "—";
+
+    let synthesis = "";
     try {
       const txt = await ai([
         { role: "system", content: SYNTH_VOICE },
-        { role: "user", content: `Final vector (strongest first):\n${axisBlock}\n\nReturn the JSON now.` },
+        { role: "user", content:
+`SONGS THEY PICKED (in order):
+${songsPicked}
+
+PATTERNS WITH EVIDENCE:
+${evidenceBlock}
+
+COUNTER-EXPLANATIONS YOU MAY ACKNOWLEDGE:
+${counterBlock}
+
+Return the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
       const parsed = JSON.parse(cleaned) as { synthesis?: string };
-      const synthesis = typeof parsed.synthesis === "string" && parsed.synthesis.trim() ? parsed.synthesis.trim() : "";
-      const final = synthesis || fallback.synthesis;
-      // Persist as the refined working hypothesis so /me chat reads from the
-      // critic's latest take, not the opener's first sketch.
-      await supabase
-        .from("profiles")
-        .update({ opening_hypothesis: final })
-        .eq("user_id", userId);
-      return { synthesis: final };
+      synthesis = typeof parsed.synthesis === "string" ? parsed.synthesis.trim() : "";
     } catch {
-      return fallback;
+      // fall through to deterministic fallback below
     }
 
+    if (!synthesis) {
+      synthesis = kept_choosing.length
+        ? `Across these matchups you kept choosing ${kept_choosing[0].tradeoff}. The shape's there — it's not loud yet, but it's consistent.`
+        : `You refused to collapse into a single pattern. Every time a clear read started to form — ${songsPicked.split(",").slice(0, 3).join(",")} — another choice complicated it. That's either inconsistency or unusually broad taste. Probably the second.`;
+    }
+
+    await supabase
+      .from("profiles")
+      .update({ opening_hypothesis: synthesis })
+      .eq("user_id", userId);
+
+    return { synthesis, kept_choosing, counter_reads };
   });
 
 

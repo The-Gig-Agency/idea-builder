@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { startSession, nextPairing, recordChoice, finalizeSession, recordEvent, roundInsight, finalSynthesis } from "@/lib/musicdna.functions";
 import { toast } from "sonner";
 
-const MAX_ROUNDS = 12;
+const MAX_ROUNDS = 6;
 
 export const Route = createFileRoute("/_authenticated/play")({
   head: () => ({ meta: [{ title: "Choose one — MusicDNA" }] }),
@@ -54,6 +54,8 @@ function Play() {
   const [reveal, setReveal] = useState<{ verdict: string; why: string; hesitation: string | null } | null>(null);
   const [insight, setInsight] = useState<Insight | null>(null);
   const [synthesis, setSynthesis] = useState<string | null>(null);
+  const [kept, setKept] = useState<Array<{ tradeoff: string; examples: string[]; supporting: number; tested: number }>>([]);
+  const [counters, setCounters] = useState<Array<{ claim: string; notes: string }>>([]);
   const [finishing, setFinishing] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const startedRef = useRef(false);
@@ -122,8 +124,8 @@ function Play() {
       response_time_ms: dwellMs,
     });
     try {
-      // After rounds 3, 6, 9 — try for an insight before the next pairing.
-      if ([3, 6, 9].includes(round)) {
+      // One mid-test insight at round 3 — break up the survey feel.
+      if (round === 3) {
         try {
           const ins = await insightFn({ data: { sessionId, round } });
           if (ins) {
@@ -149,8 +151,14 @@ function Play() {
       await finalize({ data: { sessionId } });
       track({ event_type: "session_completed", session_id: sessionId, props: { rounds: nr } });
       try {
-        const { synthesis } = await synthFn({ data: { sessionId } });
-        setSynthesis(synthesis);
+        const r = await synthFn({ data: { sessionId } }) as {
+          synthesis: string;
+          kept_choosing: Array<{ tradeoff: string; examples: string[]; supporting: number; tested: number }>;
+          counter_reads: Array<{ claim: string; notes: string }>;
+        };
+        setSynthesis(r.synthesis);
+        setKept(r.kept_choosing ?? []);
+        setCounters((r.counter_reads ?? []).map((c) => ({ claim: c.claim, notes: c.notes })));
       } catch { /* fall through */ }
       setDone(true);
       setBusy(false);
@@ -184,22 +192,70 @@ function Play() {
 
   if (done) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-24">
-        <p className="eyebrow mb-8">The payoff</p>
-        <h1 className="display text-3xl md:text-4xl mb-10">Here's what I think.</h1>
-        {synthesis ? (
-          <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground mb-12 border-l-2 border-primary/40 pl-6 italic">
-            {synthesis}
-          </p>
+      <main className="mx-auto max-w-2xl px-6 py-20 space-y-14">
+        <header className="space-y-3">
+          <p className="eyebrow">the read</p>
+          <h1 className="display text-3xl md:text-4xl leading-tight">
+            What you kept choosing.
+          </h1>
+        </header>
+
+        {kept.length > 0 ? (
+          <section className="space-y-5">
+            <p className="eyebrow">evidence</p>
+            <ul className="space-y-4">
+              {kept.map((k, i) => (
+                <li key={i} className="border-l-2 border-primary/40 pl-5 space-y-2">
+                  <p className="font-serif text-xl md:text-2xl leading-snug">
+                    You repeatedly favored <span className="italic">{k.tradeoff}</span>.
+                  </p>
+                  {k.examples.length > 0 && (
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+                      {k.examples.join(" · ")}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : (
-          <p className="text-muted-foreground mb-12">Reading complete.</p>
+          <section className="space-y-3">
+            <p className="eyebrow">the finding</p>
+            <p className="font-serif text-xl md:text-2xl italic text-muted-foreground leading-snug">
+              You refused to collapse into a single pattern. Every time a clear read started to form, another pick complicated it. Broad ear — not random.
+            </p>
+          </section>
         )}
-        <div className="flex flex-col sm:flex-row gap-3">
+
+        {synthesis && (
+          <section className="space-y-3">
+            <p className="eyebrow">what this might mean</p>
+            <p className="font-serif text-2xl md:text-3xl leading-snug border-l-2 border-primary pl-6 italic">
+              {synthesis}
+            </p>
+          </section>
+        )}
+
+        {counters.length > 0 && (
+          <section className="space-y-3">
+            <p className="eyebrow">other possible explanations</p>
+            <ul className="space-y-2">
+              {counters.map((c, i) => (
+                <li key={i} className="text-sm md:text-base text-muted-foreground">
+                  <span className="font-serif italic text-foreground">{c.claim}</span>
+                  {c.notes && <span className="block font-mono text-[11px] uppercase tracking-[0.22em] mt-1">{c.notes}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
           <button
             onClick={() => navigate({ to: "/me" })}
             className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
           >
-            Keep talking to me →
+            Push back on this →
           </button>
           <button
             onClick={() => navigate({ to: "/profile" })}
@@ -208,7 +264,6 @@ function Play() {
             See your full reading
           </button>
         </div>
-
       </main>
     );
   }
