@@ -518,7 +518,6 @@ export type Database = {
           movement: number
           nostalgia: number
           primary_dimensions: string[]
-          primary_lane: string
           romanticism: number
           title: string
           transformation: number
@@ -547,7 +546,6 @@ export type Database = {
           movement?: number
           nostalgia?: number
           primary_dimensions?: string[]
-          primary_lane?: string
           romanticism?: number
           title: string
           transformation?: number
@@ -576,7 +574,6 @@ export type Database = {
           movement?: number
           nostalgia?: number
           primary_dimensions?: string[]
-          primary_lane?: string
           romanticism?: number
           title?: string
           transformation?: number
