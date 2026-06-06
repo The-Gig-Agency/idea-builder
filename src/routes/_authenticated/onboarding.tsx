@@ -30,6 +30,7 @@ const LANE_LABEL: Record<string, string> = {
 
 function Onboarding() {
   const fn = useServerFn(analyzeOpeningSongs);
+  const logEvent = useServerFn(recordEvent);
   const navigate = useNavigate();
   const [picks, setPicks] = useState<Array<Song | null>>([null, null, null, null, null]);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
