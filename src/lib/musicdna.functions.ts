@@ -1106,7 +1106,9 @@ async function nudgeCriticFromFeedback(
     provocation_appetite: p.provocation_appetite,
     move_tally: p.move_tally,
     forbidden_moves: p.forbidden_moves.slice(0, 8),
-    turns_observed: p.turns_observed,
+    // Count an explicit feedback event as one "observed" tick so the voice
+    // modulation gate (turns_observed >= 2) can trip from feedback alone.
+    turns_observed: p.turns_observed + 1,
   }, { onConflict: "user_id" });
 }
 
