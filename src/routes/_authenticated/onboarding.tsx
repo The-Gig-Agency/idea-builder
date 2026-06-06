@@ -331,8 +331,8 @@ function Onboarding() {
             </div>
           )}
 
-          {/* Next */}
-          {pending.stage === "observation" && (
+          {/* Only show a button for the final turn — otherwise it auto-advances */}
+          {pending.stage === "observation" && pending.final && (
             <div className="pt-4 animate-in fade-in duration-500">
               <button
                 onClick={commitAndAdvance}
@@ -343,6 +343,7 @@ function Onboarding() {
               </button>
             </div>
           )}
+
         </section>
       )}
 
