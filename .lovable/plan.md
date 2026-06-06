@@ -1,68 +1,52 @@
-# Conversational onboarding & interleaved insight pacing
+You're right. The ceiling isn't the UI — it's that the model is allowed to *classify*, and classification is boring. The song-3 line ("jagged abrasion of Seattle… high-gloss New Romantic… foundational ska") came out of `REACT_VOICE`, which today only loosely tells the model to "react to the specific songs." It didn't ban music-journalism mode, so the model defaulted to it.
 
-Right now onboarding is a 5-input form → one hypothesis → done. Pairings are a flat sequence. We're going to make the whole arc feel like the original ChatGPT conversation: observation → interpretation → new hypothesis → better question → revelation.
+The fix is to give every prompt one rule set with no escape hatches.
 
-## The new arc
+## The new rule (applies to every onboarding LLM call)
 
-```
-Stage 1 — Conversation (onboarding)
-  Step A: "Name 3 songs you love."        →  AI reacts + forms hypothesis v1
-  Step B: "Now 2 more — go somewhere else." →  AI refines or breaks hypothesis → picks a lane
-Stage 2 — Diagnostic pairings (10–15, not 50)
-  - 3 pairings → micro-insight #1 ("you keep choosing songs that reward patience")
-  - 3 pairings → micro-insight #2 (sometimes a challenge: "let's test that")
-  - 3 pairings → micro-insight #3 (refinement)
-  - final 2–3 pairings
-Stage 3 — Final synthesis
-  The big reveal. One specific, slightly uncomfortable observation.
-  "I don't think you like dark music. I think you like music that starts in darkness and moves toward light."
-```
+The model has only four allowed moves:
 
-## Onboarding — conversational two-step
+1. **Notice** — "That's not where most people start."
+2. **Compare** — "Those last two pull in opposite directions."
+3. **Hypothesize** — "I think you may care more about energy than polish."
+4. **Challenge** — "Let's see if that holds. Tell me I'm wrong."
 
-Replace `src/routes/_authenticated/onboarding.tsx` with a chat-style flow:
+Hard bans (no exceptions, including the "smart" final synthesis):
+- No genres, scenes, decades, cities, eras, movements ("Seattle", "New Romantic", "ska", "Madchester", "post-punk").
+- No artist names, bands, producers, labels, lyrics, instruments, chart history, cultural influence.
+- No song description ("jagged", "high-gloss", "offbeat precision", "architectural blueprint").
+- No critic-prose vocabulary ("oscillate", "definitive cultural snap", "lineage", "ache", "texture", "restless").
+- Every sentence's subject is **the listener**, not the song.
+- Speak with low confidence. Every claim is a hypothesis inviting disproof.
 
-1. **Step A (3 songs)** — single prompt, 3 inputs. Submits to a new server fn `reactToThree`:
-   - returns `{ reaction, hypothesis_v1, suspected_dimensions, lane_guess, confidence }`
-   - reaction is 1–2 sentences, Rolling Stone voice, names something specific ("Two of those start quiet and detonate. I'm watching the third.")
-2. **Step B (2 more songs, "go somewhere else")** — prompts user to push the AI. Submits to `refineWithTwoMore`:
-   - returns final `{ reaction, hypothesis_v2, lane, confidence, secondary_lanes, candidate_dimensions, per_song, canon_matches }`
-   - this is what gets written to `profiles` (same fields as today)
-3. CTA: "Begin the matchups →"
+## Files to change
 
-Visually: each AI reply renders as a card with eyebrow ("Observation" / "Hypothesis" / "Refinement"), serif quote, then the next input slides in below. Feels like a conversation, not a form.
+**`src/lib/musicdna.functions.ts`** — three prompts, same rule set, different tiers of confidence:
 
-## Pairings — interleaved micro-insights
+1. `MICRO_REACT_BASE` (songs 1, 2, 4) — tighten the bans, add an explicit "4 moves only" list, and require either a *notice* or a *hypothesis*, never a description. Strip remaining loopholes ("a tell that…" can still drift; replace examples with cleaner ones).
 
-In `nextPairing` (or a sibling fn), after rounds 3, 6, 9 return an `insight` payload alongside the pairing:
+2. `REACT_VOICE` (song 3 — the offender in the screenshot) — rewrite so `reaction` must be a **notice or comparison across the three songs as choices**, and `hypothesis_v1` must be a **falsifiable claim about the listener**, ending with an invitation to break it. Add the same hard bans. Cap reaction at ~18 words, hypothesis at ~22.
+   - Good shape: "None of these are polished. Even the famous one is rough. That can't be a coincidence." → "I think you choose energy over polish. Throw me something that proves me wrong."
+   - Bad shape (current): "You oscillate between the jagged abrasion of Seattle…"
 
-```
-{ pairing, round, insight?: { kind: "observation"|"challenge"|"refinement", text: string } }
-```
+3. `REFINE_VOICE` (final synthesis) — same bans. The final hypothesis is allowed to be sharper and more committed, but still about the listener and still framed as testable ("Let's see if the matchups hold"). Remove the implicit license to do music criticism in the lock-in.
 
-Insight text is generated server-side from the current vector + recent choices. Examples:
-- observation: "You keep choosing the song that takes longer to arrive."
-- challenge: "Let's test that — this next one's the opposite."
-- refinement: "Not patience exactly. Patience that pays off."
+No UI changes. No schema changes. Same JSON shapes, same lane/confidence/dimension fields — just stricter voice contracts in the system prompts plus tightened examples and word caps.
 
-UI in `play.tsx`: when an insight comes back, render it full-bleed for ~2.5s (or until user taps "continue"), then the pairing.
+## How we'll know it worked
 
-## Final synthesis
+Re-run with the same three songs (Smells Like Teen Spirit / True / Guns of Navarone). Acceptable:
 
-After the last round, instead of straight to `/profile`, route to a `/synthesis` reveal screen (or extend the existing reveal). New server fn `finalSynthesis(sessionId)` returns one paragraph: the big-reveal observation. Voice: "I don't think you like X. I think you like Y." Specific, slightly uncomfortable.
+> "Big songs, but none of them are polite. I'd guess you pick energy over polish — prove me wrong with the next one."
 
-## Files
+Unacceptable (current):
 
-- `src/routes/_authenticated/onboarding.tsx` — rewrite as 2-step conversation
-- `src/lib/musicdna.functions.ts` — add `reactToThree`, `refineWithTwoMore`, `finalSynthesis`; extend `nextPairing` return with optional `insight`
-- `src/routes/_authenticated/play.tsx` — render insight cards between pairings; route to synthesis at the end
-- `src/routes/_authenticated/synthesis.tsx` — new reveal screen
-- migration: add `profiles.opening_step` (text) so we can resume mid-conversation, and `sessions.insights_shown` (jsonb) to avoid duplicates
+> "You oscillate between the jagged abrasion of Seattle, high-gloss New Romantic longing, and the rigid offbeat precision of foundational ska."
 
-## Out of scope (for this pass)
+If the model still names a scene, decade, or production trait, the prompt isn't strict enough and we tighten again.
 
-- No admin/rubric changes
-- No new `diagnostic_families` table yet (separate request)
-- Existing `analyzeOpeningSongs` stays as a back-compat alias
+## Out of scope for this pass
 
-Ready to build this?
+- No changes to the pairings engine, scoring, or the result page.
+- No changes to question copy or the auto-advance pacing.
+- Not moving Q2–Q5 into the database (separate decision still open).
