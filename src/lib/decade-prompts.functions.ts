@@ -31,6 +31,24 @@ export const getActiveDecadePrompt = createServerFn({ method: "GET" })
     return { text: row?.text ?? null };
   });
 
+// Public-readable: return all prompts for a decade, ordered by position.
+// Used by per-decade onboarding pages (e.g. /1980) to drive the full question
+// sequence, not just the opener.
+export const listDecadePromptsPublic = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) =>
+    z.object({ decade: z.enum(DECADES) }).parse(d),
+  )
+  .handler(async ({ data }): Promise<{ rows: Array<{ text: string; position: number; is_active: boolean }> }> => {
+    const { data: rows, error } = await publicSupabase
+      .from("decade_opening_prompts")
+      .select("text,position,is_active")
+      .eq("decade", data.decade)
+      .order("position", { ascending: true });
+    if (error) return { rows: [] };
+    return { rows: (rows ?? []) as Array<{ text: string; position: number; is_active: boolean }> };
+  });
+
+
 // --- Admin operations ---
 
 async function assertAdminAndGetClient(userId: string) {

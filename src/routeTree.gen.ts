@@ -17,6 +17,7 @@ import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedPlayRouteImport } from './routes/_authenticated/play'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as Authenticated1980RouteImport } from './routes/_authenticated/1980'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -57,10 +58,16 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const Authenticated1980Route = Authenticated1980RouteImport.update({
+  id: '/1980',
+  path: '/1980',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/1980': typeof Authenticated1980Route
   '/admin': typeof AuthenticatedAdminRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/play': typeof AuthenticatedPlayRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/1980': typeof Authenticated1980Route
   '/admin': typeof AuthenticatedAdminRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/play': typeof AuthenticatedPlayRoute
@@ -81,6 +89,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/1980': typeof Authenticated1980Route
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/play': typeof AuthenticatedPlayRoute
@@ -92,6 +101,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/1980'
     | '/admin'
     | '/onboarding'
     | '/play'
@@ -101,6 +111,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/1980'
     | '/admin'
     | '/onboarding'
     | '/play'
@@ -111,6 +122,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/1980'
     | '/_authenticated/admin'
     | '/_authenticated/onboarding'
     | '/_authenticated/play'
@@ -183,10 +195,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/1980': {
+      id: '/_authenticated/1980'
+      path: '/1980'
+      fullPath: '/1980'
+      preLoaderRoute: typeof Authenticated1980RouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  Authenticated1980Route: typeof Authenticated1980Route
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedPlayRoute: typeof AuthenticatedPlayRoute
@@ -194,6 +214,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  Authenticated1980Route: Authenticated1980Route,
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedPlayRoute: AuthenticatedPlayRoute,
