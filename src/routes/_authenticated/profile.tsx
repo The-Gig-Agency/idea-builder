@@ -26,6 +26,19 @@ const DIMS = [
   "dreaminess","community",
 ];
 
+type Claim = {
+  dimension: string;
+  preferred?: string;
+  opposed?: string;
+  supporting_choices: number;
+  tested_total: number;
+  confidence: number;
+  examples?: Array<{ chosen: string; rejected: string; delta: number }>;
+  tradeoff: string;
+};
+type Counter = { claim: string; impact: "low" | "medium" | "high"; notes: string };
+type Reasoning = { allowed_claims: Claim[]; blocked_claims: Claim[]; counterarguments: Counter[]; patterns: Claim[] };
+
 function ProfilePage() {
   const fn = useServerFn(getMyResult);
   const { data } = useSuspenseQuery(
@@ -33,7 +46,9 @@ function ProfilePage() {
   );
   const [copied, setCopied] = useState(false);
   const latest = data.sessions[0];
+  const reasoning = data.reasoning as Reasoning | null;
   const vector = (latest?.vector ?? {}) as Record<string, number>;
+
   const max = Math.max(20, ...DIMS.map((d) => Math.abs(vector[d] ?? 0)));
   const chartData = DIMS.map((d) => ({
     dim: d.replace(/_/g, " "),
