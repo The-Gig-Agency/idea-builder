@@ -360,7 +360,7 @@ function ProfilePage() {
 
 
           <div className="border hairline-strong rounded-sm bg-surface p-6 mt-10">
-            <p className="eyebrow mb-4">15-axis radar</p>
+            <p className="eyebrow mb-4">10-axis radar</p>
             <div style={{ width: "100%", height: 460 }}>
               <ResponsiveContainer>
                 <RadarChart data={chartData}>
