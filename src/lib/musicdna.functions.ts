@@ -1111,10 +1111,24 @@ export const reactToThree = createServerFn({ method: "POST" })
     }
   });
 
-// Per-song micro-reaction. One short sentence in the critic voice, used
-// during the conversational onboarding right after the user submits a song.
-const MICRO_REACT_VOICE = `${PERSONA}
-Mode: micro-reaction. The listener just named ONE song. React in ONE sentence, max 14 words. Be specific about THIS song or how it sits next to the ones they already named. Examples: "Interesting — not many people start there." "Now we're somewhere." "Bold. That song fights its own chorus." "Mm. Patient choice." Never analyze, never explain. Never repeat the song title. No emojis. No quotes. No period-stacking.`;
+// Per-song micro-reaction. LADDERED by index — early questions get simple,
+// human, inviting reactions; mid-questions start naming patterns; the heavy
+// music-critic flourishes are saved for the final synthesis (refineWithTwoMore).
+const MICRO_REACT_BASE = `${PERSONA}
+Mode: micro-reaction. The listener just named ONE song. React in ONE sentence. No emojis. No quotes. No JSON. Never repeat the song title literally. Never lecture. Never use jargon like "movement", "atmosphere", "vector", "ska-adjacent".`;
+
+function microReactVoice(index: number): string {
+  if (index <= 1) {
+    return `${MICRO_REACT_BASE}
+Tier: EARLY (song #${index + 1}). Keep it SIMPLE and human — one plain observation a normal person instantly gets. Max 12 words. Examples: "Interesting — that one's more restless than it lets on." "Okay. Harder to pin down than it first sounds." "Mm. Bigger song than people give it credit for." Avoid clever metaphors.`;
+  }
+  if (index === 3) {
+    return `${MICRO_REACT_BASE}
+Tier: MIDDLE (song #4). Start naming a pattern across what they've picked — drawn to X, allergic to Y. Plain English. Max 18 words. Examples: "You keep choosing songs that move even when they're uncomfortable." "There's a thread here — none of these sit still."`;
+  }
+  return `${MICRO_REACT_BASE}
+Tier: MID (song #${index + 1}). A specific, slightly pointed read. Plain English over cleverness. Max 16 words.`;
+}
 
 export const reactToOne = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1132,12 +1146,11 @@ export const reactToOne = createServerFn({ method: "POST" })
         ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
         : "";
       const txt = await ai([
-        { role: "system", content: MICRO_REACT_VOICE },
+        { role: "system", content: microReactVoice(data.index) },
         { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n\nReturn ONLY the one-sentence reaction. No JSON. No quotes.` },
       ]);
       const cleaned = txt.replace(/^["'`\s]+|["'`\s]+$/g, "").split("\n")[0].trim();
       if (!cleaned) return { text: fallbacks[data.index % fallbacks.length] };
-      // hard length cap so it stays micro
       const capped = cleaned.length > 160 ? cleaned.slice(0, 157) + "…" : cleaned;
       return { text: capped };
     } catch {
