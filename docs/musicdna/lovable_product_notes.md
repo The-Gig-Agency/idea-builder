@@ -8,6 +8,8 @@ Do not optimize the MVP around "great songs" or "famous songs." Optimize around 
 
 Use `docs/musicdna/intelligence_layer.md` before generating result copy. The AI must produce evidence, patterns, counterarguments, and confidence before it is allowed to produce prose.
 
+Use `docs/musicdna/lovable_lane_engine_prompt.md` before expanding the app beyond Alternative. The engine and lanes must be separated before adding broad Pop, Hip-Hop, Electronic, and Classic Rock coverage.
+
 ## New Insight
 
 `Breaking Into Heaven` is a diagnostic song.

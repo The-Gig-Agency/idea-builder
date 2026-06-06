@@ -17,6 +17,7 @@ The current strongest candidate dimension expansion is `immersion`: immediacy vs
 - `docs/musicdna/ontology.md`: 15-dimension taste ontology, candidate dimension expansion, and pairing standards.
 - `docs/musicdna/canon_workflow.md`: step-by-step curation process.
 - `docs/musicdna/lovable_product_notes.md`: Lovable-facing notes for diagnostic tradeoff implementation.
+- `docs/musicdna/lovable_lane_engine_prompt.md`: decision-complete Lovable prompt for the multi-lane engine MVP.
 - `docs/musicdna/intelligence_layer.md`: evidence-first AI reasoning framework for Analyst and Critic layers.
 - `tools/musicdna/generate_alternative_canon.cjs`: deterministic seed-canon generator.
 - `tools/musicdna/validate_canon.cjs`: CSV-aware canon validator.
@@ -24,4 +25,4 @@ The current strongest candidate dimension expansion is `immersion`: immediacy vs
 
 ## Next Step
 
-After the diagnostic canon is reviewed, generate candidate pairings and curate down to the first elite matchup graph.
+Next implementation handoff: use `docs/musicdna/lovable_lane_engine_prompt.md` to have Lovable build the multi-lane engine MVP.
