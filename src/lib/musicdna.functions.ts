@@ -58,6 +58,7 @@ type Lane = (typeof LANES)[number];
 function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
   if (!sub) return null;
   const s = sub.toLowerCase();
+  if ((LANES as readonly string[]).includes(s)) return s as Lane;
   if (
     s.includes("post_punk") || s.includes("post-punk") ||
     s.includes("shoegaze") || s.includes("dreampop") || s.includes("britpop") ||
@@ -90,7 +91,7 @@ type OpeningAnalysis = {
 
 async function classifyLane(
   songs: string[],
-  supabase: { from: (t: string) => { select: (c: string) => { ilike: (col: string, v: string) => { limit: (n: number) => Promise<{ data: Array<{ lane: string; title: string; artist: string }> | null }> } } } },
+  supabase: { from: (t: string) => { select: (c: string) => { ilike: (col: string, v: string) => { limit: (n: number) => Promise<{ data: Array<{ primary_lane?: string | null; lane: string; title: string; artist: string }> | null }> } } } },
 ): Promise<OpeningAnalysis> {
   const perSong: OpeningAnalysis["per_song"] = [];
   const votes: Record<string, number> = {};
@@ -102,12 +103,12 @@ async function classifyLane(
     let matchedLane: Lane | null = null;
     if (title) {
       try {
-        const { data } = await supabase.from("songs").select("lane,title,artist").ilike("title", title).limit(5);
+        const { data } = await supabase.from("songs").select("primary_lane,lane,title,artist").ilike("title", title).limit(5);
         if (data && data.length) {
           const best = artistPart
             ? data.find((r) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? data[0]
             : data[0];
-          matchedLane = catalogLaneToTopLane(best.lane);
+          matchedLane = catalogLaneToTopLane(best.primary_lane ?? best.lane);
         }
       } catch { /* ignore catalog miss */ }
     }
@@ -230,8 +231,8 @@ export const nextPairing = createServerFn({ method: "POST" })
 
     const pairingSelect = `
       id, tests, hypothesis, why_good, diagnostic_weight, lane,
-      song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,lane),
-      song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,lane)
+      song_a:songs!pairings_song_a_id_fkey(id,title,artist,year,primary_lane,lane),
+      song_b:songs!pairings_song_b_id_fkey(id,title,artist,year,primary_lane,lane)
     `;
 
     // Primary fetch: lane-scoped (or all active when lane is 'general').
@@ -873,4 +874,3 @@ export const getMyFeedback = createServerFn({ method: "POST" })
       .eq("session_id", data.session_id);
     return { feedback: rows ?? [] };
   });
-

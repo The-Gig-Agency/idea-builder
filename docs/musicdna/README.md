@@ -12,6 +12,16 @@ The app is not learning songs. It is learning tradeoffs.
 
 The current strongest candidate dimension expansion is `immersion`: immediacy vs slow reveal. Example: choosing `Breaking Into Heaven` over `She Bangs the Drums` may reveal immersion over immediacy, journey over anthem, and atmosphere over hook.
 
+## Lane Contract
+
+MusicDNA separates routing lanes from diagnostic sub-lanes:
+
+- `songs.primary_lane` is the top-level route: `alternative`, `pop`, `hip_hop`, `electronic`, `classic_rock`, or `general`.
+- `songs.lane` is the granular catalog lane, such as `post_punk_new_wave`, `goth_darkwave`, `shoegaze_dreampop`, or `manchester_indie_dance`.
+- `pairings.lane` matches the top-level route and should be validated against both songs' `primary_lane`.
+
+This means `Ceremony` can remain `post_punk_new_wave`, `A Forest` can remain `goth_darkwave`, and their pairings can still correctly route through `alternative`.
+
 ## Current Structure
 
 - `docs/musicdna/ontology.md`: 15-dimension taste ontology, candidate dimension expansion, and pairing standards.

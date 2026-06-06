@@ -114,6 +114,46 @@ on public.sessions (user_id, lane, started_at desc);
 
 Do not remove existing song `lane`; song lane and pairing lane may be the same now, but pairing lane is the routing contract.
 
+### Song Lane Contract
+
+Songs need two lane fields:
+
+```sql
+lane text not null;
+primary_lane text not null default 'alternative';
+```
+
+- `songs.lane` is the granular diagnostic catalog lane or sub-lane, such as `post_punk_new_wave`, `goth_darkwave`, `shoegaze_dreampop`, or `manchester_indie_dance`.
+- `songs.primary_lane` is the top-level MusicDNA routing lane: `alternative`, `pop`, `hip_hop`, `electronic`, `classic_rock`, or `general`.
+- `pairings.lane` must match both songs' `primary_lane`, not necessarily their granular `lane`.
+
+For example, an Alternative pairing can have:
+
+```json
+{
+  "pairing_lane": "alternative",
+  "song_a_lane": "post_punk_new_wave",
+  "song_a_primary_lane": "alternative",
+  "song_b_lane": "goth_darkwave",
+  "song_b_primary_lane": "alternative"
+}
+```
+
+This is valid. Do not split the Alternative pairing universe into seven sub-lanes for MVP routing.
+
+Use this validation shape:
+
+```sql
+select p.id
+from public.pairings p
+join public.songs sa on sa.id = p.song_a_id
+join public.songs sb on sb.id = p.song_b_id
+where p.lane <> sa.primary_lane
+   or p.lane <> sb.primary_lane;
+```
+
+Do not validate `pairings.lane = songs.lane`; that will falsely reject useful cross-sub-lane diagnostic pairings.
+
 ## Server Function Changes
 
 ### Replace/Extend Opening Hypothesis
@@ -143,6 +183,7 @@ Output:
 Implementation rules:
 
 - Use deterministic catalog/lane matching first.
+- When a catalog match exists, prefer `songs.primary_lane` for routing; fall back to mapping `songs.lane` to a top-level lane.
 - Use LLM only to polish the hypothesis and resolve ambiguous cases.
 - Clamp confidence to `0 <= confidence <= 1`.
 - If confidence is below `0.6`, use lane `general`.
