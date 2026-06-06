@@ -145,45 +145,96 @@ function ProfilePage() {
             </section>
           ) : null}
 
-          {reasoning?.allowed_claims?.length ? (
-            <section className="mt-12 mb-12">
-              <p className="eyebrow mb-5">The evidence</p>
-              <ul className="divide-y divide-border border hairline-strong rounded-sm bg-surface">
-                {reasoning?.allowed_claims.map((c, i) => (
-                  <li key={i} className="px-5 py-4">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <p className="font-serif text-lg leading-snug">
-                        <span className="text-foreground">{c.preferred}</span>
-                        <span className="text-muted-foreground"> over </span>
-                        <span className="text-muted-foreground">{c.opposed}</span>
-                      </p>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
-                        {c.supporting_choices}/{c.tested_total} · conf {c.confidence.toFixed(2)}
-                      </span>
-                    </div>
-                    {c.examples?.length ? (
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        e.g. {c.examples.map((e) => `${e.chosen} over ${e.rejected}`).join(" · ")}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          {(() => {
+            const impactRank = { high: 3, medium: 2, low: 1 } as const;
+            const counters = [...(reasoning?.counterarguments ?? [])].sort(
+              (a, b) => (impactRank[b.impact] ?? 0) - (impactRank[a.impact] ?? 0),
+            );
+            const topCounter = counters[0];
+            const restCounters = counters.slice(1);
+            const claims = [...(reasoning?.allowed_claims ?? [])].sort(
+              (a, b) => b.confidence - a.confidence,
+            );
 
-          {reasoning?.counterarguments?.length ? (
-            <section className="mt-8 mb-12">
-              <p className="eyebrow mb-3">What this reading could also be</p>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {reasoning?.counterarguments.map((c, i) => (
-                  <li key={i} className="border-l-2 border-border pl-4">
-                    <span className="text-foreground">{c.claim}</span> <span className="opacity-70">— {c.notes}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+            return (
+              <>
+                {topCounter ? (
+                  <section className="mt-10 mb-10">
+                    <p className="eyebrow mb-3">Strongest counter-read</p>
+                    <div className="border-l-2 border-primary bg-surface px-5 py-4">
+                      <div className="flex items-baseline justify-between gap-4 mb-1.5">
+                        <p className="font-serif text-xl leading-snug text-foreground">{topCounter.claim}</p>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary shrink-0">
+                          {topCounter.impact} impact
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{topCounter.notes}</p>
+                    </div>
+                  </section>
+                ) : null}
+
+                {claims.length ? (
+                  <section className="mt-12 mb-12">
+                    <p className="eyebrow mb-5">The receipts</p>
+                    <ul className="divide-y divide-border border hairline-strong rounded-sm bg-surface">
+                      {claims.map((c, i) => {
+                        const ratio = c.tested_total > 0 ? c.supporting_choices / c.tested_total : 0;
+                        return (
+                          <li key={i} className="px-5 py-5">
+                            <div className="flex items-baseline justify-between gap-4 mb-2">
+                              <p className="font-serif text-lg leading-snug">
+                                <span className="text-foreground">{c.preferred}</span>
+                                <span className="text-muted-foreground"> over </span>
+                                <span className="text-muted-foreground">{c.opposed}</span>
+                              </p>
+                              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground shrink-0">
+                                {c.supporting_choices}/{c.tested_total} picks · {Math.round(c.confidence * 100)}% conf
+                              </span>
+                            </div>
+                            <div className="h-1 w-full bg-border/60 rounded-sm overflow-hidden mb-2">
+                              <div
+                                className="h-full bg-primary"
+                                style={{ width: `${Math.round(ratio * 100)}%` }}
+                              />
+                            </div>
+                            {c.examples?.length ? (
+                              <ul className="mt-2 space-y-1">
+                                {c.examples.slice(0, 3).map((e, j) => (
+                                  <li key={j} className="text-xs text-muted-foreground">
+                                    <span className="font-mono text-[10px] uppercase tracking-[0.22em] mr-2 opacity-60">→</span>
+                                    <span className="text-foreground">{e.chosen}</span>
+                                    <span> over </span>
+                                    <span className="line-through decoration-1">{e.rejected}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ) : null}
+
+                {restCounters.length ? (
+                  <section className="mt-8 mb-12">
+                    <p className="eyebrow mb-3">Other ways to read this</p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      {restCounters.map((c, i) => (
+                        <li key={i} className="border-l-2 border-border pl-4">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.22em] mr-2 opacity-60">
+                            {c.impact}
+                          </span>
+                          <span className="text-foreground">{c.claim}</span>{" "}
+                          <span className="opacity-70">— {c.notes}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+              </>
+            );
+          })()}
 
 
           <div className="border hairline-strong rounded-sm bg-surface p-6 mt-10">
