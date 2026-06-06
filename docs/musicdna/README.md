@@ -25,6 +25,7 @@ This means `Ceremony` can remain `post_punk_new_wave`, `A Forest` can remain `go
 ## Current Structure
 
 - `docs/musicdna/ontology.md`: 15-dimension taste ontology, candidate dimension expansion, and pairing standards.
+- `docs/musicdna/project_learnings_v1.md`: living synthesis of the project thesis, major discoveries, and MVP assumptions.
 - `docs/musicdna/canon_workflow.md`: step-by-step curation process.
 - `docs/musicdna/lovable_product_notes.md`: Lovable-facing notes for diagnostic tradeoff implementation.
 - `docs/musicdna/lovable_lane_engine_prompt.md`: decision-complete Lovable prompt for the multi-lane engine MVP.
