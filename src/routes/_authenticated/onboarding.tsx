@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { reactToOne, reactToThree, refineWithTwoMore, recordEvent } from "@/lib/musicdna.functions";
+import { getActiveDecadePrompt } from "@/lib/decade-prompts.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
