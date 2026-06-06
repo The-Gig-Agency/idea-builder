@@ -1044,3 +1044,340 @@ export const getMyFeedback = createServerFn({ method: "POST" })
       .eq("session_id", data.session_id);
     return { feedback: rows ?? [] };
   });
+
+
+// ============================================================
+// CONVERSATIONAL ONBOARDING — react / refine / insight / synthesis
+// Two-step taste read: 3 songs → reaction + hypothesis_v1
+// then 2 more songs → refinement, lane lock, write to profile.
+// ============================================================
+
+const REACT_VOICE = `You are MusicDNA's writer reading three songs a listener just named as ones they love.
+You are an old-Rolling-Stone music critic: punchy, opinionated, slightly uncomfortable. No platitudes. No genre labels.
+Never use "you like" — use "you reward", "you trust", "you keep choosing".
+Output STRICT JSON with this shape:
+{
+  "reaction": "ONE sentence, max 24 words. React to the SPECIFIC songs. Name something you notice across them — not a label, an observation. Examples: 'Two of those start quiet and detonate.' 'These don't sit still.' 'You picked three songs that don't stop moving.'",
+  "hypothesis_v1": "ONE sentence, max 28 words. Your working theory about what these three reward. Be specific. End with something like 'Let's see if that holds.' or 'I'd like to push on that.'",
+  "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "confidence": 0.0-1.0,
+  "suspected_dimensions": ["movement","atmosphere","groove","darkness","hope","nostalgia","transformation","complexity","melody","verbal_cleverness","authenticity","romanticism","energy","dreaminess","community"]  // 2-4 axes that seem to matter, in priority order
+}
+No prose, no markdown fences.`;
+
+type ReactToThreeResult = {
+  reaction: string;
+  hypothesis_v1: string;
+  lane_guess: Lane;
+  confidence: number;
+  suspected_dimensions: string[];
+};
+
+export const reactToThree = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ songs: z.array(z.string().trim().min(1).max(200)).length(3) }).parse(d),
+  )
+  .handler(async ({ data }): Promise<ReactToThreeResult> => {
+    const fallback: ReactToThreeResult = {
+      reaction: "Three songs is barely a sketch — but a sketch already says something.",
+      hypothesis_v1: "I'm not going to guess from three. Throw me two more and I'll commit.",
+      lane_guess: "general",
+      confidence: 0,
+      suspected_dimensions: [],
+    };
+    try {
+      const txt = await ai([
+        { role: "system", content: REACT_VOICE },
+        { role: "user", content: `Three songs they love:\n${data.songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
+      ]);
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      const p = JSON.parse(cleaned) as Partial<ReactToThreeResult>;
+      const lane = (LANES as readonly string[]).includes(p.lane_guess as string) ? (p.lane_guess as Lane) : "general";
+      return {
+        reaction: typeof p.reaction === "string" && p.reaction.trim() ? p.reaction.trim() : fallback.reaction,
+        hypothesis_v1: typeof p.hypothesis_v1 === "string" && p.hypothesis_v1.trim() ? p.hypothesis_v1.trim() : fallback.hypothesis_v1,
+        lane_guess: lane,
+        confidence: Math.max(0, Math.min(1, Number(p.confidence ?? 0))),
+        suspected_dimensions: Array.isArray(p.suspected_dimensions)
+          ? p.suspected_dimensions.filter((s): s is string => typeof s === "string" && (DIMS as readonly string[]).includes(s)).slice(0, 4)
+          : [],
+      };
+    } catch {
+      return fallback;
+    }
+  });
+
+// Step B: 5 songs total + the prior hypothesis. The AI either confirms,
+// refines, or breaks its own guess. Writes to profile. This is the lock-in.
+const REFINE_VOICE = `You are MusicDNA's writer. The listener gave you three songs, you formed a working hypothesis, and they just threw two more at you — often deliberately different. Your job: be honest about whether the new pair confirms, refines, or breaks your guess. Then commit.
+
+Voice: old Rolling Stone, punchy, slightly uncomfortable, never flattering. Never "you like" — use "you reward", "you trust", "you keep choosing".
+
+Return STRICT JSON:
+{
+  "reaction": "ONE sentence, max 24 words. React to the new two and how they sit with the first three. Honest. Examples: 'That second one breaks my read.' 'Those two confirm what I suspected.' 'You went somewhere darker — interesting.'",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "confidence": 0.0-1.0,
+  "secondary_lanes": [lane, ...],
+  "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "groove": -100..100, "darkness": -100..100, "hope": -100..100, "nostalgia": -100..100, "transformation": -100..100, "complexity": -100..100, "melody": -100..100, "verbal_cleverness": -100..100, "authenticity": -100..100, "romanticism": -100..100, "energy": -100..100, "dreaminess": -100..100, "community": -100..100 },
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
+  "reasoning": ["one short observation", "..."],
+  "hypothesis": "ONE sentence, max 30 words. Your refined hypothesis after seeing all five. Name what these choices reward — specific axes. End with 'Let's see if the matchups hold.' or similar half-promise."
+}
+No prose, no markdown fences.`;
+
+export const refineWithTwoMore = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      firstThree: z.array(z.string().trim().min(1).max(200)).length(3),
+      twoMore: z.array(z.string().trim().min(1).max(200)).length(2),
+      hypothesis_v1: z.string().max(500).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const allFive = [...data.firstThree, ...data.twoMore];
+    let llm: OpeningAnalysis & { reaction: string } = {
+      ...FALLBACK,
+      reaction: "Couldn't quite read those — but the matchups don't need me to.",
+      per_song: allFive.map((s) => ({ input: s, lane: "unknown", source: "llm" })),
+    };
+    try {
+      const txt = await ai([
+        { role: "system", content: REFINE_VOICE },
+        { role: "user", content: `Working hypothesis after the first three:\n"${data.hypothesis_v1 ?? "(none)"}"\n\nThe first three:\n${data.firstThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nThe new two:\n${data.twoMore.map((s, i) => `${i + 4}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
+      ]);
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & { reaction: string }>;
+      const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
+      const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+      const secondary = Array.isArray(parsed.secondary_lanes)
+        ? parsed.secondary_lanes.filter((l): l is Lane => (LANES as readonly string[]).includes(l as string) && l !== lane && l !== "general")
+        : [];
+      const dims: LlmDimensions = {};
+      if (parsed.candidate_dimensions && typeof parsed.candidate_dimensions === "object") {
+        for (const d of DIMS) {
+          const v = (parsed.candidate_dimensions as Record<string, unknown>)[d];
+          if (typeof v === "number" && Number.isFinite(v)) dims[d] = Math.max(-100, Math.min(100, Math.round(v)));
+        }
+      }
+      const perSong = allFive.map((input) => {
+        const match = Array.isArray(parsed.per_song) ? parsed.per_song.find((p) => p?.input === input) : null;
+        const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
+        return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
+      });
+      llm = {
+        lane: confidence < 0.4 ? "general" : lane,
+        confidence,
+        secondary_lanes: secondary,
+        reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
+        hypothesis: typeof parsed.hypothesis === "string" && parsed.hypothesis.trim() ? parsed.hypothesis.trim() : FALLBACK.hypothesis,
+        candidate_dimensions: dims,
+        per_song: perSong,
+        canon_matches: [],
+        reaction: typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Locked in.",
+      };
+    } catch { /* keep fallback */ }
+
+    // Hidden canon enrichment — same shape as analyzeOpeningSongs.
+    for (let i = 0; i < allFive.length; i++) {
+      const raw = allFive[i];
+      const [titlePart, artistPart] = raw.split(/—|–|-/).map((s) => s.trim());
+      const title = titlePart || raw;
+      if (!title) continue;
+      try {
+        const { data: rows } = await supabase
+          .from("songs")
+          .select("id,primary_lane,lane,title,artist")
+          .ilike("title", title)
+          .limit(5);
+        if (!rows?.length) continue;
+        const best = artistPart
+          ? rows.find((r: { artist?: string | null }) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? rows[0]
+          : rows[0];
+        const topLane = catalogLaneToTopLane(best.primary_lane ?? best.lane);
+        llm.canon_matches.push({
+          input: raw,
+          song_id: best.id,
+          title: best.title,
+          artist: best.artist,
+          primary_lane: best.primary_lane ?? best.lane,
+        });
+        if (llm.per_song[i]) {
+          llm.per_song[i] = { ...llm.per_song[i], source: "catalog", canon_id: best.id, lane: topLane ?? llm.per_song[i].lane };
+        }
+      } catch { /* swallow */ }
+    }
+
+    await supabase
+      .from("profiles")
+      .update({
+        opening_songs: allFive,
+        opening_hypothesis: llm.hypothesis,
+        opening_lane: llm.lane,
+        opening_lane_confidence: llm.confidence,
+        opening_analysis_json: JSON.parse(JSON.stringify(llm)),
+      })
+      .eq("user_id", userId);
+
+    return llm;
+  });
+
+
+// ============================================================
+// Round insights — interleaved observations during pairings.
+// Called by the client after rounds 3, 6, 9. Reads current vector
+// + recent choices and returns a short Rolling Stone–voice line.
+// ============================================================
+
+const INSIGHT_KINDS = ["observation", "challenge", "refinement"] as const;
+type InsightKind = (typeof INSIGHT_KINDS)[number];
+
+const INSIGHT_VOICE = `You are MusicDNA's writer dropping a short observation between matchups. Voice: old Rolling Stone, punchy, slightly uncomfortable. Never "you like" — use "you keep choosing", "you reward", "you trust". One observation per sentence. Never flatter.
+
+You are given the listener's running axis vector (positive = high pole, negative = low pole) and their most recent choices. Pick the SHARPEST thing you can defend from this evidence. If a clear pattern is there, NAME it. If not, challenge or refine.
+
+Return STRICT JSON:
+{
+  "kind": "observation" | "challenge" | "refinement",
+  "text": "ONE or TWO sentences, max 32 words total. Specific. Defendable from the evidence. Examples: 'You keep choosing the song that takes longer to arrive.' 'Not patience exactly. Patience that pays off.' 'Let's test that — this next one's the opposite.'"
+}
+No prose, no markdown fences.`;
+
+export const roundInsight = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ sessionId: z.string().uuid(), round: z.number().int().min(1).max(50) }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<{ kind: InsightKind; text: string } | null> => {
+    // Only fire after rounds 3, 6, 9.
+    if (![3, 6, 9].includes(data.round)) return null;
+    const { supabase, userId } = context;
+    const sessionRes = await supabase
+      .from("sessions")
+      .select("vector,user_id")
+      .eq("id", data.sessionId)
+      .single();
+    const session = sessionRes.data as { vector: Record<string, number>; user_id: string } | null;
+    if (!session || session.user_id !== userId) return null;
+
+    const vector = session.vector ?? {};
+    // Top 3 strongest axes so far.
+    const ranked = (DIMS as readonly string[])
+      .map((d) => ({ d, v: vector[d] ?? 0 }))
+      .filter((x) => Math.abs(x.v) >= 8)
+      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
+      .slice(0, 3);
+
+    if (!ranked.length) {
+      return {
+        kind: data.round === 6 ? "challenge" : "observation",
+        text: "Nothing's locked in yet. Keep choosing — the pattern will out itself.",
+      };
+    }
+
+    // Pull the last 4 choices for grounding.
+    const choicesRes = await supabase
+      .from("choices")
+      .select("ms_to_decide,chosen:chosen_song_id(title,artist),rejected:rejected_song_id(title,artist)")
+      .eq("session_id", data.sessionId)
+      .order("created_at", { ascending: false })
+      .limit(4);
+    type Row = { ms_to_decide: number | null; chosen: { title: string; artist: string } | null; rejected: { title: string; artist: string } | null };
+    const recent = ((choicesRes.data ?? []) as unknown as Row[])
+      .filter((r) => r.chosen && r.rejected)
+      .map((r) => `${r.chosen!.title} > ${r.rejected!.title}${r.ms_to_decide != null ? ` (${r.ms_to_decide}ms)` : ""}`);
+
+    const axisBlock = ranked
+      .map(({ d, v }) => {
+        const label = DIM_LABEL[d];
+        const pole = v >= 0 ? label?.hi : label?.lo;
+        return `- ${d}: ${v >= 0 ? "+" : ""}${Math.round(v)} (${pole})`;
+      })
+      .join("\n");
+
+    const kindHint = data.round === 3 ? "observation" : data.round === 6 ? "challenge" : "refinement";
+    const prompt = `Round ${data.round}. Vector so far:\n${axisBlock}\n\nRecent picks:\n${recent.join("\n") || "(none)"}\n\nPreferred kind for this round: ${kindHint}. But override if the evidence demands the other.\n\nReturn the JSON now.`;
+
+    try {
+      const txt = await ai([
+        { role: "system", content: INSIGHT_VOICE },
+        { role: "user", content: prompt },
+      ]);
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { kind?: string; text?: string };
+      const kind = (INSIGHT_KINDS as readonly string[]).includes(parsed.kind ?? "") ? (parsed.kind as InsightKind) : (kindHint as InsightKind);
+      const text = typeof parsed.text === "string" && parsed.text.trim() ? parsed.text.trim() : "";
+      if (!text) return null;
+      return { kind, text };
+    } catch {
+      return null;
+    }
+  });
+
+
+// ============================================================
+// Final synthesis — the big reveal after the last pairing.
+// One specific, slightly uncomfortable observation built from
+// the full session vector.
+// ============================================================
+
+const SYNTH_VOICE = `You are MusicDNA's writer delivering the final synthesis after a full listening session. This is the payoff. The listener has earned ONE specific, slightly uncomfortable observation — the kind that lands because it's true.
+
+Voice: old Rolling Stone. Punchy. Never flatter. Never "you like". The classic move is contrast: "I don't think you like X. I think you like Y." or "It's not X for you. It's Y." Use it when the evidence supports it.
+
+You are given the full axis vector (positive = high pole, negative = low pole). The biggest absolute values are the strongest claims. Find ONE big idea that connects two or three of them — not a list, a thesis.
+
+Return STRICT JSON:
+{
+  "synthesis": "2-4 sentences. The big reveal. Specific. Defensible from the evidence. End on the thesis sentence."
+}
+No prose, no markdown fences.`;
+
+export const finalSynthesis = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }): Promise<{ synthesis: string }> => {
+    const { supabase, userId } = context;
+    const sessionRes = await supabase
+      .from("sessions")
+      .select("vector,user_id")
+      .eq("id", data.sessionId)
+      .single();
+    const session = sessionRes.data as { vector: Record<string, number>; user_id: string } | null;
+    const fallback = { synthesis: "The matchups didn't lock onto one thesis. Keep listening — the shape's still forming." };
+    if (!session || session.user_id !== userId) return fallback;
+
+    const vector = session.vector ?? {};
+    const ranked = (DIMS as readonly string[])
+      .map((d) => ({ d, v: vector[d] ?? 0 }))
+      .filter((x) => Math.abs(x.v) >= 10)
+      .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
+      .slice(0, 5);
+
+    if (ranked.length < 2) return fallback;
+
+    const axisBlock = ranked
+      .map(({ d, v }) => {
+        const label = DIM_LABEL[d];
+        const pole = v >= 0 ? label?.hi : label?.lo;
+        const opp = v >= 0 ? label?.lo : label?.hi;
+        return `- ${d}: ${v >= 0 ? "+" : ""}${Math.round(v)} → ${pole} over ${opp}`;
+      })
+      .join("\n");
+
+    try {
+      const txt = await ai([
+        { role: "system", content: SYNTH_VOICE },
+        { role: "user", content: `Final vector (strongest first):\n${axisBlock}\n\nReturn the JSON now.` },
+      ]);
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      const parsed = JSON.parse(cleaned) as { synthesis?: string };
+      const synthesis = typeof parsed.synthesis === "string" && parsed.synthesis.trim() ? parsed.synthesis.trim() : "";
+      return { synthesis: synthesis || fallback.synthesis };
+    } catch {
+      return fallback;
+    }
+  });
