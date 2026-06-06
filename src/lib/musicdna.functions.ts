@@ -841,13 +841,15 @@ export const submitFeedback = createServerFn({ method: "POST" })
       target: data.target ?? null,
     };
     // One feedback row per (user, session, target)
-    const { data: existing } = await supabase
+    const q = supabase
       .from("result_feedback")
       .select("id")
       .eq("user_id", userId)
-      .eq("session_id", data.session_id)
-      .is("target", data.target ?? null)
-      .maybeSingle();
+      .eq("session_id", data.session_id);
+    const { data: existing } = await (data.target
+      ? q.eq("target", data.target)
+      : q.is("target", null)
+    ).maybeSingle();
     if (existing?.id) {
       const { error } = await supabase.from("result_feedback").update(row).eq("id", existing.id);
       if (error) throw new Error(error.message);
