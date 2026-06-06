@@ -145,11 +145,11 @@ function ProfilePage() {
             </section>
           ) : null}
 
-          {data.reasoning?.allowed_claims?.length ? (
+          {reasoning?.allowed_claims?.length ? (
             <section className="mt-12 mb-12">
               <p className="eyebrow mb-5">The evidence</p>
               <ul className="divide-y divide-border border hairline-strong rounded-sm bg-surface">
-                {data.reasoning.allowed_claims.map((c, i) => (
+                {reasoning?.allowed_claims.map((c, i) => (
                   <li key={i} className="px-5 py-4">
                     <div className="flex items-baseline justify-between gap-4">
                       <p className="font-serif text-lg leading-snug">
@@ -172,11 +172,11 @@ function ProfilePage() {
             </section>
           ) : null}
 
-          {data.reasoning?.counterarguments?.length ? (
+          {reasoning?.counterarguments?.length ? (
             <section className="mt-8 mb-12">
               <p className="eyebrow mb-3">What this reading could also be</p>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                {data.reasoning.counterarguments.map((c, i) => (
+                {reasoning?.counterarguments.map((c, i) => (
                   <li key={i} className="border-l-2 border-border pl-4">
                     <span className="text-foreground">{c.claim}</span> <span className="opacity-70">— {c.notes}</span>
                   </li>
