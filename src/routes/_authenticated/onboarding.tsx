@@ -202,6 +202,39 @@ function Onboarding() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 pt-16 pb-24 min-h-screen flex flex-col">
+      {/* CONVERSATION LOG — oldest first, fading as it ages */}
+      {history.length > 0 && !done && (
+        <section className="space-y-10 mb-12">
+          {history.map((h, i) => {
+            const age = history.length - 1 - i;
+            const opacity = Math.max(0.35, 1 - age * 0.18);
+            return (
+              <article
+                key={i}
+                style={{ opacity }}
+                className="space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-500"
+              >
+                <p className="eyebrow text-muted-foreground">
+                  {String(i + 1).padStart(2, "0")} · {h.prompt}
+                </p>
+                <p className="font-mono text-base md:text-lg text-foreground">✓ {h.song}</p>
+                {h.reaction && (
+                  <p className="font-serif text-xl md:text-2xl leading-snug italic text-primary/90">
+                    {h.reaction}
+                  </p>
+                )}
+                {h.hypothesis && (
+                  <div className="mt-3 border-l-2 border-primary/60 pl-4 py-1">
+                    <p className="eyebrow mb-1">working hypothesis</p>
+                    <p className="font-serif text-lg italic">"{h.hypothesis}"</p>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      )}
+
       {/* ACTIVE QUESTION */}
       {activePrompt && (
         <section className="space-y-6 animate-in fade-in duration-700">
@@ -331,39 +364,6 @@ function Onboarding() {
               Let's test that →
             </button>
           </div>
-        </section>
-      )}
-
-      {/* CONVERSATION LOG — newest first, fading as it ages */}
-      {history.length > 0 && !done && (
-        <section className="mt-16 pt-10 border-t hairline space-y-10">
-          {[...history].reverse().map((h, revIdx) => {
-            const age = revIdx;
-            const opacity = Math.max(0.35, 1 - age * 0.18);
-            return (
-              <article
-                key={history.length - 1 - revIdx}
-                style={{ opacity }}
-                className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-500"
-              >
-                <p className="eyebrow text-muted-foreground">
-                  {String(history.length - revIdx).padStart(2, "0")} · {h.prompt}
-                </p>
-                <p className="font-mono text-base md:text-lg text-foreground">✓ {h.song}</p>
-                {h.reaction && (
-                  <p className="font-serif text-xl md:text-2xl leading-snug italic text-primary/90">
-                    {h.reaction}
-                  </p>
-                )}
-                {h.hypothesis && (
-                  <div className="mt-3 border-l-2 border-primary/60 pl-4 py-1">
-                    <p className="eyebrow mb-1">working hypothesis</p>
-                    <p className="font-serif text-lg italic">"{h.hypothesis}"</p>
-                  </div>
-                )}
-              </article>
-            );
-          })}
         </section>
       )}
     </main>
