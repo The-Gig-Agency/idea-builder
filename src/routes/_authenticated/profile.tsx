@@ -20,10 +20,10 @@ export const Route = createFileRoute("/_authenticated/profile")({
   ),
 });
 
+// Canonical 10-axis taxonomy. Matches DIMS in src/lib/musicdna.functions.ts.
 const DIMS = [
-  "movement","atmosphere","groove","darkness","hope","nostalgia","transformation",
-  "complexity","melody","verbal_cleverness","authenticity","romanticism","energy",
-  "dreaminess","community",
+  "movement","atmosphere","immersion","scale","community",
+  "perspective","confidence","tension","texture","transformation",
 ];
 
 type Claim = {
