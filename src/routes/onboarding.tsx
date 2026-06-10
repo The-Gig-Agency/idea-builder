@@ -207,10 +207,11 @@ function Onboarding() {
         // Short reaction, then reveal next slot.
         const r = (await reactOneFn({
           data: { song: text, index: rank - 1, priorSongs: songs },
-        } as never)) as { text: string };
+        } as never)) as { text: string; nextLabel: string | null };
         setSongs(nextSongs);
         setDraft("");
         setReactions((prev) => [...prev, r.text]);
+        setNextLabels((prev) => [...prev, r.nextLabel ?? null]);
         setPhase(rank === 1 ? "slot2" : "slot3");
         track({ event_type: "onboarding_slot_submitted", props: { rank } });
       } else {
