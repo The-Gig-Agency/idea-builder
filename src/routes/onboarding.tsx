@@ -98,6 +98,7 @@ function Onboarding() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [reactions, setReactions] = useState<string[]>([]); // per-slot reaction text
+  const [nextLabels, setNextLabels] = useState<(string | null)[]>([]); // personalized labels for slot 2 / slot 3
   const [refined, setRefined] = useState<Refined | null>(null);
   const [r5Step, setR5Step] = useState<0 | 1 | 2>(0);
   const [opener, setOpener] = useState<OnboardingOpener | null>(null);
@@ -206,10 +207,11 @@ function Onboarding() {
         // Short reaction, then reveal next slot.
         const r = (await reactOneFn({
           data: { song: text, index: rank - 1, priorSongs: songs },
-        } as never)) as { text: string };
+        } as never)) as { text: string; nextLabel: string | null };
         setSongs(nextSongs);
         setDraft("");
         setReactions((prev) => [...prev, r.text]);
+        setNextLabels((prev) => [...prev, r.nextLabel ?? null]);
         setPhase(rank === 1 ? "slot2" : "slot3");
         track({ event_type: "onboarding_slot_submitted", props: { rank } });
       } else {
@@ -408,7 +410,7 @@ function Onboarding() {
             <RankedInput
               key={phase}
               rank={songs.length + 1}
-              label={SLOT_LABELS[songs.length] ?? ""}
+              label={nextLabels[songs.length - 1] || SLOT_LABELS[songs.length] || ""}
               value={draft}
               placeholder={PLACEHOLDERS[songs.length] ?? ""}
               onChange={setDraft}

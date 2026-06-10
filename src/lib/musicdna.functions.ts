@@ -1329,22 +1329,46 @@ export const reactToOne = createServerFn({ method: "POST" })
       priorSongs: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
     }).parse(d),
   )
-  .handler(async ({ data }): Promise<{ text: string }> => {
+  .handler(async ({ data }): Promise<{ text: string; nextLabel: string | null }> => {
     const fallbacks = ["Interesting.", "Noted.", "Mm.", "Okay.", "Now we're talking."];
+    const nextRank = data.index + 2; // index 0 → asking for #2, etc.
     try {
       const prior = data.priorSongs.length
         ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
         : "";
+      const nextPromptRules = `
+Also write a SHORT prompt for the next slot (#${nextRank}) that riffs on ONE distinctive angle of what's been named so far — pick ONE of: decade/era (e.g. "from the 90s"), genre or scene (e.g. "grunge", "boom-bap"), or mood (e.g. "another 4am track").
+Rules for nextLabel:
+- 3 to 8 words, sentence case. No quotes, no emojis, no hashtags.
+- Start with an imperative like "Now", "Give me", "Hit me with".
+- Reference EXACTLY ONE angle. Don't stack era + genre + mood.
+- Voice: Rolling Stone swagger. Punchy, a little irreverent.
+- If you genuinely can't pin a distinctive angle (song unrecognized / too generic), return nextLabel as "" (empty string). Don't bluff.
+Good examples: "Now give me #${nextRank} from the 90s." / "Now your second-best grunge pick." / "Hit me with another 4am track."`;
       const txt = await ai([
-        { role: "system", content: microReactVoice(data.index) },
-        { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n\nReturn ONLY the one-sentence reaction. No JSON. No quotes.` },
+        { role: "system", content: `${microReactVoice(data.index)}\n${nextPromptRules}\n\nReturn STRICT JSON: {"reaction": "...", "nextLabel": "..."}. No markdown fences.` },
+        { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n\nReturn the JSON now.` },
       ]);
-      const cleaned = txt.replace(/^["'`\s]+|["'`\s]+$/g, "").split("\n")[0].trim();
-      if (!cleaned) return { text: fallbacks[data.index % fallbacks.length] };
-      const capped = cleaned.length > 160 ? cleaned.slice(0, 157) + "…" : cleaned;
-      return { text: capped };
+      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+      let reaction = "";
+      let nextLabel: string | null = null;
+      try {
+        const parsed = JSON.parse(cleaned) as { reaction?: unknown; nextLabel?: unknown };
+        if (typeof parsed.reaction === "string") reaction = parsed.reaction.trim();
+        if (typeof parsed.nextLabel === "string") {
+          const nl = parsed.nextLabel.replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
+          // Cap length and reject obviously-bad outputs
+          if (nl && nl.length <= 80 && nl.split(/\s+/).length <= 10) nextLabel = nl;
+        }
+      } catch {
+        // Not JSON — treat the whole thing as the reaction, no nextLabel.
+        reaction = cleaned.split("\n")[0].replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
+      }
+      if (!reaction) reaction = fallbacks[data.index % fallbacks.length];
+      const capped = reaction.length > 160 ? reaction.slice(0, 157) + "…" : reaction;
+      return { text: capped, nextLabel };
     } catch {
-      return { text: fallbacks[data.index % fallbacks.length] };
+      return { text: fallbacks[data.index % fallbacks.length], nextLabel: null };
     }
   });
 
