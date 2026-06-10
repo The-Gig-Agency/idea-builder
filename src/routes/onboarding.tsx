@@ -98,6 +98,7 @@ function Onboarding() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [reactions, setReactions] = useState<string[]>([]); // per-slot reaction text
+  const [nextLabels, setNextLabels] = useState<(string | null)[]>([]); // personalized labels for slot 2 / slot 3
   const [refined, setRefined] = useState<Refined | null>(null);
   const [r5Step, setR5Step] = useState<0 | 1 | 2>(0);
   const [opener, setOpener] = useState<OnboardingOpener | null>(null);
