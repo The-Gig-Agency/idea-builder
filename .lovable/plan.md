@@ -1,39 +1,30 @@
-## Goal
+## Problem
 
-When the user submits song #1 (and later song #2), the next slot's label should reference something distinctive about the prior song(s) — decade, genre/scene, or mood — in the magazine-critic voice. E.g. "Now give me #2 from the 90s" or "Now the second-best grunge song you know."
+Current slot-1 / slot-2 reactions (e.g. "You chose a well-known gateway as your first move *instead of digging deep*") read as judgmental — like the user picked the wrong song. The critic is supposed to be on their side, not grading homework.
 
-## Approach
+## Fix
 
-Extend the existing `reactToOne` server function (already called after each of the first two songs) to also return a short, voice-y label for the *next* slot. The frontend swaps that into the slot input header. If the model can't pin an angle, we fall back to today's generic label ("Now #2" / "And the third").
+Rewrite the `microReactVoice` system prompt inside `reactToOne` in `src/lib/musicdna.functions.ts`. Keep everything else (model, JSON shape `{ reaction, nextLabel }`, `nextPromptRules`, fallbacks, the 3-song `reactToThree` synthesis) untouched.
 
-## Changes
+### New voice rules for per-song reactions
 
-**1. `src/lib/musicdna.functions.ts` — `reactToOne`**
-- Switch its output from `{ text }` to `{ text, nextLabel }`.
-- Update the prompt so the model also returns a one-line "next slot" prompt that riffs on whatever's most distinctive about the prior song(s) — decade, genre, scene, or mood — model's choice. Constraints in the prompt:
-  - 3–8 words, sentence case, no quotes, no emojis.
-  - Must start with "Now" or "Give me" or similar imperative.
-  - Reference exactly one angle (era OR genre OR mood), not a laundry list.
-  - Voice: Rolling Stone swagger (matches existing `microReactVoice`).
-- Parse JSON output; on any failure or empty `nextLabel`, return `nextLabel: null`.
-- Keep the existing reaction logic and fallbacks intact.
+- **Punch with the user, never at them.** Observe what the pick reveals — mood, instinct, era-feel, scene loyalty. Light teasing is welcome; verdicts are not.
+- **Banned moves:** never imply the pick was safe, obvious, lazy, shallow, predictable, a gateway, a starter pack, or that something else would've been better. No "instead of…", no "rather than…", no "not the deep cut but…".
+- **Banned words:** *gateway, shallow, deep, obvious, predictable, safe, basic, surface, starter, expected, instead.*
+- **One sentence, 8–18 words.** Rolling Stone swagger: vivid verb, specific noun, a wink. Sentence case, no emojis, no quotes around the reaction.
+- **Allowed angles:** name the mood it summons, the kind of listener it implies, the scene/era it points to, or pose a curious follow-up tied to that song.
 
-**2. `src/routes/onboarding.tsx`**
-- Add state `nextLabels: (string | null)[]` alongside `reactions`.
-- In `submitSlot`, when `rank < 3`, store `r.nextLabel` into `nextLabels`.
-- Where the active `<RankedInput label={SLOT_LABELS[songs.length] ?? ""} />` renders, use `nextLabels[songs.length - 1] ?? SLOT_LABELS[songs.length]` so slot 2 and slot 3 pick up the personalized label when available.
-- Slot 1's label stays the static "The one at the top".
+### Examples to seed the prompt
 
-**3. No DB / migration / schema changes.** Voice + fallbacks live entirely in the existing server function and route.
+- "Bring On the Dancing Horses" → "Dancing Horses out the gate — you like your melancholy with a backbeat."
+- "Smells Like Teen Spirit" → "Opening with the loudest room in the building. Bold."
+- "Strobe" → "Strobe first — you're a 4am person and we both know it."
+- "Juicy" → "Juicy up top. You came here to feel good about something."
 
-## Examples (illustrative, model-generated)
+(Examples are illustrative; the model writes its own.)
 
-- Song #1 = "Smells Like Teen Spirit" → slot 2 label: "Now give me #2 from the 90s" or "Now the second-best grunge song."
-- Song #1 = "Strobe" → slot 2 label: "Give me another 4am track."
-- Song #1 = "Juicy" → slot 2 label: "Now your second-best 90s hip-hop pick."
-- Unknown song → slot 2 label falls back to "Now #2".
+## Scope
 
-## Out of scope
-
-- No changes to `refineWithTwoMore`, `commitOpeningThree`, pairing logic, or DB events.
-- No new event types; we keep `onboarding_slot_submitted` as-is.
+- Only `reactToOne`'s system prompt changes.
+- `reactToThree` (the 3-song synthesis) keeps its current stronger POV — that's where the critic earns a real read.
+- No changes to UI, DB, schemas, events, or `nextLabel` logic.
