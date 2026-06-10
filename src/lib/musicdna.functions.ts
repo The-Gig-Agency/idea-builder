@@ -1375,7 +1375,7 @@ Good examples:
         if (typeof parsed.nextLabel === "string") {
           const nl = parsed.nextLabel.replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
           // Cap length and reject obviously-bad outputs
-          if (nl && nl.length <= 80 && nl.split(/\s+/).length <= 10) nextLabel = nl;
+          if (nl && nl.length <= 120 && nl.split(/\s+/).length <= 14) nextLabel = nl;
         }
       } catch {
         // Not JSON — treat the whole thing as the reaction, no nextLabel.
