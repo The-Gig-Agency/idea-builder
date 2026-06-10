@@ -1542,7 +1542,7 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
     const allThree = data.songs;
     let llm: OpeningAnalysis & { reaction: string } = {
       ...FALLBACK,
-      reaction: "Three picks, ranked. Enough to start. Let's see if the matchups hold.",
+      reaction: "Three picks in. I'm seeing a shape, not a portrait.\nLet's pressure-test it.",
       per_song: allThree.map((s) => ({ input: s, lane: "unknown", source: "llm" })),
     };
     try {
@@ -1551,9 +1551,13 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         { role: "user", content: `Three songs, ranked top to bottom:\n${allThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
-      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & { reaction: string }>;
+      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & {
+        observation_1?: string; observation_2?: string; reaction?: string;
+      }>;
       const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
-      const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+      // Three songs is never enough for high confidence. Cap at 0.65.
+      const rawConfidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+      const confidence = Math.min(0.65, rawConfidence);
       const secondary = Array.isArray(parsed.secondary_lanes)
         ? parsed.secondary_lanes.filter((l): l is Lane => (LANES as readonly string[]).includes(l as string) && l !== lane && l !== "general")
         : [];
@@ -1569,6 +1573,12 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
         return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
       });
+      const obs1 = typeof parsed.observation_1 === "string" ? parsed.observation_1.trim() : "";
+      const obs2 = typeof parsed.observation_2 === "string" ? parsed.observation_2.trim() : "";
+      // The UI shows `reaction` next to the 3rd song. Two observations, joined.
+      // The hypothesis is shown separately below. No double commentary.
+      const composedReaction = [obs1, obs2].filter(Boolean).join("\n") ||
+        (typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Three picks in. I'm seeing a shape, not a portrait.");
       llm = {
         lane: confidence < 0.4 ? "general" : lane,
         confidence,
@@ -1578,7 +1588,7 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         candidate_dimensions: dims,
         per_song: perSong,
         canon_matches: [],
-        reaction: typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Locked in.",
+        reaction: composedReaction,
       };
     } catch { /* keep fallback */ }
 
