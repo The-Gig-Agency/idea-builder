@@ -1339,14 +1339,29 @@ export const reactToOne = createServerFn({ method: "POST" })
         ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
         : "";
       const nextPromptRules = `
-Also write a SHORT prompt for the next slot (#${nextRank}) that riffs on ONE distinctive angle of what's been named so far — pick ONE of: decade/era (e.g. "from the 90s"), genre or scene (e.g. "grunge", "boom-bap"), or mood (e.g. "another 4am track").
+Also write a SHORT, CONVERSATIONAL prompt for the next slot (#${nextRank}). This is the critic talking to a friend across a table — NOT a quiz question. Show you were listening to what they just said.
+
+Riff on ONE distinctive angle of what's been named so far — pick whichever fits best:
+- the ARTIST by name (e.g. "who's second best to Echo?", "your #2 after Nirvana?")
+- the DECADE/ERA (e.g. "80s kid, huh? Give me #2", "still in the 90s — what's next?")
+- the GENRE/SCENE (e.g. "okay grunge head, now #2", "another from the boom-bap shelf?")
+- the MOOD or time-of-day (e.g. "cool... now another 4am one", "stay sad — what's next?")
+
 Rules for nextLabel:
-- 3 to 8 words, sentence case. No quotes, no emojis, no hashtags.
-- Start with an imperative like "Now", "Give me", "Hit me with".
-- Reference EXACTLY ONE angle. Don't stack era + genre + mood.
-- Voice: Rolling Stone swagger. Punchy, a little irreverent.
-- If you genuinely can't pin a distinctive angle (song unrecognized / too generic), return nextLabel as "" (empty string). Don't bluff.
-Good examples: "Now give me #${nextRank} from the 90s." / "Now your second-best grunge pick." / "Hit me with another 4am track."`;
+- 4 to 10 words. Conversational, like a real human reacting. Lowercase fragments and ellipses are fine.
+- Can open with a small acknowledgment ("cool…", "okay…", "alright…", "noted —", "huh.") then ask for #${nextRank}.
+- Reference EXACTLY ONE angle (artist OR era OR scene OR mood). Don't stack them.
+- Must feel like a continuation of the conversation, not a survey field label.
+- Voice: Rolling Stone swagger but warm — punching WITH them, not at them. Never grade the pick.
+- If you genuinely can't pin a distinctive angle (song unrecognized / too generic), return nextLabel as "" (empty string). Don't bluff a generic one.
+
+Good examples:
+- "cool… now who's second best to Echo?"
+- "80s kid, huh? Give me #${nextRank}."
+- "alright grunge head — what's #${nextRank}?"
+- "Nirvana up top. Who follows?"
+- "stay in that mood. Hit me with #${nextRank}."`;
+
       const txt = await ai([
         { role: "system", content: `${microReactVoice(data.index)}\n${nextPromptRules}\n\nReturn STRICT JSON: {"reaction": "...", "nextLabel": "..."}. No markdown fences.` },
         { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n\nReturn the JSON now.` },
@@ -1360,7 +1375,7 @@ Good examples: "Now give me #${nextRank} from the 90s." / "Now your second-best 
         if (typeof parsed.nextLabel === "string") {
           const nl = parsed.nextLabel.replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
           // Cap length and reject obviously-bad outputs
-          if (nl && nl.length <= 80 && nl.split(/\s+/).length <= 10) nextLabel = nl;
+          if (nl && nl.length <= 120 && nl.split(/\s+/).length <= 14) nextLabel = nl;
         }
       } catch {
         // Not JSON — treat the whole thing as the reaction, no nextLabel.
