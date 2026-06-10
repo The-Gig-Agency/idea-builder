@@ -440,16 +440,20 @@ function Onboarding() {
                 "{refined.hypothesis}"
               </p>
               <div className="flex flex-wrap items-center gap-3 pt-1 animate-in fade-in duration-700">
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Lane</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Possible lane</span>
                 <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
-                  {LANE_LABEL[refined.lane] ?? refined.lane}
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  {Math.round(refined.confidence * 100)}% confidence
+                  {(() => {
+                    const primary = LANE_LABEL[refined.lane] ?? refined.lane;
+                    const sec = (refined.secondary_lanes ?? []).filter((l) => l && l !== refined.lane && l !== "general")[0];
+                    if (refined.confidence < 0.55 && sec) {
+                      return `${primary} or ${LANE_LABEL[sec] ?? sec}`;
+                    }
+                    return primary;
+                  })()}
                 </span>
               </div>
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground pt-2">
-                now let's pressure-test it — side by side
+                let's pressure-test it — side by side
               </p>
             </>
           )}
