@@ -358,20 +358,44 @@ export const nextPairing = createServerFn({ method: "POST" })
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
 
     let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+
+    // Same-artist diagnostic pairings are micro-Bowie decisions, not lane
+    // decisions. Drop them. If this empties the pool, fall back to general
+    // and re-apply the filter there.
+    const differentArtist = (p: typeof pool[number]) => {
+      const a = (p.song_a?.artist ?? "").trim().toLowerCase();
+      const b = (p.song_b?.artist ?? "").trim().toLowerCase();
+      return a !== "" && b !== "" && a !== b;
+    };
+    pool = pool.filter(differentArtist);
+
     if (!pool.length && sessionLane !== "general") {
       pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
       if (pairingsRes.error) throw new Error(pairingsRes.error.message);
-      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id)).filter(differentArtist);
     }
     if (!pool.length) {
       return { pairing: null, round, confidence, done: true as const };
     }
 
+    // Hypothesis-challenging boost: prefer pairings whose `tests` axes are the
+    // axes the working read leans hardest on. Encourages the engine to probe
+    // ITS OWN current guess instead of grabbing a high-diagnostic-weight pair.
+    const leaningAxes = new Set(
+      (DIMS as readonly string[])
+        .map((d) => ({ d, v: Math.abs(vector[d] ?? 0) }))
+        .filter((x) => x.v >= 15)
+        .sort((a, b) => b.v - a.v)
+        .slice(0, 3)
+        .map((x) => x.d),
+    );
     const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
     const scored = pool.map((p) => {
       const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
       const axisNeed = tests.reduce((s, d) => s + need(d), 0) / Math.max(1, tests.length);
-      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed);
+      const challengesHypothesis = leaningAxes.size > 0 && tests.some((t) => leaningAxes.has(t));
+      const challengeBoost = challengesHypothesis ? 1.5 : 1;
+      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed) * challengeBoost;
       return { p, w };
     });
     const total = scored.reduce((s, x) => s + x.w, 0);
