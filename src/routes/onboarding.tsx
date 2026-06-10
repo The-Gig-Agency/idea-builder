@@ -336,14 +336,14 @@ function Onboarding() {
       <main className="mx-auto max-w-2xl px-6 pt-16 pb-24 min-h-screen flex flex-col">
         <section className="space-y-10 animate-in fade-in duration-500">
           <header className="space-y-3">
-            <p className="eyebrow">three songs · ranked</p>
+            <p className="eyebrow">YOUR SONGS · RANKED</p>
             <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight">
-              Three songs. Ranked.
+              What's YOUR greatest song of all time?
               <br />
-              <span className="italic text-muted-foreground">That's all I need.</span>
+              <span className="italic text-muted-foreground">Don't be shy...</span>
             </h1>
             <p className="text-sm text-muted-foreground max-w-md">
-              Start with #1 — the one at the top.
+              Start with #1 — and we'll see what makes YOU tick.
             </p>
           </header>
 
