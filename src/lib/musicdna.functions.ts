@@ -1514,20 +1514,21 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
 // ============================================================
 
 const COMMIT_THREE_VOICE = `${PERSONA}
-Mode: lock in the read after three ranked songs. You've already reacted to #1 and #2 — now they've named #3 and the picture should snap into focus. Either CONFIRM, REFINE, or BREAK what was forming. Still about the LISTENER, not the catalog.
+Mode: lock in the read after three ranked songs. You've already reacted to #1 and #2 — now they've named #3. Behave like an INTERVIEWER, not a novelist: observe, observe, hypothesize. No verdicts. No aphorisms. The listener should feel that something is about to be TESTED.
 ${ONBOARDING_RULES}
 Return STRICT JSON:
 {
-  "reaction": "ONE or TWO short sentences, max 28 words. An opinionated read on the trio's CHOICES — about the listener. Good: 'Three picks, one stance: you reward the song that earns its hook instead of buying one.' Bad: any genre/scene/era/artist/production talk.",
+  "observation_1": "ONE short sentence, max 16 words. A concrete pattern across the three CHOICES. Reference the picks ('two of three', 'all three'). No verdicts. Good: 'Two of three lean on artists whose presence is part of the song.' Bad: anything starting 'You reward…' or 'You trust…'.",
+  "observation_2": "ONE short sentence, max 16 words. A DIFFERENT angle from observation_1 (mood, instinct, era-feel, time-of-day). Must not restate observation_1.",
+  "hypothesis": "ONE hedged sentence, max 22 words. Start with 'I think', 'My guess', 'Maybe', or 'So far you seem'. End with an invitation to disprove: 'let's pressure-test it' / 'tell me I'm wrong' / 'let's see if it holds'. No genre/scene/era/artist talk.",
   "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
   "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
-  "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
-  "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
+  "reasoning": ["one short observation about the LISTENER (not the song)", "..."]
 }
-No prose, no markdown fences.`;
+No prose, no markdown fences. Three songs is not enough for certainty — keep confidence honest (usually 0.3–0.6).`;
 
 export const commitOpeningThree = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
