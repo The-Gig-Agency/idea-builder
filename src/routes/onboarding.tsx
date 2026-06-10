@@ -410,7 +410,7 @@ function Onboarding() {
             <RankedInput
               key={phase}
               rank={songs.length + 1}
-              label={SLOT_LABELS[songs.length] ?? ""}
+              label={nextLabels[songs.length - 1] || SLOT_LABELS[songs.length] || ""}
               value={draft}
               placeholder={PLACEHOLDERS[songs.length] ?? ""}
               onChange={setDraft}
