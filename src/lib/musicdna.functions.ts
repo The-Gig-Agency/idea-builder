@@ -358,20 +358,44 @@ export const nextPairing = createServerFn({ method: "POST" })
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
 
     let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+
+    // Same-artist diagnostic pairings are micro-Bowie decisions, not lane
+    // decisions. Drop them. If this empties the pool, fall back to general
+    // and re-apply the filter there.
+    const differentArtist = (p: typeof pool[number]) => {
+      const a = (p.song_a?.artist ?? "").trim().toLowerCase();
+      const b = (p.song_b?.artist ?? "").trim().toLowerCase();
+      return a !== "" && b !== "" && a !== b;
+    };
+    pool = pool.filter(differentArtist);
+
     if (!pool.length && sessionLane !== "general") {
       pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
       if (pairingsRes.error) throw new Error(pairingsRes.error.message);
-      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id)).filter(differentArtist);
     }
     if (!pool.length) {
       return { pairing: null, round, confidence, done: true as const };
     }
 
+    // Hypothesis-challenging boost: prefer pairings whose `tests` axes are the
+    // axes the working read leans hardest on. Encourages the engine to probe
+    // ITS OWN current guess instead of grabbing a high-diagnostic-weight pair.
+    const leaningAxes = new Set(
+      (DIMS as readonly string[])
+        .map((d) => ({ d, v: Math.abs(vector[d] ?? 0) }))
+        .filter((x) => x.v >= 15)
+        .sort((a, b) => b.v - a.v)
+        .slice(0, 3)
+        .map((x) => x.d),
+    );
     const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
     const scored = pool.map((p) => {
       const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
       const axisNeed = tests.reduce((s, d) => s + need(d), 0) / Math.max(1, tests.length);
-      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed);
+      const challengesHypothesis = leaningAxes.size > 0 && tests.some((t) => leaningAxes.has(t));
+      const challengeBoost = challengesHypothesis ? 1.5 : 1;
+      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed) * challengeBoost;
       return { p, w };
     });
     const total = scored.reduce((s, x) => s + x.w, 0);
@@ -1221,10 +1245,12 @@ export const getMyFeedback = createServerFn({ method: "POST" })
 // ============================================================
 
 const ONBOARDING_RULES = `HARD RULES — no exceptions:
-- You have ONLY four moves: NOTICE ("that's not where most people start"), COMPARE ("those two pull opposite directions"), HYPOTHESIZE ("I think you may care more about energy than polish"), CHALLENGE ("tell me I'm wrong").
+- You are a psychological interviewer, NOT a literary critic. Plain words. Operational claims. The reader should always know what's being TESTED next.
+- You have ONLY four moves: NOTICE ("two of three lean the same way"), COMPARE ("those two pull opposite directions"), HYPOTHESIZE ("I think you may care more about energy than polish"), CHALLENGE ("tell me I'm wrong").
 - The subject of every sentence is THE LISTENER and what their CHOICE might say. Never the song.
 - BANNED: genres, scenes, decades, cities, eras, movements (no "Seattle", "New Romantic", "ska", "Madchester", "post-punk", "grunge", "synth-pop"). No artist/band/producer/label names. No lyrics, instruments, chart history, cultural influence, production talk.
 - BANNED: describing the song ("jagged", "high-gloss", "offbeat precision", "architectural blueprint", "cathedral", "anthem"). No wine-review words ("oscillate", "ache", "texture", "restless", "lineage", "warm", "sits").
+- BANNED APHORISMS (case-insensitive): "the moment when", "the performer who", "survives their own", "refuses to blink", "becomes a spectacle", "secret becomes", "singular presence", "their own spotlight". Sentences cannot OPEN with "You reward …" or "You trust …" — those are verdicts dressed as observations. Use "Two of three…", "So far…", "If that's right, then…", "Let's test it." instead.
 - Speak with LOW confidence. Hedge. Every claim is a hypothesis that invites disproof. No therapist talk, no "I'm noticing…", no "that one" crutch.
 - Plain conversational English. Short sentences. No emojis. No quotes. No JSON unless explicitly asked for.`;
 
@@ -1512,20 +1538,21 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
 // ============================================================
 
 const COMMIT_THREE_VOICE = `${PERSONA}
-Mode: lock in the read after three ranked songs. You've already reacted to #1 and #2 — now they've named #3 and the picture should snap into focus. Either CONFIRM, REFINE, or BREAK what was forming. Still about the LISTENER, not the catalog.
+Mode: lock in the read after three ranked songs. You've already reacted to #1 and #2 — now they've named #3. Behave like an INTERVIEWER, not a novelist: observe, observe, hypothesize. No verdicts. No aphorisms. The listener should feel that something is about to be TESTED.
 ${ONBOARDING_RULES}
 Return STRICT JSON:
 {
-  "reaction": "ONE or TWO short sentences, max 28 words. An opinionated read on the trio's CHOICES — about the listener. Good: 'Three picks, one stance: you reward the song that earns its hook instead of buying one.' Bad: any genre/scene/era/artist/production talk.",
+  "observation_1": "ONE short sentence, max 16 words. A concrete pattern across the three CHOICES. Reference the picks ('two of three', 'all three'). No verdicts. Good: 'Two of three lean on artists whose presence is part of the song.' Bad: anything starting 'You reward…' or 'You trust…'.",
+  "observation_2": "ONE short sentence, max 16 words. A DIFFERENT angle from observation_1 (mood, instinct, era-feel, time-of-day). Must not restate observation_1.",
+  "hypothesis": "ONE hedged sentence, max 22 words. Start with 'I think', 'My guess', 'Maybe', or 'So far you seem'. End with an invitation to disprove: 'let's pressure-test it' / 'tell me I'm wrong' / 'let's see if it holds'. No genre/scene/era/artist talk.",
   "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
   "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
-  "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
-  "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
+  "reasoning": ["one short observation about the LISTENER (not the song)", "..."]
 }
-No prose, no markdown fences.`;
+No prose, no markdown fences. Three songs is not enough for certainty — keep confidence honest (usually 0.3–0.6).`;
 
 export const commitOpeningThree = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1539,7 +1566,7 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
     const allThree = data.songs;
     let llm: OpeningAnalysis & { reaction: string } = {
       ...FALLBACK,
-      reaction: "Three picks, ranked. Enough to start. Let's see if the matchups hold.",
+      reaction: "Three picks in. I'm seeing a shape, not a portrait.\nLet's pressure-test it.",
       per_song: allThree.map((s) => ({ input: s, lane: "unknown", source: "llm" })),
     };
     try {
@@ -1548,9 +1575,13 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         { role: "user", content: `Three songs, ranked top to bottom:\n${allThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
-      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & { reaction: string }>;
+      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & {
+        observation_1?: string; observation_2?: string; reaction?: string;
+      }>;
       const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
-      const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+      // Three songs is never enough for high confidence. Cap at 0.65.
+      const rawConfidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
+      const confidence = Math.min(0.65, rawConfidence);
       const secondary = Array.isArray(parsed.secondary_lanes)
         ? parsed.secondary_lanes.filter((l): l is Lane => (LANES as readonly string[]).includes(l as string) && l !== lane && l !== "general")
         : [];
@@ -1566,6 +1597,12 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
         return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
       });
+      const obs1 = typeof parsed.observation_1 === "string" ? parsed.observation_1.trim() : "";
+      const obs2 = typeof parsed.observation_2 === "string" ? parsed.observation_2.trim() : "";
+      // The UI shows `reaction` next to the 3rd song. Two observations, joined.
+      // The hypothesis is shown separately below. No double commentary.
+      const composedReaction = [obs1, obs2].filter(Boolean).join("\n") ||
+        (typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Three picks in. I'm seeing a shape, not a portrait.");
       llm = {
         lane: confidence < 0.4 ? "general" : lane,
         confidence,
@@ -1575,7 +1612,7 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         candidate_dimensions: dims,
         per_song: perSong,
         canon_matches: [],
-        reaction: typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Locked in.",
+        reaction: composedReaction,
       };
     } catch { /* keep fallback */ }
 
