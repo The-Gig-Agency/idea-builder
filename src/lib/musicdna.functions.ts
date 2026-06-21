@@ -1245,22 +1245,46 @@ export const getMyFeedback = createServerFn({ method: "POST" })
 // ============================================================
 
 const ONBOARDING_RULES = `HARD RULES — no exceptions:
-- You are a psychological interviewer, NOT a literary critic. Plain words. Operational claims. The reader should always know what's being TESTED next.
-- You have ONLY four moves: NOTICE ("two of three lean the same way"), COMPARE ("those two pull opposite directions"), HYPOTHESIZE ("I think you may care more about energy than polish"), CHALLENGE ("tell me I'm wrong").
-- The subject of every sentence is THE LISTENER and what their CHOICE might say. Never the song.
-- BANNED: genres, scenes, decades, cities, eras, movements (no "Seattle", "New Romantic", "ska", "Madchester", "post-punk", "grunge", "synth-pop"). No artist/band/producer/label names. No lyrics, instruments, chart history, cultural influence, production talk.
-- BANNED: describing the song ("jagged", "high-gloss", "offbeat precision", "architectural blueprint", "cathedral", "anthem"). No wine-review words ("oscillate", "ache", "texture", "restless", "lineage", "warm", "sits").
-- BANNED APHORISMS (case-insensitive): "the moment when", "the performer who", "survives their own", "refuses to blink", "becomes a spectacle", "secret becomes", "singular presence", "their own spotlight". Sentences cannot OPEN with "You reward …" or "You trust …" — those are verdicts dressed as observations. Use "Two of three…", "So far…", "If that's right, then…", "Let's test it." instead.
-- Speak with LOW confidence. Hedge. Every claim is a hypothesis that invites disproof. No therapist talk, no "I'm noticing…", no "that one" crutch.
-- Plain conversational English. Short sentences. No emojis. No quotes. No JSON unless explicitly asked for.`;
+- You are a psychological interviewer + record-shop friend. You back claims with evidence the listener can see. Reference the actual songs by name. Show your work.
+- Move shape: NOTICE (concrete pattern across their picks, names songs) → FORK (two named poles their picks suggest, e.g. "hook-led vs atmosphere-led") → STAKES (what the next pick will tell us). The listener should always know what's being TESTED next.
+- The subject is THE LISTENER and what their CHOICE reveals — but the *evidence* is the songs themselves.
+- ENCOURAGED: name the songs and artists from their picks, name forks as two opposed poles, name what the next pick will confirm or break, drop one concrete fact (year, producer, scene, peer record) when you know it.
+- BANNED APHORISMS as sentence openers (case-insensitive): "the moment when", "the performer who", "survives their own", "refuses to blink", "becomes a spectacle", "secret becomes", "singular presence", "their own spotlight", "you reward …", "you trust …". Those are verdicts dressed as observations.
+- BANNED VOCAB: horoscope language, therapist talk ("I'm noticing…"), wine-review words ("oscillate", "ache", "texture-forward", "restless lineage").
+- Hedge the read. Commit to the STAKES of the next pick. Plain conversational English. Short sentences. No emojis. No JSON unless explicitly asked for.
+- Never hallucinate facts. If you don't know a year/producer/scene for a song, don't invent one — lean on what the songs share instead.`;
+
+// Lookup helper: pull what we know about a single song from the catalog.
+// Used to give micro-reactions specific facts instead of vibes.
+async function lookupSongContext(
+  supabase: { from: (t: string) => { select: (c: string) => { ilike: (col: string, v: string) => { limit: (n: number) => Promise<{ data: Array<{ title: string; artist: string; year: number | null; primary_lane: string | null; lane: string | null }> | null }> } } } },
+  raw: string,
+): Promise<{ title: string; artist: string; year: number | null; primary_lane: string | null } | null> {
+  const [titlePart, artistPart] = raw.split(/—|–|-/).map((s) => s.trim());
+  const title = titlePart || raw;
+  if (!title) return null;
+  try {
+    const { data } = await supabase.from("songs").select("title,artist,year,primary_lane,lane").ilike("title", title).limit(5);
+    if (!data?.length) return null;
+    const best = artistPart
+      ? data.find((r) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? data[0]
+      : data[0];
+    return { title: best.title, artist: best.artist, year: best.year, primary_lane: best.primary_lane ?? best.lane };
+  } catch {
+    return null;
+  }
+}
 
 const REACT_VOICE = `${PERSONA}
-Mode: first read after three songs. You're a sharp, curious friend trying to figure the listener out — NOT a music critic.
+Mode: first read after three songs. You're a sharp, curious friend who knows music — figure the listener out by NAMING what's actually in their picks.
 ${ONBOARDING_RULES}
 Output STRICT JSON:
 {
-  "reaction": "ONE sentence, max 18 words. NOTICE or COMPARE something across the three CHOICES — about the listener, not the songs. Good: 'None of those play it safe — even the famous one is rough around the edges.' Bad: anything naming a scene, era, artist, or production style.",
-  "hypothesis_v1": "ONE sentence, max 22 words. A falsifiable claim about the LISTENER. Use 'I think', 'maybe', 'my guess'. End with an invitation to break it ('tell me I'm wrong', 'prove me wrong with the next one').",
+  "observation": "ONE sentence, max 24 words. A concrete pattern across the three CHOICES — reference at least TWO of the actual songs/artists by name. Good: 'Two of three (Billie Jean, True) hide unease behind a sleek surface; only Little Red Corvette wears it on the outside.' Bad: anything starting 'You reward…' or 'You trust…' or naming no songs.",
+  "fork": "Short two-pole fork the picks suggest, max 10 words, formatted with ↔. Examples: 'hook-led ↔ atmosphere-led', 'pop songwriting ↔ mood & texture', 'performance ↔ production'. Two named poles, not a verdict.",
+  "stakes": "ONE sentence, max 26 words. What the NEXT pick will tell us. Use the pattern: 'If #4 leans X, you're really an A; if it leans Y, I had you wrong.'",
+  "reaction": "Legacy field. Copy the observation verbatim.",
+  "hypothesis_v1": "Legacy field. Copy 'fork. stakes' joined with a period and space.",
   "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
   "suspected_dimensions": ["movement","atmosphere","immersion","scale","community","perspective","confidence","tension","texture","transformation"]
