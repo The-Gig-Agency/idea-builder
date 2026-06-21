@@ -45,7 +45,7 @@ const PLACEHOLDERS = [
 ];
 
 type Phase = "slot1" | "slot2" | "slot3" | "playing" | "done";
-type Refined = { reaction?: string; hypothesis: string; lane: string; confidence: number; secondary_lanes?: string[] };
+type Refined = { reaction?: string; hypothesis: string; lane: string; confidence: number; secondary_lanes?: string[]; observation?: string; fork?: string; stakes?: string };
 type Song = { id: string; title: string; artist: string; year: number | null; lane: string };
 type Pairing = {
   id: string; tests: string[]; hypothesis: string | null; why_good: string | null;
