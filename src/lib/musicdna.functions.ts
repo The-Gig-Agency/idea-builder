@@ -1356,16 +1356,14 @@ export const reactToThree = createServerFn({ method: "POST" })
 // song 1–2 = casual friend, song 3 = music-loving friend, song 4 = sharper
 // critic-friend, song 5+ = niche expert. Heavy critic flourishes are saved
 // for the final synthesis (refineWithTwoMore).
-const MICRO_REACT_BASE = `Mode: micro-reaction. The listener just named ONE song. React in ONE sentence — Rolling Stone swagger, punchy, a little irreverent.
+const MICRO_REACT_BASE = `Mode: micro-reaction. The listener just named ONE song. React in ONE sentence — record-store-friend who knows music, punchy, on their side.
 
 VOICE RULES (HARD):
-- Punch WITH the listener, never AT them. You are on their side. A wink, not a grade.
-- NEVER imply the pick was safe, obvious, lazy, shallow, predictable, a gateway, a starter pack, surface-level, basic, or that some other song would've been better.
+- Punch WITH the listener, never AT them. A wink, not a grade. Never imply the pick was safe, obvious, lazy, shallow, predictable, a gateway, a starter pack, basic, or that some other song would've been better.
 - BANNED WORDS (case-insensitive): gateway, shallow, deep cut, obvious, predictable, safe, basic, surface, starter, expected, instead, rather than, should've, could've, lazy.
-- No verdicts on the choice. Observe what it REVEALS — mood it summons, instinct it shows, the kind of listener it implies, the scene/era/time-of-day it points to. A curious follow-up tied to the song is fine.
-- One sentence, 8–18 words. Sentence case. No emojis, no hashtags, no quotes around the reaction.
-- You MAY name the scene, era, time-of-day, or mood the song evokes. Do NOT lecture about production or trivia.
-${ONBOARDING_RULES}`;
+- BANNED APHORISM OPENERS: "the moment when", "the performer who", "you reward …", "you trust …", "secret becomes", "survives their own", "refuses to blink".
+- Lead with a CONCRETE HOOK about the actual song or artist when you genuinely know one: a year, a producer, a peer record, a scene, a small fact ("Quincy fought MJ to cut Billie Jean. Lost. Good call."). If you don't truly know a fact, don't invent one — riff on the mood or instinct the pick implies. NEVER hallucinate years, producers, labels, or chart history.
+- One sentence, 10–22 words. Sentence case. No emojis, no hashtags, no quotes around the reaction.`;
 
 function microReactVoice(index: number): string {
   if (index === 0) {
