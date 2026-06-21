@@ -1577,13 +1577,13 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
 // ============================================================
 
 const COMMIT_THREE_VOICE = `${PERSONA}
-Mode: lock in the read after three ranked songs. You've already reacted to #1 and #2 — now they've named #3. Behave like an INTERVIEWER, not a novelist: observe, observe, hypothesize. No verdicts. No aphorisms. The listener should feel that something is about to be TESTED.
+Mode: lock in the read after three ranked songs. Behave like a music critic doing an interview: name the pattern (with songs), name the fork, name the stakes of the next pick. Evidence first, fork second, stakes last.
 ${ONBOARDING_RULES}
 Return STRICT JSON:
 {
-  "observation_1": "ONE short sentence, max 16 words. A concrete pattern across the three CHOICES. Reference the picks ('two of three', 'all three'). No verdicts. Good: 'Two of three lean on artists whose presence is part of the song.' Bad: anything starting 'You reward…' or 'You trust…'.",
-  "observation_2": "ONE short sentence, max 16 words. A DIFFERENT angle from observation_1 (mood, instinct, era-feel, time-of-day). Must not restate observation_1.",
-  "hypothesis": "ONE hedged sentence, max 22 words. Start with 'I think', 'My guess', 'Maybe', or 'So far you seem'. End with an invitation to disprove: 'let's pressure-test it' / 'tell me I'm wrong' / 'let's see if it holds'. No genre/scene/era/artist talk.",
+  "observation": "ONE sentence, max 28 words. A concrete pattern across the three CHOICES. MUST name at least TWO of the actual songs/artists from their picks. Good: 'Two of three (Billie Jean, True) hide unease behind a sleek surface; only Little Red Corvette wears it on the outside.' Bad: anything that names zero songs, or opens with 'You reward…'.",
+  "fork": "Short two-pole fork the picks suggest, max 10 words, formatted with ↔. Examples: 'hook-led ↔ atmosphere-led', 'performance ↔ production', 'pop songwriting ↔ mood & texture', 'restraint ↔ release'. Two named poles, not a verdict.",
+  "stakes": "ONE sentence, max 28 words. What the FIRST matchup will tell us. Pattern: 'If you pick X over Y, the fork lands on A; if it flips, I had you wrong.' Reference the fork by its poles.",
   "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
@@ -1591,7 +1591,7 @@ Return STRICT JSON:
   "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
   "reasoning": ["one short observation about the LISTENER (not the song)", "..."]
 }
-No prose, no markdown fences. Three songs is not enough for certainty — keep confidence honest (usually 0.3–0.6).`;
+No prose, no markdown fences. Three songs is not enough for certainty — keep confidence honest (0.3–0.6).`;
 
 export const commitOpeningThree = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1603,22 +1603,29 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const allThree = data.songs;
-    let llm: OpeningAnalysis & { reaction: string } = {
+    let llm: OpeningAnalysis & { reaction: string; observation?: string; fork?: string; stakes?: string } = {
       ...FALLBACK,
       reaction: "Three picks in. I'm seeing a shape, not a portrait.\nLet's pressure-test it.",
+      observation: "Three picks in. I'm seeing a shape, not a portrait.",
+      fork: "sketch ↔ portrait",
+      stakes: "The first matchup will tell us which side you actually live on.",
       per_song: allThree.map((s) => ({ input: s, lane: "unknown", source: "llm" })),
     };
     try {
+      // Catalog context for all three. Lets the critic reference real facts.
+      const ctx = await Promise.all(allThree.map((s) => lookupSongContext(supabase as never, s)));
+      const ctxBlock = ctx
+        .map((c, i) => c ? `${i + 1}. ${c.title} — ${c.artist}${c.year ? ` (${c.year})` : ""}${c.primary_lane ? ` · ${c.primary_lane}` : ""}` : `${i + 1}. (no catalog match — don't invent facts for this one)`)
+        .join("\n");
       const txt = await ai([
         { role: "system", content: COMMIT_THREE_VOICE },
-        { role: "user", content: `Three songs, ranked top to bottom:\n${allThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
+        { role: "user", content: `Three songs, ranked top to bottom (raw input):\n${allThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nWhat the catalog knows (use only if matched; don't invent):\n${ctxBlock}\n\nReturn the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
       const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & {
-        observation_1?: string; observation_2?: string; reaction?: string;
+        observation?: string; fork?: string; stakes?: string; reaction?: string;
       }>;
       const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
-      // Three songs is never enough for high confidence. Cap at 0.65.
       const rawConfidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
       const confidence = Math.min(0.65, rawConfidence);
       const secondary = Array.isArray(parsed.secondary_lanes)
@@ -1636,24 +1643,29 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
         const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
         return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
       });
-      const obs1 = typeof parsed.observation_1 === "string" ? parsed.observation_1.trim() : "";
-      const obs2 = typeof parsed.observation_2 === "string" ? parsed.observation_2.trim() : "";
-      // The UI shows `reaction` next to the 3rd song. Two observations, joined.
-      // The hypothesis is shown separately below. No double commentary.
-      const composedReaction = [obs1, obs2].filter(Boolean).join("\n") ||
-        (typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Three picks in. I'm seeing a shape, not a portrait.");
+      const observation = typeof parsed.observation === "string" && parsed.observation.trim()
+        ? parsed.observation.trim()
+        : (typeof parsed.reaction === "string" ? parsed.reaction.trim() : "Three picks in. I'm seeing a shape, not a portrait.");
+      const fork = typeof parsed.fork === "string" && parsed.fork.trim() ? parsed.fork.trim() : "sketch ↔ portrait";
+      const stakes = typeof parsed.stakes === "string" && parsed.stakes.trim() ? parsed.stakes.trim() : "The first matchup will tell us which side you actually live on.";
+      // `reaction` (shown next to song #3) is the observation only — no double commentary.
+      // `hypothesis` (shown as the working read) is fork + stakes.
       llm = {
         lane: confidence < 0.4 ? "general" : lane,
         confidence,
         secondary_lanes: secondary,
         reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
-        hypothesis: typeof parsed.hypothesis === "string" && parsed.hypothesis.trim() ? parsed.hypothesis.trim() : FALLBACK.hypothesis,
+        hypothesis: `${fork}. ${stakes}`,
         candidate_dimensions: dims,
         per_song: perSong,
         canon_matches: [],
-        reaction: composedReaction,
+        reaction: observation,
+        observation,
+        fork,
+        stakes,
       };
     } catch { /* keep fallback */ }
+
 
     // Hidden canon enrichment.
     for (let i = 0; i < allThree.length; i++) {
