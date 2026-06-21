@@ -24,14 +24,7 @@ export const Route = createFileRoute("/onboarding")({
 
 const MAX_ROUNDS = 6;
 
-const LANE_LABEL: Record<string, string> = {
-  alternative: "Alternative",
-  pop: "Pop",
-  hip_hop: "Hip-Hop",
-  electronic: "Electronic",
-  classic_rock: "Classic Rock",
-  general: "General",
-};
+// LANE_LABEL removed — fork chip replaces the lane verdict.
 
 const SLOT_LABELS = [
   "The one at the top",
