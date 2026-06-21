@@ -442,29 +442,32 @@ function Onboarding() {
         </section>
       )}
 
-      {/* Final synthesis after slot 3 */}
+      {/* Final synthesis after slot 3 — fork + stakes, no lane chip */}
       {refined && (
-        <section className="space-y-6 animate-in fade-in duration-500">
+        <section className="space-y-5 animate-in fade-in duration-500">
           {r5Step >= 2 && (
             <>
-              <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary animate-in fade-in duration-700">
-                "{refined.hypothesis}"
-              </p>
-              <div className="flex flex-wrap items-center gap-3 pt-1 animate-in fade-in duration-700">
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Possible lane</span>
-                <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
-                  {(() => {
-                    const primary = LANE_LABEL[refined.lane] ?? refined.lane;
-                    const sec = (refined.secondary_lanes ?? []).filter((l) => l && l !== refined.lane && l !== "general")[0];
-                    if (refined.confidence < 0.55 && sec) {
-                      return `${primary} or ${LANE_LABEL[sec] ?? sec}`;
-                    }
-                    return primary;
-                  })()}
-                </span>
-              </div>
+              {refined.fork && (
+                <div className="flex flex-wrap items-center gap-3 animate-in fade-in duration-700">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    the fork
+                  </span>
+                  <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
+                    {refined.fork}
+                  </span>
+                </div>
+              )}
+              {refined.stakes ? (
+                <p className="font-serif text-2xl md:text-3xl leading-snug italic text-primary animate-in fade-in duration-700">
+                  "{refined.stakes}"
+                </p>
+              ) : (
+                <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary animate-in fade-in duration-700">
+                  "{refined.hypothesis}"
+                </p>
+              )}
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground pt-2">
-                let's pressure-test it — side by side
+                first matchup loading — let's see which side you actually live on
               </p>
             </>
           )}
