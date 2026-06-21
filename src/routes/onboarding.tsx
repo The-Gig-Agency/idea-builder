@@ -411,6 +411,11 @@ function Onboarding() {
       {/* Active slot input — slot2 or slot3 */}
       {(phase === "slot2" || phase === "slot3") && (
         <section ref={slotAnchorRef} className="space-y-6 animate-in fade-in duration-500">
+          {phase === "slot2" && (
+            <p className="font-serif italic text-xl md:text-2xl text-muted-foreground animate-in fade-in slide-in-from-bottom-1 duration-500">
+              now give me one more
+            </p>
+          )}
           <div className="space-y-6">
             <RankedInput
               key={phase}
