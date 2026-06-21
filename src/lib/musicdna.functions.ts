@@ -1294,6 +1294,9 @@ No prose, no markdown fences.`;
 type ReactToThreeResult = {
   reaction: string;
   hypothesis_v1: string;
+  observation: string;
+  fork: string;
+  stakes: string;
   lane_guess: Lane;
   confidence: number;
   suspected_dimensions: string[];
@@ -1304,25 +1307,39 @@ export const reactToThree = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z.object({ songs: z.array(z.string().trim().min(1).max(200)).length(3) }).parse(d),
   )
-  .handler(async ({ data }): Promise<ReactToThreeResult> => {
+  .handler(async ({ data, context }): Promise<ReactToThreeResult> => {
+    const { supabase } = context;
     const fallback: ReactToThreeResult = {
       reaction: "Three songs is barely a sketch — but a sketch already says something.",
-      hypothesis_v1: "I'm not going to guess from three. Throw me two more and I'll commit.",
+      hypothesis_v1: "Three picks is a sketch. Give me two more and I'll commit.",
+      observation: "Three songs is barely a sketch — but a sketch already says something.",
+      fork: "sketch ↔ portrait",
+      stakes: "Two more picks and I commit. Surprise me.",
       lane_guess: "general",
       confidence: 0,
       suspected_dimensions: [],
     };
     try {
+      const ctx = await Promise.all(data.songs.map((s) => lookupSongContext(supabase as never, s)));
+      const ctxBlock = ctx
+        .map((c, i) => c ? `${i + 1}. ${c.title} — ${c.artist}${c.year ? ` (${c.year})` : ""}${c.primary_lane ? ` · ${c.primary_lane}` : ""}` : `${i + 1}. (no catalog match)`)
+        .join("\n");
       const txt = await ai([
         { role: "system", content: REACT_VOICE },
-        { role: "user", content: `Three songs they love:\n${data.songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
+        { role: "user", content: `Three songs they love (raw input):\n${data.songs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nWhat the catalog knows (use only if it matches; don't invent):\n${ctxBlock}\n\nReturn the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
       const p = JSON.parse(cleaned) as Partial<ReactToThreeResult>;
       const lane = (LANES as readonly string[]).includes(p.lane_guess as string) ? (p.lane_guess as Lane) : "general";
+      const observation = typeof p.observation === "string" && p.observation.trim() ? p.observation.trim() : (typeof p.reaction === "string" ? p.reaction.trim() : "");
+      const fork = typeof p.fork === "string" && p.fork.trim() ? p.fork.trim() : fallback.fork;
+      const stakes = typeof p.stakes === "string" && p.stakes.trim() ? p.stakes.trim() : fallback.stakes;
       return {
-        reaction: typeof p.reaction === "string" && p.reaction.trim() ? p.reaction.trim() : fallback.reaction,
-        hypothesis_v1: typeof p.hypothesis_v1 === "string" && p.hypothesis_v1.trim() ? p.hypothesis_v1.trim() : fallback.hypothesis_v1,
+        reaction: observation || fallback.reaction,
+        hypothesis_v1: `${fork}. ${stakes}`,
+        observation: observation || fallback.observation,
+        fork,
+        stakes,
         lane_guess: lane,
         confidence: Math.max(0, Math.min(1, Number(p.confidence ?? 0))),
         suspected_dimensions: Array.isArray(p.suspected_dimensions)
@@ -1333,6 +1350,7 @@ export const reactToThree = createServerFn({ method: "POST" })
       return fallback;
     }
   });
+
 
 // Per-song micro-reaction. LADDERED by index — the PERSONA itself escalates:
 // song 1–2 = casual friend, song 3 = music-loving friend, song 4 = sharper
