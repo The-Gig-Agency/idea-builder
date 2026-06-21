@@ -223,11 +223,22 @@ function Onboarding() {
           lane: string;
           confidence: number;
           secondary_lanes?: string[];
+          observation?: string;
+          fork?: string;
+          stakes?: string;
         };
         setSongs(nextSongs);
         setDraft("");
         setReactions((prev) => [...prev, r.reaction]);
-        setRefined({ hypothesis: r.hypothesis, lane: r.lane, confidence: r.confidence, secondary_lanes: r.secondary_lanes ?? [] });
+        setRefined({
+          hypothesis: r.hypothesis,
+          lane: r.lane,
+          confidence: r.confidence,
+          secondary_lanes: r.secondary_lanes ?? [],
+          observation: r.observation,
+          fork: r.fork,
+          stakes: r.stakes,
+        });
         setPhase("playing");
         track({ event_type: "onboarding_slot_submitted", props: { rank: 3 } });
         track({ event_type: "onboarding_three_submitted", variant: opener?.variant_key ?? "fallback" });
