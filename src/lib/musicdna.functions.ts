@@ -378,9 +378,11 @@ export const nextPairing = createServerFn({ method: "POST" })
       return { pairing: null, round, confidence, done: true as const };
     }
 
-    // Hypothesis-challenging boost: prefer pairings whose `tests` axes are the
-    // axes the working read leans hardest on. Encourages the engine to probe
-    // ITS OWN current guess instead of grabbing a high-diagnostic-weight pair.
+    // Hypothesis-challenging filter+boost: the next matchup should *test the
+    // fork the critic just named*, not grab any high-weight pair. We identify
+    // axes the working read leans hardest on (the live fork) and prefer pairings
+    // whose `tests` include one of them. Hard filter when possible; fall back
+    // to a 1.5x boost if filtering would empty the pool.
     const leaningAxes = new Set(
       (DIMS as readonly string[])
         .map((d) => ({ d, v: Math.abs(vector[d] ?? 0) }))
@@ -389,6 +391,14 @@ export const nextPairing = createServerFn({ method: "POST" })
         .slice(0, 3)
         .map((x) => x.d),
     );
+    const testsFork = (p: typeof pool[number]) => {
+      const tests = ((p.tests as string[] | null) ?? []) as string[];
+      return tests.some((t) => leaningAxes.has(t));
+    };
+    if (leaningAxes.size > 0) {
+      const forkPool = pool.filter(testsFork);
+      if (forkPool.length > 0) pool = forkPool;
+    }
     const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
     const scored = pool.map((p) => {
       const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
