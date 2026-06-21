@@ -24,14 +24,7 @@ export const Route = createFileRoute("/onboarding")({
 
 const MAX_ROUNDS = 6;
 
-const LANE_LABEL: Record<string, string> = {
-  alternative: "Alternative",
-  pop: "Pop",
-  hip_hop: "Hip-Hop",
-  electronic: "Electronic",
-  classic_rock: "Classic Rock",
-  general: "General",
-};
+// LANE_LABEL removed — fork chip replaces the lane verdict.
 
 const SLOT_LABELS = [
   "The one at the top",
@@ -45,7 +38,7 @@ const PLACEHOLDERS = [
 ];
 
 type Phase = "slot1" | "slot2" | "slot3" | "playing" | "done";
-type Refined = { reaction?: string; hypothesis: string; lane: string; confidence: number; secondary_lanes?: string[] };
+type Refined = { reaction?: string; hypothesis: string; lane: string; confidence: number; secondary_lanes?: string[]; observation?: string; fork?: string; stakes?: string };
 type Song = { id: string; title: string; artist: string; year: number | null; lane: string };
 type Pairing = {
   id: string; tests: string[]; hypothesis: string | null; why_good: string | null;
@@ -223,11 +216,22 @@ function Onboarding() {
           lane: string;
           confidence: number;
           secondary_lanes?: string[];
+          observation?: string;
+          fork?: string;
+          stakes?: string;
         };
         setSongs(nextSongs);
         setDraft("");
         setReactions((prev) => [...prev, r.reaction]);
-        setRefined({ hypothesis: r.hypothesis, lane: r.lane, confidence: r.confidence, secondary_lanes: r.secondary_lanes ?? [] });
+        setRefined({
+          hypothesis: r.hypothesis,
+          lane: r.lane,
+          confidence: r.confidence,
+          secondary_lanes: r.secondary_lanes ?? [],
+          observation: r.observation,
+          fork: r.fork,
+          stakes: r.stakes,
+        });
         setPhase("playing");
         track({ event_type: "onboarding_slot_submitted", props: { rank: 3 } });
         track({ event_type: "onboarding_three_submitted", variant: opener?.variant_key ?? "fallback" });
@@ -431,29 +435,32 @@ function Onboarding() {
         </section>
       )}
 
-      {/* Final synthesis after slot 3 */}
+      {/* Final synthesis after slot 3 — fork + stakes, no lane chip */}
       {refined && (
-        <section className="space-y-6 animate-in fade-in duration-500">
+        <section className="space-y-5 animate-in fade-in duration-500">
           {r5Step >= 2 && (
             <>
-              <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary animate-in fade-in duration-700">
-                "{refined.hypothesis}"
-              </p>
-              <div className="flex flex-wrap items-center gap-3 pt-1 animate-in fade-in duration-700">
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Possible lane</span>
-                <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
-                  {(() => {
-                    const primary = LANE_LABEL[refined.lane] ?? refined.lane;
-                    const sec = (refined.secondary_lanes ?? []).filter((l) => l && l !== refined.lane && l !== "general")[0];
-                    if (refined.confidence < 0.55 && sec) {
-                      return `${primary} or ${LANE_LABEL[sec] ?? sec}`;
-                    }
-                    return primary;
-                  })()}
-                </span>
-              </div>
+              {refined.fork && (
+                <div className="flex flex-wrap items-center gap-3 animate-in fade-in duration-700">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    the fork
+                  </span>
+                  <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
+                    {refined.fork}
+                  </span>
+                </div>
+              )}
+              {refined.stakes ? (
+                <p className="font-serif text-2xl md:text-3xl leading-snug italic text-primary animate-in fade-in duration-700">
+                  "{refined.stakes}"
+                </p>
+              ) : (
+                <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary animate-in fade-in duration-700">
+                  "{refined.hypothesis}"
+                </p>
+              )}
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground pt-2">
-                let's pressure-test it — side by side
+                first matchup loading — let's see which side you actually live on
               </p>
             </>
           )}
