@@ -1397,13 +1397,23 @@ export const reactToOne = createServerFn({ method: "POST" })
       priorSongs: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
     }).parse(d),
   )
-  .handler(async ({ data }): Promise<{ text: string; nextLabel: string | null }> => {
+  .handler(async ({ data, context }): Promise<{ text: string; nextLabel: string | null }> => {
+    const { supabase } = context;
     const fallbacks = ["Interesting.", "Noted.", "Mm.", "Okay.", "Now we're talking."];
     const nextRank = data.index + 2; // index 0 → asking for #2, etc.
     try {
       const prior = data.priorSongs.length
         ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
         : "";
+
+      // Hidden context: anything the catalog knows about this song. Passed as
+      // "facts the critic happens to know" — never quoted verbatim, never
+      // invented when absent.
+      const ctx = await lookupSongContext(supabase as never, data.song);
+      const ctxBlock = ctx
+        ? `Catalog knows: ${ctx.title} — ${ctx.artist}${ctx.year ? ` (${ctx.year})` : ""}${ctx.primary_lane ? ` · ${ctx.primary_lane}` : ""}. You may use this. Do not invent anything beyond it.`
+        : `Catalog has no match for this song. Don't invent facts — riff on instinct or mood.`;
+
       const nextPromptRules = `
 Also write a SHORT, CONVERSATIONAL prompt for the next slot (#${nextRank}). This is the critic talking to a friend across a table — NOT a quiz question. Show you were listening to what they just said.
 
@@ -1414,23 +1424,14 @@ Riff on ONE distinctive angle of what's been named so far — pick whichever fit
 - the MOOD or time-of-day (e.g. "cool... now another 4am one", "stay sad — what's next?")
 
 Rules for nextLabel:
-- 4 to 10 words. Conversational, like a real human reacting. Lowercase fragments and ellipses are fine.
-- Can open with a small acknowledgment ("cool…", "okay…", "alright…", "noted —", "huh.") then ask for #${nextRank}.
+- 4 to 10 words. Conversational. Lowercase fragments and ellipses are fine.
 - Reference EXACTLY ONE angle (artist OR era OR scene OR mood). Don't stack them.
-- Must feel like a continuation of the conversation, not a survey field label.
-- Voice: Rolling Stone swagger but warm — punching WITH them, not at them. Never grade the pick.
-- If you genuinely can't pin a distinctive angle (song unrecognized / too generic), return nextLabel as "" (empty string). Don't bluff a generic one.
-
-Good examples:
-- "cool… now who's second best to Echo?"
-- "80s kid, huh? Give me #${nextRank}."
-- "alright grunge head — what's #${nextRank}?"
-- "Nirvana up top. Who follows?"
-- "stay in that mood. Hit me with #${nextRank}."`;
+- Voice: warm — punching WITH them, never at them. Never grade the pick.
+- If you can't pin a distinctive angle, return nextLabel as "" (empty string).`;
 
       const txt = await ai([
         { role: "system", content: `${microReactVoice(data.index)}\n${nextPromptRules}\n\nReturn STRICT JSON: {"reaction": "...", "nextLabel": "..."}. No markdown fences.` },
-        { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n\nReturn the JSON now.` },
+        { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n${ctxBlock}\n\nReturn the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
       let reaction = "";
@@ -1440,15 +1441,13 @@ Good examples:
         if (typeof parsed.reaction === "string") reaction = parsed.reaction.trim();
         if (typeof parsed.nextLabel === "string") {
           const nl = parsed.nextLabel.replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
-          // Cap length and reject obviously-bad outputs
           if (nl && nl.length <= 120 && nl.split(/\s+/).length <= 14) nextLabel = nl;
         }
       } catch {
-        // Not JSON — treat the whole thing as the reaction, no nextLabel.
         reaction = cleaned.split("\n")[0].replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
       }
       if (!reaction) reaction = fallbacks[data.index % fallbacks.length];
-      const capped = reaction.length > 160 ? reaction.slice(0, 157) + "…" : reaction;
+      const capped = reaction.length > 200 ? reaction.slice(0, 197) + "…" : reaction;
       return { text: capped, nextLabel };
     } catch {
       return { text: fallbacks[data.index % fallbacks.length], nextLabel: null };
