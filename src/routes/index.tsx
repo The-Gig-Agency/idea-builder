@@ -11,13 +11,21 @@ export const Route = createFileRoute("/")({
         content:
           "Twenty song matchups. Three minutes. Discover what your taste reveals about you.",
       },
-      { property: "og:title", content: "MusicDNA" },
+      { property: "og:title", content: "MusicDNA — Why do you love the songs you love?" },
       {
         property: "og:description",
         content:
           "Choose between songs. Discover the hidden patterns in your taste.",
       },
+      { property: "og:image", content: "/og-image.jpg" },
+      { property: "og:image:width", content: "1216" },
+      { property: "og:image:height", content: "640" },
+      { property: "og:url", content: "/" },
+      { name: "twitter:image", content: "/og-image.jpg" },
+      { name: "twitter:title", content: "MusicDNA — Why do you love the songs you love?" },
+      { name: "twitter:description", content: "Choose between songs. Discover the hidden patterns in your taste." },
     ],
+    links: [{ rel: "canonical", href: "/" }],
   }),
   component: Landing,
 });
