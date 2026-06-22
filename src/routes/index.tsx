@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import logoAsset from "@/assets/music-dna-logo.png.asset.json";
+
 
 
 export const Route = createFileRoute("/")({
