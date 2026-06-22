@@ -440,32 +440,16 @@ function Onboarding() {
         </section>
       )}
 
-      {/* Final synthesis after slot 3 — fork + stakes, no lane chip */}
+      {/* Post-3 read — one short conversational observation. No fork, no stakes, no axis talk. */}
       {refined && (
-        <section className="space-y-5 animate-in fade-in duration-500">
+        <section className="space-y-4 animate-in fade-in duration-500">
           {r5Step >= 2 && (
             <>
-              {refined.fork && (
-                <div className="flex flex-wrap items-center gap-3 animate-in fade-in duration-700">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                    the fork
-                  </span>
-                  <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
-                    {refined.fork}
-                  </span>
-                </div>
-              )}
-              {refined.stakes ? (
-                <p className="font-serif text-2xl md:text-3xl leading-snug italic text-primary animate-in fade-in duration-700">
-                  "{refined.stakes}"
-                </p>
-              ) : (
-                <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary animate-in fade-in duration-700">
-                  "{refined.hypothesis}"
-                </p>
-              )}
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground pt-2">
-                first matchup loading — let's see which side you actually live on
+              <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground animate-in fade-in duration-700">
+                {refined.observation || refined.hypothesis}
+              </p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground pt-1">
+                next one coming up…
               </p>
             </>
           )}
@@ -508,10 +492,9 @@ function Onboarding() {
       {/* Current pairing */}
       {pairing && phase === "playing" && (
         <section ref={pairingAnchorRef} className="space-y-6 pt-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center">
             <p className="eyebrow">Round {String(round).padStart(2, "0")} / {MAX_ROUNDS}</p>
-            <div className="h-px flex-1 mx-6 bg-border" />
-            <p className="eyebrow">{pairing.tests?.join(" · ") || "—"}</p>
+            <div className="h-px flex-1 ml-6 bg-border" />
           </div>
           <p className="font-serif text-xl md:text-2xl text-muted-foreground">
             {entries.length === 0 ? "Pick one. Don't overthink it." : "Next one — go with your gut."}
