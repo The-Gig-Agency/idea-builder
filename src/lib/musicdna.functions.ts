@@ -967,8 +967,13 @@ Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
       narrative: narrative || null,
     });
 
-    if (criticStatus === "error") {
-      throw new Error(criticError ?? "Critic failed");
+    // If the critic AI failed, don't strand the user — fall back to a
+    // deterministic narrative built from the allowed claims. The error is
+    // already logged to llm_calls above.
+    if (criticStatus === "error" || !narrative.trim()) {
+      narrative = allowed_claims.length
+        ? `Across these matchups you kept choosing ${allowed_claims[0].tradeoff} (${allowed_claims[0].supporting_choices} of ${allowed_claims[0].tested_total} relevant picks). The shape's there — consistent, if not loud.`
+        : `Nothing cleared the evidence threshold this round. Either you're harder to read than most, or the matchups didn't catch you. Worth another pass.`;
     }
 
     // -------- Persist --------
