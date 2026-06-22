@@ -340,43 +340,43 @@ function Onboarding() {
   // INITIAL: cold open — single slot only
   if (phase === "slot1") {
     return (
-      <main className="mx-auto max-w-2xl px-6 pt-16 pb-24 min-h-screen flex flex-col">
-        <section className="space-y-10 animate-in fade-in duration-500">
-          <header className="space-y-3">
-            <p className="eyebrow">YOUR SONGS · RANKED</p>
-            <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight">
-              What's YOUR greatest song of all time?
-              <br />
-              <span className="italic text-muted-foreground">Don't be shy...</span>
-            </h1>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Start with #1 — and we'll see what makes YOU tick.
-            </p>
-          </header>
+    <main className="mx-auto max-w-2xl px-6 pt-24 pb-24 min-h-screen flex flex-col">
+      <section className="space-y-16 animate-in fade-in duration-500">
+        <header className="space-y-4 text-center sm:text-left">
+          <p className="eyebrow">YOUR SONGS · RANKED</p>
+          <h1 className="display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+            What's YOUR greatest song of all time?
+            <br />
+            <span className="italic text-muted-foreground">Don't be shy...</span>
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-md text-center sm:text-left">
+            Start with #1 — and we'll see what makes YOU tick.
+          </p>
+        </header>
 
-          <div className="space-y-6">
-            <RankedInput
-              rank={1}
-              label={SLOT_LABELS[0]}
-              value={draft}
-              placeholder={PLACEHOLDERS[0]}
-              onChange={setDraft}
-              autoFocus
-              onEnter={submitSlot}
-            />
-          </div>
+        <div className="space-y-8">
+          <RankedInput
+            rank={1}
+            label={SLOT_LABELS[0]}
+            value={draft}
+            placeholder={PLACEHOLDERS[0]}
+            onChange={setDraft}
+            autoFocus
+            onEnter={submitSlot}
+          />
+        </div>
 
-          <div>
-            <button
-              onClick={submitSlot}
-              disabled={busy || draft.trim().length < 2}
-              className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
-            >
-              {busy ? "Reading…" : "→"}
-            </button>
-          </div>
-        </section>
-      </main>
+        <div className="flex justify-center sm:justify-start">
+          <button
+            onClick={submitSlot}
+            disabled={busy || draft.trim().length < 2}
+            className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90 disabled:opacity-40"
+          >
+            {busy ? "Reading…" : "→"}
+          </button>
+        </div>
+      </section>
+    </main>
     );
   }
 

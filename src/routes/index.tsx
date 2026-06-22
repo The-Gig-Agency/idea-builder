@@ -49,7 +49,7 @@ function Nav() {
     <header className="border-b hairline">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Link to="/" className="flex items-center gap-3">
-          <img src="/music-dna-logo.png" alt="MusicDNA" className="h-14 w-auto" />
+          <img src="/music-dna-logo.png" alt="MusicDNA" className="h-28 w-auto" />
           <span className="sr-only">MusicDNA</span>
         </Link>
 
