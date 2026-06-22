@@ -296,7 +296,11 @@ function Onboarding() {
 
       const { pairing: nxt, round: nr, done: isDone } = await nextFn({ data: { sessionId } });
       if (isDone || !nxt || nr > MAX_ROUNDS) {
-        await finalizeFn({ data: { sessionId } });
+        try {
+          await finalizeFn({ data: { sessionId } });
+        } catch (e) {
+          console.error("finalizeSession failed", e);
+        }
         track({ event_type: "session_completed", session_id: sessionId, props: { rounds: nr } });
         try {
           const r = await synthFn({ data: { sessionId } }) as {
@@ -307,7 +311,9 @@ function Onboarding() {
           setSynthesis(r.synthesis);
           setKept(r.kept_choosing ?? []);
           setCounters((r.counter_reads ?? []).map((c) => ({ claim: c.claim, notes: c.notes })));
-        } catch { /* fall through */ }
+        } catch (e) {
+          console.error("finalSynthesis failed", e);
+        }
         setPhase("done");
         setBusy(false);
         return;
