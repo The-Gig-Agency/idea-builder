@@ -397,7 +397,7 @@ function Onboarding() {
               </span>
               <span className="font-mono text-base md:text-lg text-foreground">✓ {s}</span>
             </div>
-            {reactions[i] && (
+            {reactions[i] && i < 2 && (
               <div className="pl-[4rem]">
                 <p className="font-serif text-xl md:text-2xl leading-snug text-foreground animate-in fade-in slide-in-from-bottom-2 duration-500">
                   {reactions[i]}
