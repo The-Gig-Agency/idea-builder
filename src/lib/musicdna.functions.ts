@@ -1292,11 +1292,11 @@ Mode: first read after three songs. You're a sharp, curious friend who knows mus
 ${ONBOARDING_RULES}
 Output STRICT JSON:
 {
-  "observation": "ONE sentence, max 24 words. A concrete pattern across the three CHOICES — reference at least TWO of the actual songs/artists by name. Good: 'Two of three (Billie Jean, True) hide unease behind a sleek surface; only Little Red Corvette wears it on the outside.' Bad: anything starting 'You reward…' or 'You trust…' or naming no songs.",
-  "fork": "Short two-pole fork the picks suggest, max 10 words, formatted with ↔. Examples: 'hook-led ↔ atmosphere-led', 'pop songwriting ↔ mood & texture', 'performance ↔ production'. Two named poles, not a verdict.",
-  "stakes": "ONE sentence, max 26 words. What the NEXT pick will tell us. Use the pattern: 'If #4 leans X, you're really an A; if it leans Y, I had you wrong.'",
+  "observation": "ONE short observation, 8–22 words. Notice a pattern across the three picks — softer is better. Good: 'Three big swings in a row. You seem more interested in impact than subtlety.' Good: 'So far you're gravitating toward scale. Nothing quiet has survived the cut.' Good: 'You haven't picked a wallflower yet.' Bad: long sentences, psychoanalytic certainty, 'suggests you want', naming no songs at all.",
+  "fork": "Leave empty.",
+  "stakes": "Leave empty.",
   "reaction": "Legacy field. Copy the observation verbatim.",
-  "hypothesis_v1": "Legacy field. Copy 'fork. stakes' joined with a period and space.",
+  "hypothesis_v1": "Legacy field. Copy the observation verbatim.",
   "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
   "confidence": 0.0-1.0,
   "suspected_dimensions": ["movement","atmosphere","immersion","scale","community","perspective","confidence","tension","texture","transformation"]
