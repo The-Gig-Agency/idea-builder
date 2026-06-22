@@ -1,72 +1,73 @@
-## What "helpful, insightful, fun, engaging" actually means here
+## The shift
 
-The I Feel Love essay is engaging because it does four things the app currently doesn't:
+Stop showing the user our model. Show them attention.
 
-1. **Evidence before verdict.** It earns "sounds like 1987" by listing what 1977 pop relied on. Then names the fork. Our app jumps straight to "you reward the performer who…" with no evidence the user can see.
-2. **Names a fork.** I Feel Love vs Being Boiled = dance future vs alternative-electronic future. Forks make a read feel like *discovery*, not horoscope. Our app gives single-axis verdicts ("Pop, 85%") with nothing to push against.
-3. **Tells the user something they didn't already know.** "Eno told Bowie he'd heard the future." A small fact, a vivid quote, a lineage. Our app's reactions are abstract and could apply to anyone.
-4. **The pick reveals something.** "Preferring Being Boiled over Don't You Want Me signals you value electronic as mood, not pop songwriting." That's the payoff sentence. Our app doesn't have a payoff sentence — it has aphorisms.
+The "fork ↔ axis" chip and the "if you pick X over Y, the fork lands on…" stakes line are ontology leaking into the UI. They make the system sound like it's grading itself out loud. Replace them with short, conversational observations that read like an interviewer noticing something — and then immediately get out of the way so the next pairing can land.
 
-I'm not going to force the essay's structure. I'm going to fix the four things that make the current flow feel generic and slow, in priority order.
+## What changes
 
-## Fix 1 — Per-song reactions get a concrete hook
+### 1. Kill the fork chip and the stakes line in the UI
 
-Right now `reactToOne` produces lines like "the moment when a secret becomes a spectacle." Replace with reactions that reference *something specific*: the artist's lineage, the year, a known fact, the production, a peer record. One sentence, no verdict.
+In `src/routes/onboarding.tsx`, remove rendering of:
+- the fork chip ("Pop songwriting ↔ Mood & texture", etc.)
+- the stakes sentence ("If #4 leans X, I had you wrong")
+- any "The Fork" / axis-named language
 
-Examples of the target shape:
-- "Billie Jean — Quincy Jones famously fought MJ to cut it. Lost. Good call."
-- "True — Spandau in their Aladdin Sane-meets-Sade phase. Bold pick."
-- "Little Red Corvette — Prince's first song to crack the white rock stations. He knew."
+Keep one short observation line above the next pairing. That's it. The pairing itself is the next question — it doesn't need a preface explaining what it tests.
 
-`reactToOne` already has decade/scene context available. We add a small "what's interesting about this record" beat to the prompt, and ban the abstract-aphorism opener list.
+Optional small touch: a quiet "Round N" counter above the matchup (replaces the chip's visual slot), no scoring talk.
 
-## Fix 2 — Post-3 read names the fork
+### 2. Shorten the post-3 read drastically
 
-Instead of "observation, observation, hypothesis" (which we shipped last round but is still too templatey), the post-3 read does:
+New target shape, ~25–40 words, one short paragraph:
 
-- **One concrete observation** referencing at least two of the three songs by name.
-- **The fork the picks suggest** — "You're hovering between [thing A] and [thing B]." Two named poles, not a single lane.
-- **What the next pick will tell us** — "If #4 is closer to X, you're really an A. If it leans Y, I had you wrong."
+> Two dramatic choices in a row. You seem to like emotional honesty delivered through a strong artistic lens — not raw confession.
 
-That last beat is the engagement hook. It tells the user the *next question matters* and previews what's being tested. It's the opposite of premature certainty — it stakes a hypothesis on the next pick.
+Rules for the model:
+- Reference at least one song or artist by name.
+- One observation, conversational, present tense.
+- No axis names, no poles, no "fork", no "stakes", no "if #4…".
+- No verdict aphorisms (banned openers stay banned).
+- Max ~40 words. Hard cap enforced in prompt.
 
-JSON contract becomes `{ observation, fork, stakes }`. Onboarding renders all three.
+### 3. Same treatment for the mid-flow reads
 
-## Fix 3 — The lane chip becomes a fork chip
+`refineWithTwoMore` / `MID_VOICE` and any later "after 6" / "after 10" beats follow the same pattern. Cadence examples to match the user's note:
 
-Drop "Possible lane: Pop" entirely. Replace with the fork itself: "Pop songwriting ↔ Mood & texture" or "Hook-led ↔ Atmosphere-led" — derived from the top-two-axes of the working vector, not from `primary_lane`. Lane is a destination; the fork is the *interesting question*. This is what makes the user lean in for #4.
+- After 3: "So far, you seem more interested in perspective than pure emotion."
+- After 6: "You're surprisingly resistant to nostalgia."
+- After 10: "You keep choosing atmosphere over immediacy."
 
-## Fix 4 — Pairings test the named fork
+Short. Observational. No mechanism talk.
 
-Last round we added a 1.5x boost for pairings that hit the user's top-|value| axes. Tighten this: when the post-3 read commits to a named fork (e.g. atmosphere vs statement), `nextPairing` *must* pick from pairings whose `tests` include that axis with both poles represented. If none qualify, fall back to top-axis boost. Result: the next matchup visibly tests the fork the critic just named — the engine and the voice are saying the same thing.
+### 4. JSON contract simplifies
 
-Plus the previous round's same-artist filter stays.
+`reactToThree` (and the mid reads) return just `{ observation }`. Drop `fork` and `stakes` from the contract and from the renderer. This also removes a class of "model forgot a field" failures.
 
-## Fix 5 — Surface what we know, sparingly
+### 5. Keep the engine smart, silently
 
-The data files have year, primary_lane, diagnostic notes, peer records, scene tags. The reactions barely use any of it. Add a tiny server-side lookup in `reactToOne` and `reactToThree`: if the song matches (or fuzzy-matches) a row in the canon/scoring TSVs, pass the year/scene/curator note into the prompt as "context the critic happens to know." Don't quote it verbatim — let the model weave it in. This is what makes a reaction feel like it came from someone who *knows music* rather than someone improvising.
+`nextPairing` keeps the hypothesis-testing logic we added last round — it still picks pairings that discriminate between the user's leaning poles. The user just never sees the poles named. Engine and voice stop saying the same thing out loud; the engine does the work, the voice stays human.
 
-When there's no match, the critic stays evidence-light and leans on tone. No hallucinated facts.
-
-## Voice rules (apply everywhere)
-
-- Reference the actual song or artist by name when possible.
-- One concrete detail per reaction (year, producer, peer, scene, production choice) when known.
-- Name forks, not lanes. Two poles, not one verdict.
-- Hedge the read; commit to the *stakes* of the next pick.
-- Banned openers stay banned: "the moment when", "the performer who", "you reward…", "you trust…".
-- Allowed moves: "Two of three…", "Closer to X than Y…", "If #4 leans…", "Tell me I'm wrong."
+Per-song reactions (`reactToOne`) keep the concrete-hook treatment from the prior round (year, producer, peer record when known) — those already feel like "someone paying attention" and the user called that out as working.
 
 ## Scope
 
-- `src/lib/musicdna.functions.ts` — prompts for `reactToOne`, `reactToThree`, `refineWithTwoMore`, `MID_VOICE`; new `{observation, fork, stakes}` contract on `reactToThree`; song-context lookup helper; tightened `nextPairing` fork-testing logic.
-- `src/routes/onboarding.tsx` — render `fork` and `stakes` from the new contract; replace lane chip with fork chip.
-- `src/routes/_authenticated/1980.tsx` — same contract change for the decade flow.
-- No DB schema changes. No new tables. Existing TSVs in `data/musicdna/` are the lookup source for Fix 5.
+- `src/lib/musicdna.functions.ts` — prompts for `reactToThree`, `refineWithTwoMore`, `MID_VOICE`; tighten word caps; drop `fork`/`stakes` from JSON contract; keep `nextPairing` logic as-is.
+- `src/routes/onboarding.tsx` — remove fork chip and stakes line; render single observation; optional quiet round counter.
+- `src/routes/_authenticated/1980.tsx` — same contract + UI change for the decade flow.
 
 ## Out of scope
 
-- Result page copy.
-- Cross-lane probes (stays disabled per `mem://product/within-lane-only.md`).
-- Curating the pairing seed (same-artist filter at runtime is enough for now).
-- Persisting the critic's "context I happen to know" — it's prompt-time only.
+- Per-song reaction shape (already good).
+- Pairing selection logic (stays).
+- Result page.
+- Any data/schema changes.
+
+## Voice rules (updated)
+
+- Speak to the user, not about the model.
+- Name songs/artists; never name axes or poles.
+- One observation per beat. ~25–40 words max.
+- Never preview what the next pick "tests."
+- Banned: "fork", "axis", "lane", "stakes", "if #4…", "I had you wrong", "the moment when", "you reward…", "you trust…".
+- Allowed: "Two of three…", "So far you seem…", "You keep choosing…", "Surprisingly…", "Closer to X than Y…" (as long as X/Y are songs or artists, not axes).
