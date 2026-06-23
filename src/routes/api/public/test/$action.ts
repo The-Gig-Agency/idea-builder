@@ -111,6 +111,7 @@ async function getOrCreateRun(personaId: string, pairingCount?: number, reset = 
     email_confirm: true,
     user_metadata: { persona_id: personaId, harness: true, display_name: `persona:${personaId}` },
   });
+  console.log("[test-harness] createUser:", { err: created.error?.message ?? null, user_id: created.data?.user?.id ?? null, email });
   if (created.data?.user?.id) {
     userId = created.data.user.id;
   } else {
