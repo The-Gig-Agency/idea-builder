@@ -197,7 +197,8 @@ One JSON array per lane, code blocks, lane name as heading. Sorted by `diagnosti
 ## Self-check before sending output
 
 - Every song scored on all 10 dimensions, no nulls.
-- No song parked at 50 across the board.
+- Score calibration applied — no song parked at 50 across the board, full 0–100 range used.
+- `routing_power` set for every song; the top-decile of each lane (by routing_power) is dominated by widely-known, lane-unambiguous tracks.
 - Every pairing's `tests` axes show ≥20 point difference between A and B in the Pass 1 vectors.
 - Every lane has roughly even axis coverage across pairings.
 - Sub-lane diversity inside each lane.
