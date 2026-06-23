@@ -153,7 +153,7 @@ function HowItWorks() {
   const steps = [
     {
       n: "01",
-      title: "Name five songs you love",
+      title: "Name three songs you love",
       body: "The songs that never leave your playlist. The songs you stop skipping. The songs that still hit years later.",
     },
     {
