@@ -18,6 +18,7 @@ import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as Authenticated1980RouteImport } from './routes/_authenticated/1980'
+import { Route as ApiPublicTestActionRouteImport } from './routes/api/public/test/$action'
 
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
@@ -63,6 +64,11 @@ const Authenticated1980Route = Authenticated1980RouteImport.update({
   path: '/1980',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicTestActionRoute = ApiPublicTestActionRouteImport.update({
+  id: '/api/public/test/$action',
+  path: '/api/public/test/$action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/api/public/test/$action': typeof ApiPublicTestActionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/api/public/test/$action': typeof ApiPublicTestActionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/api/public/test/$action': typeof ApiPublicTestActionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/profile'
     | '/s/$sessionId'
+    | '/api/public/test/$action'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/profile'
     | '/s/$sessionId'
+    | '/api/public/test/$action'
   id:
     | '__root__'
     | '/'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/profile'
     | '/s/$sessionId'
+    | '/api/public/test/$action'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -137,6 +149,7 @@ export interface RootRouteChildren {
   MeRoute: typeof MeRoute
   OnboardingRoute: typeof OnboardingRoute
   SSessionIdRoute: typeof SSessionIdRoute
+  ApiPublicTestActionRoute: typeof ApiPublicTestActionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -204,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Authenticated1980RouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/test/$action': {
+      id: '/api/public/test/$action'
+      path: '/api/public/test/$action'
+      fullPath: '/api/public/test/$action'
+      preLoaderRoute: typeof ApiPublicTestActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -229,6 +249,7 @@ const rootRouteChildren: RootRouteChildren = {
   MeRoute: MeRoute,
   OnboardingRoute: OnboardingRoute,
   SSessionIdRoute: SSessionIdRoute,
+  ApiPublicTestActionRoute: ApiPublicTestActionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
