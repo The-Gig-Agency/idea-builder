@@ -138,8 +138,10 @@ Do this only after Pass 1 is reviewed and song titles are locked. Pairings refer
 ```json
 {
   "lane": "alternative | pop | hip_hop | electronic | classic_rock",
+  "song_a_id": "artist_slug__title_slug",
   "song_a_title": "string",
   "song_a_artist": "string",
+  "song_b_id": "artist_slug__title_slug",
   "song_b_title": "string",
   "song_b_artist": "string",
   "tests": ["movement", "atmosphere"],
