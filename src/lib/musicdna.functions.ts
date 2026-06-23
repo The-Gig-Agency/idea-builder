@@ -2349,10 +2349,7 @@ async function ensureChatSessionForUser(
   const lane = (profile.opening_lane as string | null) ?? "general";
   const conf = Number(profile.opening_lane_confidence ?? 0);
   const dims = (profile.opening_analysis_json?.candidate_dimensions ?? {}) as Record<string, number>;
-  const vector: Record<string, number> = {};
-  for (const [k, v] of Object.entries(dims)) {
-    if (typeof v === "number" && Number.isFinite(v)) vector[k] = Math.round(v);
-  }
+  const vector = seedVectorFromPriors(dims);
   const { data: created, error } = await supabase
     .from("sessions")
     .insert({
