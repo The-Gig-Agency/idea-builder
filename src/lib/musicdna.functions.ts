@@ -1,6 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+
+// Shared Supabase client type used by the *Impl exports below. The test
+// harness (src/routes/api/public/test/$action.ts) calls these Impl variants
+// directly with a service-role admin client + synthetic userId, bypassing
+// the auth middleware so agents can drive end-to-end runs without auth.
+export type AuthedSupabase = SupabaseClient<Database>;
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
