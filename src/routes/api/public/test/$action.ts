@@ -6,7 +6,7 @@
 // real Supabase auth user. Each persona_id is a stable synthetic identity
 // stored in public.test_runs with its own generated user_id.
 //
-// Auth: header `x-test-harness-secret: <TEST_HARNESS_SECRET>`. No bearer.
+// Auth: header `x-test-harness-secret: <AGENT_TEST_HARNESS_KEY>`. No bearer.
 // All DB writes use the service-role admin client; RLS is bypassed.
 //
 // See /docs/test-harness.md for the full agent-facing API.
@@ -37,7 +37,7 @@ const err = (status: number, message: string, extra: Record<string, unknown> = {
   json({ ok: false, error: message, ...extra }, { status });
 
 function authorized(req: Request): boolean {
-  const secret = process.env.TEST_HARNESS_SECRET;
+  const secret = process.env.AGENT_TEST_HARNESS_KEY;
   if (!secret) return false;
   const got = req.headers.get("x-test-harness-secret") ?? "";
   if (got.length !== secret.length) return false;

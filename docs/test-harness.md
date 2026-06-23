@@ -18,10 +18,10 @@ This is a **test harness only** — do not expose the secret publicly.
 Every request must include:
 
 ```
-x-test-harness-secret: <TEST_HARNESS_SECRET>
+x-test-harness-secret: <AGENT_TEST_HARNESS_KEY>
 ```
 
-The secret is stored as a Supabase project secret named `TEST_HARNESS_SECRET`.
+The secret is stored as a project secret named `AGENT_TEST_HARNESS_KEY`.
 Ask the project owner for the value — never commit it.
 
 ## Base URL
@@ -264,7 +264,7 @@ the persona resumes "fresh".
 ## End-to-end agent script (curl)
 
 ```bash
-SECRET="…"                                  # TEST_HARNESS_SECRET
+SECRET="…"                                  # AGENT_TEST_HARNESS_KEY
 BASE="https://project--bf62bea5-34b0-497c-a8a5-6c41d3f35ed6-dev.lovable.app/api/public/test"
 P="alt-kid-$(date +%s)"
 
