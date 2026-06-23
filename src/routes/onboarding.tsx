@@ -58,6 +58,43 @@ type Entry = {
 const DIR_GLYPH: Record<Entry["direction"], string> = { forming: "↑", holding: "→", revising: "↻" };
 const DIR_LABEL: Record<Entry["direction"], string> = { forming: "first read", holding: "holding", revising: "revising" };
 
+function LineReveal({
+  lines,
+  animate,
+  intervalMs = 700,
+  startDelayMs = 0,
+  className,
+}: {
+  lines: string[];
+  animate: boolean;
+  intervalMs?: number;
+  startDelayMs?: number;
+  className?: string;
+}) {
+  const [shown, setShown] = useState(animate ? 0 : lines.length);
+  useEffect(() => {
+    if (!animate) {
+      setShown(lines.length);
+      return;
+    }
+    setShown(0);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    lines.forEach((_, idx) => {
+      timers.push(setTimeout(() => setShown((s) => Math.max(s, idx + 1)), startDelayMs + idx * intervalMs));
+    });
+    return () => { for (const t of timers) clearTimeout(t); };
+  }, [animate, lines.length, intervalMs, startDelayMs]);
+  return (
+    <div className={className}>
+      {lines.slice(0, shown).map((line, i) => (
+        <p key={i} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function Onboarding() {
   const reactOneFn = useServerFn(reactToOne);
   const commitFn = useServerFn(commitOpeningThree);
