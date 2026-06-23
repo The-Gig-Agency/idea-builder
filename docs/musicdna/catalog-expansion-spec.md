@@ -81,6 +81,7 @@ The first 3 songs are **not enough to fully diagnose taste**; they only need to 
   "transformation": 0,
   "canon_score": 0,
   "diagnostic_power": 0,
+  "routing_power": 0,
   "polarization": 0,
   "tradeoff_richness": 0,
   "identity_signaling": 0,
@@ -88,15 +89,28 @@ The first 3 songs are **not enough to fully diagnose taste**; they only need to 
 }
 ```
 
+### Score calibration (use the full range)
+
+Apply this rubric to every one of the 10 dimensions. Score compression is the #1 failure mode — don't hover around 50.
+
+- **90–100** = defining characteristic of the song
+- **70–89** = clearly present
+- **55–69** = somewhat present
+- **45–54** = neutral
+- **30–44** = clearly opposite pole
+- **0–29** = defining opposite pole
+
 ### Scoring guidance
 
 - 50 = neutral. Don't park everything at 50. We need spread.
 - A song should have at least 3 axes outside the 35–65 band or it isn't pulling weight.
 - `canon_score` = influence / recognition / longevity. "How known is it?"
 - `diagnostic_power` = "If someone puts this in their top 3, what do we learn?" These are independent — a #1 Billboard hit can have low diagnostic power; an obscure B-side can have high diagnostic power.
+- `routing_power` = how reliably this song, if named by a user in the 3-song opener, routes them to the correct lane. Different from `diagnostic_power`. A song is high routing power when it is **widely known AND lane-unambiguous** — naming it gives us strong, clean lane signal. Examples: Billie Jean = high; Anti-Hero = high; an obscure shoegaze deep cut = low (even if diagnostic_power is high); a crossover hit that lives between two lanes = low. The opener uses 3 songs, so routing_power matters as much as diagnostic_power for catalog coverage.
 - `polarization` = how strongly fans/non-fans disagree about it.
 - `tradeoff_richness` = how many of the 10 axes the song meaningfully tests (not just 1–2).
 - `identity_signaling` = how much picking this song says "this is who I am."
+
 
 ### Within-lane diversity requirements
 
@@ -183,7 +197,8 @@ One JSON array per lane, code blocks, lane name as heading. Sorted by `diagnosti
 ## Self-check before sending output
 
 - Every song scored on all 10 dimensions, no nulls.
-- No song parked at 50 across the board.
+- Score calibration applied — no song parked at 50 across the board, full 0–100 range used.
+- `routing_power` set for every song; the top-decile of each lane (by routing_power) is dominated by widely-known, lane-unambiguous tracks.
 - Every pairing's `tests` axes show ≥20 point difference between A and B in the Pass 1 vectors.
 - Every lane has roughly even axis coverage across pairings.
 - Sub-lane diversity inside each lane.
