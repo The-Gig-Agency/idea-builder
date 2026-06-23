@@ -35,10 +35,17 @@ A song or pairing exists to **reveal** something, not to be famous. Diagnostic p
 
 ### Why 3 openers matters for catalog design
 
-The user names only **3 songs** before we route them to a lane and start pairings. That means:
-- Lane routing must succeed from a 3-song fingerprint. The catalog needs enough coverage that 3 named songs reliably hit known entries (or close artist matches).
-- Sub-lane diversity inside each lane matters more, not less — 3 songs is a thin signal, so the within-lane pairings have to do most of the work.
+The first 3 songs are **not enough to fully diagnose taste**; they only need to route the user into the right lane. The pairings do the real diagnostic work. That means:
+- The catalog needs enough coverage that 3 named songs reliably hit known entries (or close artist matches) so lane routing succeeds.
+- Sub-lane diversity inside each lane matters more, not less — the within-lane pairings carry the diagnostic load.
 - Coverage breadth across artists beats deeper coverage of a few famous artists.
+
+### Global constraints (apply to every song)
+
+- **Known enough**: prefer songs with enough listener recognition to make fair pairings. Obscure songs are allowed only when diagnostic power is exceptional.
+- **Artist cap**: max **3 songs per artist per lane** unless explicitly justified in the `rationale`.
+- **Score direction**: higher score always means the **high pole** in the dimension table above. (e.g. `movement: 85` = forward motion; `movement: 15` = stillness.)
+- **Stable IDs**: every song gets a `song_id` of the form `artist_slug__title_slug` (lowercase, non-alphanumerics → `_`, double underscore between artist and title). Pairings reference songs by `song_a_id` / `song_b_id`, not by title — titles collide.
 
 ---
 
