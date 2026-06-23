@@ -2594,11 +2594,18 @@ export const currentRead = createServerFn({ method: "POST" })
         strength: 0,
       };
     }
+    // Rotate variants by current choice count so the running thesis evolves
+    // round to round instead of repeating the same line on the same axis.
+    const { count: choiceCount } = await supabase
+      .from("choices")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId);
+    const variantSeed = (choiceCount ?? 0) + dimSeed(top.d) + (top.v >= 0 ? 0 : 1);
     const beat = BEAT[top.d];
-    const pole = top.v >= 0 ? beat?.hi : beat?.lo;
+    const pole = pickVariant(top.v >= 0 ? beat?.hi : beat?.lo, variantSeed);
     if (!pole) {
       const phrase = REVEAL[top.d];
-      const fallback = top.v >= 0 ? phrase?.hi : phrase?.lo;
+      const fallback = pickVariant(top.v >= 0 ? phrase?.hi : phrase?.lo, variantSeed);
       return {
         thesis: fallback ? `You keep choosing ${fallback.verdict}.` : `Leaning ${top.d}.`,
         hook: "Let's see if that holds.",
