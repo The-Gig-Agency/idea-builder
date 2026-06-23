@@ -259,8 +259,9 @@ const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "class
 
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
+  .handler(async ({ context }) => startSessionImpl(context.supabase, context.userId));
+
+export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("opening_lane, opening_lane_confidence, opening_analysis_json")
@@ -292,7 +293,7 @@ export const startSession = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return { sessionId: data.id, lane, lane_confidence };
-  });
+}
 
 // ============ Next pairing ============
 // Probe schedule: at these rounds we silently inject a pairing from a
@@ -309,8 +310,9 @@ type ProbeState = {
 export const nextPairing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context;
+  .handler(async ({ data, context }) => nextPairingImpl(context.supabase, data));
+
+export async function nextPairingImpl(supabase: AuthedSupabase, data: { sessionId: string }) {
     const [usedRes, sessionRes] = await Promise.all([
       supabase.from("choices").select("pairing_id").eq("session_id", data.sessionId),
       supabase
@@ -433,7 +435,7 @@ export const nextPairing = createServerFn({ method: "POST" })
     }
     return { pairing: pick.p, round: round + 1, confidence, done: false as const };
 
-  });
+}
 
 
 // ============ Record choice ============
@@ -714,8 +716,9 @@ export const recordChoice = createServerFn({ method: "POST" })
       msToDecide: z.number().int().nonnegative().max(600000).optional(),
     }).parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+  .handler(async ({ data, context }) => recordChoiceImpl(context.supabase, context.userId, data));
+
+export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string, data: { sessionId: string; pairingId: string; chosenSongId: string; msToDecide?: number }) {
     const songCols = "id,title,artist,movement,atmosphere,immersion,scale,community,perspective,confidence,tension,texture,transformation";
     const [pairingRes, sessionRes] = await Promise.all([
       supabase
@@ -874,7 +877,7 @@ export const recordChoice = createServerFn({ method: "POST" })
       .eq("id", data.sessionId);
     if (uErr) throw new Error(uErr.message);
     return { vector: vec, verdict, why, hesitation, dim: topDim, delta: topDelta };
-  });
+}
 
 
 
@@ -902,8 +905,9 @@ Prefer: "across these choices", "this suggests", "you repeatedly favored", "the 
 export const finalizeSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+  .handler(async ({ data, context }) => finalizeSessionImpl(context.supabase, context.userId, data));
+
+export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: string, data: { sessionId: string }) {
     const { data: session, error: sErr } = await supabase
       .from("sessions").select("vector,user_id").eq("id", data.sessionId).single();
     if (sErr || !session) throw new Error(sErr?.message ?? "session not found");
@@ -1172,14 +1176,15 @@ Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
       allowed_claims,
       counterarguments,
     };
-  });
+}
 
 
 // ============ Get latest profile + session for /profile page ============
 export const getMyResult = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
+  .handler(async ({ context }) => getMyResultImpl(context.supabase, context.userId));
+
+export async function getMyResultImpl(supabase: AuthedSupabase, userId: string) {
     const [{ data: profile }, { data: sessions }] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase
@@ -1235,7 +1240,7 @@ export const getMyResult = createServerFn({ method: "GET" })
       reasoning = (reasoningRes.data as unknown as typeof reasoning) ?? null;
     }
     return { profile, sessions: sessions ?? [], definingChoices, reasoning };
-  });
+}
 
 
 // ============ Instrumentation: events + feedback ============
@@ -1784,8 +1789,9 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
       songs: z.array(z.string().trim().min(1).max(200)).length(3),
     }).parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+  .handler(async ({ data, context }) => commitOpeningThreeImpl(context.supabase, context.userId, data));
+
+export async function commitOpeningThreeImpl(supabase: AuthedSupabase, userId: string, data: { songs: string[] }) {
     const allThree = data.songs;
     const fallbackObservation = "Three songs in. Already a shape, not a portrait — let's keep going.";
     let llm: OpeningAnalysis & { reaction: string; observation?: string; fork?: string; stakes?: string } = {
@@ -1892,7 +1898,7 @@ export const commitOpeningThree = createServerFn({ method: "POST" })
       .eq("user_id", userId);
 
     return llm;
-  });
+}
 
 
 
@@ -2024,8 +2030,9 @@ type SynthPayload = {
 export const finalSynthesis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ sessionId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }): Promise<SynthPayload> => {
-    const { supabase, userId } = context;
+  .handler(async ({ data, context }): Promise<SynthPayload> => finalSynthesisImpl(context.supabase, context.userId, data));
+
+export async function finalSynthesisImpl(supabase: AuthedSupabase, userId: string, data: { sessionId: string }): Promise<SynthPayload> {
     const sessionRes = await supabase
       .from("sessions")
       .select("user_id, vector")
@@ -2114,7 +2121,7 @@ Return the JSON now.` },
       .eq("user_id", userId);
 
     return { synthesis, kept_choosing, counter_reads };
-  });
+}
 
 
 // ============================================================
