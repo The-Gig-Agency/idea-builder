@@ -430,95 +430,249 @@ export const nextPairing = createServerFn({ method: "POST" })
 
 // ============ Record choice ============
 // Each axis carries a short verdict ("immersion over immediacy") plus a
-// Rolling Stone–voice "why that mattered" line. Keep them punchy, opinionated,
-// one observation per sentence. No platitudes, no genre talk.
-const REVEAL: Record<string, { hi: { verdict: string; why: string }; lo: { verdict: string; why: string } }> = {
+// "why that mattered" line. Voice: smart, conversational, curious — a critic
+// thinking out loud, not delivering a verdict. Hedge where appropriate
+// ("maybe", "starting to look like", "early read"). Keep the conversation
+// going. Multiple variants per pole so repeats don't read like a script.
+type RevealVariant = { verdict: string; why: string };
+type BeatVariant = { thesis: string; hook: string };
+
+const REVEAL: Record<string, { hi: RevealVariant[]; lo: RevealVariant[] }> = {
   movement: {
-    hi: { verdict: "forward motion over stillness", why: "You want the song to take you somewhere. Standing still is for other people." },
-    lo: { verdict: "stillness over forward motion", why: "You'd rather the song sit you down than drag you forward. Patience as taste." },
+    hi: [
+      { verdict: "forward motion over stillness", why: "Feels like you want the song to take you somewhere. Standing still is for other people — maybe." },
+      { verdict: "motion over patience", why: "Twice in a row you picked the one that moves. Early read: you like a song with somewhere to be." },
+      { verdict: "propulsion over repose", why: "You keep nudging toward the one that won't sit down. Tell me if I'm wrong about that." },
+    ],
+    lo: [
+      { verdict: "stillness over forward motion", why: "Looks like you'd rather the song sit you down than drag you forward. Patience as taste, maybe." },
+      { verdict: "repose over propulsion", why: "You keep gravitating to the still ones. Early hypothesis: you want the song to wait with you." },
+      { verdict: "the slow lane over the fast one", why: "Not in a hurry. Are you ever, or does it depend on the day?" },
+    ],
   },
   atmosphere: {
-    hi: { verdict: "immersive mood over statement", why: "You trust the room more than the lyric. The air around the song is the song." },
-    lo: { verdict: "statement over immersive mood", why: "You want the song to mean something out loud. No hiding behind reverb." },
+    hi: [
+      { verdict: "immersive mood over statement", why: "Starting to think you trust the room more than the lyric. The air around the song is the song?" },
+      { verdict: "atmosphere over message", why: "You keep picking the one that surrounds you. Mood as the whole point, maybe." },
+      { verdict: "haze over clarity", why: "The blurrier one keeps winning. I could be wrong, but you sound like a reverb person." },
+    ],
+    lo: [
+      { verdict: "statement over immersive mood", why: "Looks like you want the song to mean something out loud. Less hiding, more saying." },
+      { verdict: "clarity over haze", why: "You keep choosing the one that says it. Reading you as someone who wants the words to land." },
+      { verdict: "the direct one over the dreamy one", why: "Not much patience for fog so far. Or is it just these picks?" },
+    ],
   },
   immersion: {
-    hi: { verdict: "slow reveal over immediacy", why: "You don't need the hook on contact. The third listen is where the song actually lives." },
-    lo: { verdict: "immediacy over slow reveal", why: "If the song doesn't grab you in eight bars it doesn't get a second chance. Hook or move on." },
+    hi: [
+      { verdict: "slow reveal over immediacy", why: "Early read: you don't need the hook on contact. The third listen is where the song actually lives, maybe." },
+      { verdict: "patience over payoff", why: "You keep picking the grower. Sounds like you trust a song to earn it." },
+      { verdict: "the long burn over the quick hit", why: "Not chasing the chorus. Curious if a true sleeper does it for you too." },
+    ],
+    lo: [
+      { verdict: "immediacy over slow reveal", why: "If the song doesn't grab you in eight bars, looks like it doesn't get a second chance." },
+      { verdict: "hook over patience", why: "You keep rewarding the one that lands fast. Reading you as a first-impression voter." },
+      { verdict: "the quick hit over the long burn", why: "Not waiting around. Is that always you, or just the mood right now?" },
+    ],
   },
   scale: {
-    hi: { verdict: "vast over intimate", why: "You want the song bigger than the room. Cathedral over kitchen, every time." },
-    lo: { verdict: "intimate over vast", why: "You like the song breathing on your neck. No stadiums, no fog machines." },
+    hi: [
+      { verdict: "vast over intimate", why: "Starting to think you want the song bigger than the room. Cathedral over kitchen — early read." },
+      { verdict: "wide over close", why: "You keep picking the one with more air. Room for the sound to stretch." },
+      { verdict: "the panorama over the close-up", why: "You like a song that opens up. I could be wrong but this looks consistent." },
+    ],
+    lo: [
+      { verdict: "intimate over vast", why: "Looks like you want the song breathing on your neck. No stadiums, no fog machines." },
+      { verdict: "close over wide", why: "You keep choosing the smaller room. Reading you as someone who wants the song one inch away." },
+      { verdict: "the close-up over the panorama", why: "Private over public, so far. Tell me if that flips on a different mood." },
+    ],
   },
   community: {
-    hi: { verdict: "communal over solitary", why: "You hear songs in rooms full of people. The singalong is the meaning." },
-    lo: { verdict: "solitary over communal", why: "Headphones, alone, on purpose. Crowds dilute the signal." },
+    hi: [
+      { verdict: "communal over solitary", why: "Early read: you hear songs in rooms full of people. The singalong is the meaning, maybe." },
+      { verdict: "shared over private", why: "You keep picking the one built for a crowd. Music as gathering." },
+      { verdict: "the room over the headphones", why: "Looks like you'd rather hear it together than alone." },
+    ],
+    lo: [
+      { verdict: "solitary over communal", why: "Headphones, alone, on purpose. Reading you as someone who wants the signal undiluted." },
+      { verdict: "private over shared", why: "You keep choosing the song that's between you and it. Crowds optional." },
+      { verdict: "the headphones over the room", why: "Solo listener so far. Curious if a great singalong still pulls you in." },
+    ],
   },
   perspective: {
-    hi: { verdict: "witness over feeling", why: "You want the song to show you something, not become you. The storyteller over the screamer." },
-    lo: { verdict: "feeling over witness", why: "You don't want a report from the scene. You want to be inside it." },
+    hi: [
+      { verdict: "witness over feeling", why: "Looks like you want the song to show you something, not become you. Narrator over screamer — early read." },
+      { verdict: "story over confession", why: "You keep picking the one telling you about it instead of bleeding on you." },
+      { verdict: "the camera over the mirror", why: "Distance is doing something for you. I could be wrong, but the pattern's there." },
+    ],
+    lo: [
+      { verdict: "feeling over witness", why: "You don't want a report from the scene. You want to be inside it." },
+      { verdict: "confession over story", why: "Keep picking the one that puts you in the song. No glass between you and it." },
+      { verdict: "the mirror over the camera", why: "First-person, no distance. Reading you as someone who wants to feel it, not hear about it." },
+    ],
   },
   confidence: {
-    hi: { verdict: "command over vulnerability", why: "You like a singer who isn't asking. Posture as music." },
-    lo: { verdict: "vulnerability over command", why: "You'd take the cracked admission over the swagger. The flinch is the point." },
+    hi: [
+      { verdict: "command over vulnerability", why: "Early read: you like a singer who isn't asking. Posture as music." },
+      { verdict: "swagger over flinch", why: "You keep picking the one that walks in like it owns the place. Tell me if that's wrong." },
+      { verdict: "the assertion over the admission", why: "Confidence keeps winning your vote. Curious how a vulnerable one lands." },
+    ],
+    lo: [
+      { verdict: "vulnerability over command", why: "Looks like you'd take the cracked admission over the swagger. The flinch is the point, maybe." },
+      { verdict: "flinch over swagger", why: "You keep choosing the one that admits something. Reading you as allergic to posing." },
+      { verdict: "the admission over the assertion", why: "Honesty over heat. I could be wrong, but the picks keep saying so." },
+    ],
   },
   tension: {
-    hi: { verdict: "danger over release", why: "You don't want the song to let you off. Pressure all the way down." },
-    lo: { verdict: "release over danger", why: "You want the song to let you breathe. The exhale is the payoff." },
+    hi: [
+      { verdict: "danger over release", why: "Looks like you don't want the song to let you off. Pressure all the way." },
+      { verdict: "pressure over relief", why: "You keep picking the one that won't resolve. Early read: you trust the squeeze." },
+      { verdict: "the held breath over the exhale", why: "Tension is doing the work for you. Curious if a real release ever beats it." },
+    ],
+    lo: [
+      { verdict: "release over danger", why: "You want the song to let you breathe. The exhale is the payoff — at least so far." },
+      { verdict: "relief over pressure", why: "You keep choosing the one that opens up. Reading you as a resolution person." },
+      { verdict: "the exhale over the held breath", why: "Air over anxiety. Maybe always, maybe just today — tell me." },
+    ],
   },
   texture: {
-    hi: { verdict: "refinement over rawness", why: "You don't romanticize the mess. Craft is the delivery system, not the enemy of feeling." },
-    lo: { verdict: "rawness over refinement", why: "You'd take the cracked voice over the perfect take. Sincerity has a sound and you can hear it." },
+    hi: [
+      { verdict: "refinement over rawness", why: "Looks like you don't romanticize the mess. Craft as the delivery system, not the enemy of feeling." },
+      { verdict: "polish over grit", why: "You keep picking the one with the seams hidden. Reading you as someone who hears the work." },
+      { verdict: "the clean take over the cracked one", why: "Production matters to you. I could be wrong — but the pattern's pretty clear." },
+    ],
+    lo: [
+      { verdict: "rawness over refinement", why: "You'd take the cracked voice over the perfect take. Sincerity has a sound and you hear it." },
+      { verdict: "grit over polish", why: "You keep choosing the one with dirt on it. Early read: you want it human, not fixed." },
+      { verdict: "the cracked take over the clean one", why: "Mess wins your vote so far. Does a flawless one ever sneak through?" },
+    ],
   },
   transformation: {
-    hi: { verdict: "takes you somewhere over holds its shape", why: "You want the song to become something it wasn't at the start. Becoming is the whole bet." },
-    lo: { verdict: "holds its shape over takes you somewhere", why: "You want the song to know what it is from the first bar. No identity crises in your playlist." },
+    hi: [
+      { verdict: "songs that go somewhere over songs that hold their shape", why: "Looks like you want the song to become something it wasn't. Becoming is the bet, maybe." },
+      { verdict: "evolution over identity", why: "You keep picking the one that shifts on you. Reading you as someone who wants the surprise." },
+      { verdict: "the journey over the snapshot", why: "Static doesn't do it. I could be wrong, but you sound like a builder-listener." },
+    ],
+    lo: [
+      { verdict: "songs that hold their shape over songs that wander", why: "You want the song to know what it is from the first bar. No identity crisis." },
+      { verdict: "identity over evolution", why: "You keep choosing the one that stays itself. Form as the whole point, maybe." },
+      { verdict: "the snapshot over the journey", why: "Conviction over becoming, so far. Tell me if a true morpher ever cracks that." },
+    ],
   },
 };
 
-// Fragmented beats for the running thesis — three short lines and a hook
-// question/half-promise that pulls the next pick.
-const BEAT: Record<string, { hi: { thesis: string; hook: string }; lo: { thesis: string; hook: string } }> = {
+// Fragmented beats for the running thesis — short lines plus a hook
+// question/half-promise that pulls the next pick. Hedged on purpose.
+const BEAT: Record<string, { hi: BeatVariant[]; lo: BeatVariant[] }> = {
   movement: {
-    hi: { thesis: "You keep choosing songs that move.\nNot fast.\nJust forward.", hook: "What happens if I throw you something that stands still?" },
-    lo: { thesis: "You keep picking the still ones.\nThe ones that sit you down.\nNo rush.", hook: "Curious if a propulsive one breaks that." },
+    hi: [
+      { thesis: "You keep choosing songs that move.\nNot fast.\nJust forward.", hook: "What happens if I throw you something that stands still?" },
+      { thesis: "Forward motion, again.\nThat's a pattern, not an accident.\nProbably.", hook: "Want to test it with a song that refuses to move?" },
+    ],
+    lo: [
+      { thesis: "Stillness keeps winning.\nThe ones that sit you down.\nNo rush.", hook: "Curious if a propulsive one breaks that." },
+      { thesis: "You're drawn to the songs that wait.\nNot lazy — patient.\nDifferent thing.", hook: "What if I throw you one with somewhere to be?" },
+    ],
   },
   atmosphere: {
-    hi: { thesis: "You trust the room more than the lyric.\nThe air around the song is the song.\nReverb as meaning.", hook: "Wonder if a flat-out statement song changes your mind." },
-    lo: { thesis: "You want the song to say it.\nOut loud.\nNo hiding behind reverb.", hook: "Let's see if a haze-bomb still gets through." },
+    hi: [
+      { thesis: "You trust the room more than the lyric.\nThe air around the song is the song.\nReverb as meaning.", hook: "Wonder if a flat-out statement song changes your mind." },
+      { thesis: "Mood keeps beating message.\nYou'd rather feel it than be told.\nMostly.", hook: "Let me try one that says it out loud." },
+    ],
+    lo: [
+      { thesis: "You want the song to say it.\nOut loud.\nNo hiding behind reverb.", hook: "Let's see if a haze-bomb still gets through." },
+      { thesis: "Clarity keeps winning.\nDirect over dreamy.\nNoted.", hook: "What does a real atmosphere piece do to that?" },
+    ],
   },
   immersion: {
-    hi: { thesis: "You don't need the hook on contact.\nThird listen, real estate opens up.\nYou wait the song out.", hook: "What does a song that grabs you in eight bars do for you?" },
-    lo: { thesis: "If it doesn't hook you fast it doesn't hook you.\nEight bars or out.\nNo slow reveals.", hook: "Wonder if a sleeper still wins you over." },
+    hi: [
+      { thesis: "You don't need the hook on contact.\nThird listen, real estate opens up.\nYou wait the song out.", hook: "What does a song that grabs you in eight bars do for you?" },
+      { thesis: "Slow burns keep winning.\nYou give songs the benefit of the doubt.\nThat's rarer than you think.", hook: "Curious if a fast-hooker still pulls you." },
+    ],
+    lo: [
+      { thesis: "If it doesn't hook you fast, it doesn't hook you.\nEight bars or out.\nNo slow reveals.", hook: "Wonder if a sleeper still wins you over." },
+      { thesis: "You vote on first impression.\nAnd you're not changing your mind.\nProbably.", hook: "Let me try a real grower on you." },
+    ],
   },
   scale: {
-    hi: { thesis: "You want the song bigger than the room.\nCathedral over kitchen.\nMore air.", hook: "What about a song built for one set of headphones?" },
-    lo: { thesis: "Up close.\nIn your ear.\nNo stadiums.", hook: "Let's see if a wall-of-sound moment still pulls you." },
+    hi: [
+      { thesis: "You want the song bigger than the room.\nCathedral over kitchen.\nMore air.", hook: "What about a song built for one set of headphones?" },
+      { thesis: "Wide keeps winning.\nYou want space in the song.\nNot crowding.", hook: "Curious how a close-up one lands." },
+    ],
+    lo: [
+      { thesis: "Up close.\nIn your ear.\nNo stadiums.", hook: "Let's see if a wall-of-sound moment still pulls you." },
+      { thesis: "You want the song one inch away.\nNot one mile.\nIntimate by design.", hook: "What does a vast one do to that?" },
+    ],
   },
   community: {
-    hi: { thesis: "Songs heard in rooms full of people.\nThe singalong is the meaning.\nMusic as gathering.", hook: "What about a song built for one set of headphones?" },
-    lo: { thesis: "Headphones. Alone. On purpose.\nCrowds dilute the signal.\nThe song is between you and it.", hook: "Curious if a singalong still moves you." },
+    hi: [
+      { thesis: "Songs heard in rooms full of people.\nThe singalong is the meaning.\nMusic as gathering.", hook: "What about a song built for one set of headphones?" },
+      { thesis: "Communal keeps winning.\nYou hear the crowd in the song.\nAnd you like it there.", hook: "Curious if a solo-listener piece still gets you." },
+    ],
+    lo: [
+      { thesis: "Headphones. Alone. On purpose.\nCrowds dilute the signal.\nThe song is between you and it.", hook: "Curious if a singalong still moves you." },
+      { thesis: "You keep it private.\nNo group hugs in the music.\nJust you.", hook: "Let me try one built for the room." },
+    ],
   },
   perspective: {
-    hi: { thesis: "You want the song to show you something.\nNot become you.\nNarrator over screamer.", hook: "What happens with a song that wants you inside it?" },
-    lo: { thesis: "You don't want a report from the scene.\nYou want to be in it.\nFirst person, no distance.", hook: "Let's see if a great storyteller still gets through." },
+    hi: [
+      { thesis: "You want the song to show you something.\nNot become you.\nNarrator over screamer.", hook: "What happens with a song that wants you inside it?" },
+      { thesis: "Distance keeps winning.\nYou like the camera, not the mirror.\nStorytellers over bleeders.", hook: "Wonder if a first-person one cracks that." },
+    ],
+    lo: [
+      { thesis: "You don't want a report from the scene.\nYou want to be in it.\nFirst person, no distance.", hook: "Let's see if a great storyteller still gets through." },
+      { thesis: "Inside the song, every time.\nNo glass.\nYou want the heat.", hook: "What does a great narrator do to that?" },
+    ],
   },
   confidence: {
-    hi: { thesis: "You like a singer who isn't asking.\nPosture as music.\nNo flinching.", hook: "Wonder what a vulnerable one does to you." },
-    lo: { thesis: "The cracked admission over the swagger.\nThe flinch is the point.\nNo armor.", hook: "Curious if a power move still pulls you in." },
+    hi: [
+      { thesis: "You like a singer who isn't asking.\nPosture as music.\nNo flinching.", hook: "Wonder what a vulnerable one does to you." },
+      { thesis: "Swagger keeps winning.\nYou want the song sure of itself.\nNo apologies.", hook: "Curious if a cracked voice still gets through." },
+    ],
+    lo: [
+      { thesis: "The cracked admission over the swagger.\nThe flinch is the point.\nNo armor.", hook: "Curious if a power move still pulls you in." },
+      { thesis: "You want the singer admitting something.\nNot performing.\nMostly.", hook: "Let me throw a confident one at you." },
+    ],
   },
   tension: {
-    hi: { thesis: "You don't want the song to let you off.\nPressure all the way.\nNo exhale.", hook: "What does a real release do for you?" },
-    lo: { thesis: "You want the song to let you breathe.\nExhale is the payoff.\nRoom to move.", hook: "Let's see if a real squeeze still gets through." },
+    hi: [
+      { thesis: "You don't want the song to let you off.\nPressure all the way.\nNo exhale.", hook: "What does a real release do for you?" },
+      { thesis: "Tension keeps winning.\nYou trust the squeeze.\nResolution can wait.", hook: "Curious if a real exhale changes that." },
+    ],
+    lo: [
+      { thesis: "You want the song to let you breathe.\nExhale is the payoff.\nRoom to move.", hook: "Let's see if a real squeeze still gets through." },
+      { thesis: "Release over pressure.\nYou want the door open.\nNot locked.", hook: "What does a song that won't resolve do to that?" },
+    ],
   },
   texture: {
-    hi: { thesis: "Craft, not mess.\nPolish is the delivery system.\nThe seams should be invisible.", hook: "Wonder if a raw nerve still gets through." },
-    lo: { thesis: "Cracked voice over the perfect take.\nEvery time.\nYou want it bleeding, not fixed.", hook: "What does a flawlessly produced one do for you?" },
+    hi: [
+      { thesis: "Craft, not mess.\nPolish is the delivery system.\nThe seams should be invisible.", hook: "Wonder if a raw nerve still gets through." },
+      { thesis: "Refinement keeps winning.\nYou hear the work.\nAnd you reward it.", hook: "Curious how a cracked take lands on you." },
+    ],
+    lo: [
+      { thesis: "Cracked voice over the perfect take.\nEvery time.\nYou want it bleeding, not fixed.", hook: "What does a flawlessly produced one do for you?" },
+      { thesis: "Grit keeps winning.\nYou trust the mess.\nPolish reads suspicious.", hook: "Let me try a clean one and see." },
+    ],
   },
   transformation: {
-    hi: { thesis: "You want the song to become something.\nNot be something.\nBecoming is the whole bet.", hook: "What about a song that arrives fully formed?" },
-    lo: { thesis: "You want the song to know what it is.\nFrom the first bar.\nNo identity crisis.", hook: "Let's try one that morphs on you." },
+    hi: [
+      { thesis: "You want the song to become something.\nNot be something.\nBecoming is the whole bet.", hook: "What about a song that arrives fully formed?" },
+      { thesis: "Evolution keeps winning.\nYou want the surprise inside the song.\nNot just at the start.", hook: "Curious if a song that holds its shape still pulls you." },
+    ],
+    lo: [
+      { thesis: "You want the song to know what it is.\nFrom the first bar.\nNo identity crisis.", hook: "Let's try one that morphs on you." },
+      { thesis: "Conviction keeps winning.\nThe song doesn't need to change to mean something.\nIt already does.", hook: "What does a real shape-shifter do to that?" },
+    ],
   },
 };
+
+function dimSeed(dim: string): number {
+  return dim.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+}
+function pickVariant<T>(arr: T[] | undefined, seed: number): T | undefined {
+  if (!arr || arr.length === 0) return undefined;
+  const i = ((seed % arr.length) + arr.length) % arr.length;
+  return arr[i];
+}
 
 // ============ Derived descriptors ============
 // Moods like nostalgic, dreamy, dark, hopeful are NOT stored and NOT scored.
@@ -596,8 +750,15 @@ export const recordChoice = createServerFn({ method: "POST" })
       if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
 
+    // Rotate variants so the same axis+direction doesn't repeat verbatim.
+    // Seed combines session + pairing + dim so it's stable but varies per round.
+    const { count: priorChoices } = await supabase
+      .from("choices")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId);
+    const variantSeed = (priorChoices ?? 0) + dimSeed(topDim) + (topDelta >= 0 ? 0 : 1);
     const phrase = REVEAL[topDim];
-    const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
+    const direction = pickVariant(topDelta >= 0 ? phrase?.hi : phrase?.lo, variantSeed);
     const ms = data.msToDecide ?? null;
     // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
     const OPENERS = ["Nice.", "OK.", "Hm.", "Interesting.", "Cool pick.", "Alright.", "Noted."];
@@ -2433,11 +2594,18 @@ export const currentRead = createServerFn({ method: "POST" })
         strength: 0,
       };
     }
+    // Rotate variants by current choice count so the running thesis evolves
+    // round to round instead of repeating the same line on the same axis.
+    const { count: choiceCount } = await supabase
+      .from("choices")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId);
+    const variantSeed = (choiceCount ?? 0) + dimSeed(top.d) + (top.v >= 0 ? 0 : 1);
     const beat = BEAT[top.d];
-    const pole = top.v >= 0 ? beat?.hi : beat?.lo;
+    const pole = pickVariant(top.v >= 0 ? beat?.hi : beat?.lo, variantSeed);
     if (!pole) {
       const phrase = REVEAL[top.d];
-      const fallback = top.v >= 0 ? phrase?.hi : phrase?.lo;
+      const fallback = pickVariant(top.v >= 0 ? phrase?.hi : phrase?.lo, variantSeed);
       return {
         thesis: fallback ? `You keep choosing ${fallback.verdict}.` : `Leaning ${top.d}.`,
         hook: "Let's see if that holds.",
