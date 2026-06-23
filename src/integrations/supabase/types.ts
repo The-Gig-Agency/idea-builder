@@ -444,6 +444,7 @@ export type Database = {
           created_at: string
           diagnostic_weight: number
           difficulty: number | null
+          expected_split: string | null
           hypothesis: string | null
           id: string
           lane: string
@@ -459,6 +460,7 @@ export type Database = {
           created_at?: string
           diagnostic_weight?: number
           difficulty?: number | null
+          expected_split?: string | null
           hypothesis?: string | null
           id?: string
           lane?: string
@@ -474,6 +476,7 @@ export type Database = {
           created_at?: string
           diagnostic_weight?: number
           difficulty?: number | null
+          expected_split?: string | null
           hypothesis?: string | null
           id?: string
           lane?: string
@@ -766,7 +769,10 @@ export type Database = {
           polarization: number | null
           primary_dimensions: string[]
           primary_lane: string
+          rationale: string | null
+          routing_power: number | null
           scale: number | null
+          sub_lane: string | null
           tension: number | null
           texture: number | null
           title: string
@@ -799,7 +805,10 @@ export type Database = {
           polarization?: number | null
           primary_dimensions?: string[]
           primary_lane?: string
+          rationale?: string | null
+          routing_power?: number | null
           scale?: number | null
+          sub_lane?: string | null
           tension?: number | null
           texture?: number | null
           title: string
@@ -832,7 +841,10 @@ export type Database = {
           polarization?: number | null
           primary_dimensions?: string[]
           primary_lane?: string
+          rationale?: string | null
+          routing_power?: number | null
           scale?: number | null
+          sub_lane?: string | null
           tension?: number | null
           texture?: number | null
           title?: string
