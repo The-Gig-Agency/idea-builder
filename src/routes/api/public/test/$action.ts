@@ -99,18 +99,37 @@ async function getOrCreateRun(personaId: string, pairingCount?: number, reset = 
     return existing.data;
   }
 
-  // First contact for this persona: insert row with generated user_id and
-  // pre-create the matching profile + user_role rows (normally a trigger on
-  // auth.users does this; we have no auth user, so do it explicitly).
+  // First contact for this persona: mint a real Supabase auth user so the
+  // sessions.user_id FK to auth.users is satisfied. handle_new_user trigger
+  // auto-creates the matching profile + user_role rows.
+  const email = `persona-${personaId.toLowerCase().replace(/[^a-z0-9._-]/g, "_")}@test.musicdna.local`;
+  let userId: string | null = null;
+
+  const created = await admin.auth.admin.createUser({
+    email,
+    password: crypto.randomUUID() + "-Aa1!",
+    email_confirm: true,
+    user_metadata: { persona_id: personaId, harness: true, display_name: `persona:${personaId}` },
+  });
+  if (created.data?.user?.id) {
+    userId = created.data.user.id;
+  } else {
+    // Likely "User already registered" — look it up via listUsers.
+    const list = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const found = list.data?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    if (!found) throw new Error(`auth.admin.createUser failed: ${created.error?.message ?? "unknown"}`);
+    userId = found.id;
+  }
+
   const inserted = await admin
     .from("test_runs")
-    .insert({ persona_id: personaId, pairing_count: pairingCount ?? 6 })
+    .insert({ persona_id: personaId, pairing_count: pairingCount ?? 6, user_id: userId })
     .select("*")
     .single();
   if (inserted.error || !inserted.data) {
     throw new Error(`test_runs insert failed: ${inserted.error?.message ?? "unknown"}`);
   }
-  const userId = inserted.data.user_id;
+  // Ensure profile/user_roles exist (trigger should have done it; belt-and-suspenders).
   await admin.from("profiles").upsert(
     { user_id: userId, display_name: `persona:${personaId}` },
     { onConflict: "user_id" },
