@@ -55,8 +55,43 @@ type Entry = {
   topDim: string | null;
 };
 
-const DIR_GLYPH: Record<Entry["direction"], string> = { forming: "↑", holding: "→", revising: "↻" };
-const DIR_LABEL: Record<Entry["direction"], string> = { forming: "first read", holding: "holding", revising: "revising" };
+
+function LineReveal({
+  lines,
+  animate,
+  intervalMs = 700,
+  startDelayMs = 0,
+  className,
+}: {
+  lines: string[];
+  animate: boolean;
+  intervalMs?: number;
+  startDelayMs?: number;
+  className?: string;
+}) {
+  const [shown, setShown] = useState(animate ? 0 : lines.length);
+  useEffect(() => {
+    if (!animate) {
+      setShown(lines.length);
+      return;
+    }
+    setShown(0);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    lines.forEach((_, idx) => {
+      timers.push(setTimeout(() => setShown((s) => Math.max(s, idx + 1)), startDelayMs + idx * intervalMs));
+    });
+    return () => { for (const t of timers) clearTimeout(t); };
+  }, [animate, lines.length, intervalMs, startDelayMs]);
+  return (
+    <div className={className}>
+      {lines.slice(0, shown).map((line, i) => (
+        <p key={i} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 function Onboarding() {
   const reactOneFn = useServerFn(reactToOne);
@@ -462,33 +497,29 @@ function Onboarding() {
         </section>
       )}
 
-      {/* Play transcript */}
       {entries.length > 0 && (
         <div className="space-y-10">
-          {entries.map((e) => {
-            const chosen = e.pairing.song_a.id === e.chosenSongId ? e.pairing.song_a : e.pairing.song_b;
-            const rejected = e.pairing.song_a.id === e.chosenSongId ? e.pairing.song_b : e.pairing.song_a;
+          {entries.map((e, i) => {
+            const isLatest = i === entries.length - 1;
+            const reactionLines = e.reaction.split("\n").map((s) => s.trim()).filter(Boolean);
+            const thesisFirst = (e.thesis.split("\n").map((s) => s.trim()).filter(Boolean)[0]) ?? "";
             return (
-              <article key={e.round} className="space-y-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  Round {String(e.round).padStart(2, "0")} · {chosen.title} vs. {rejected.title} — you picked <span className="text-foreground">{chosen.title}</span>
-                </p>
-                <p className="font-serif text-lg md:text-xl leading-snug text-foreground whitespace-pre-line">
-                  {e.reaction}
-                </p>
-                <div className="border-l-2 border-primary/40 pl-4 py-1 space-y-2">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                    my read so far · {DIR_LABEL[e.direction]} {DIR_GLYPH[e.direction]}
-                  </p>
-                  <p className="font-serif italic text-base md:text-lg text-foreground/90 leading-snug whitespace-pre-line">
-                    {e.thesis}
-                  </p>
-                  {e.hook && (
-                    <p className="font-serif text-sm md:text-base text-muted-foreground leading-snug pt-1">
-                      {e.hook}
-                    </p>
-                  )}
-                </div>
+              <article key={e.round} className="space-y-4">
+                <LineReveal
+                  lines={reactionLines}
+                  animate={isLatest}
+                  intervalMs={700}
+                  className="font-serif text-lg md:text-xl leading-snug text-foreground"
+                />
+                {thesisFirst && (
+                  <LineReveal
+                    lines={[thesisFirst]}
+                    animate={isLatest}
+                    startDelayMs={isLatest ? reactionLines.length * 700 + 250 : 0}
+                    intervalMs={700}
+                    className="font-serif italic text-base md:text-lg text-foreground/90 leading-snug border-l-2 border-primary/40 pl-4 py-1"
+                  />
+                )}
               </article>
             );
           })}
