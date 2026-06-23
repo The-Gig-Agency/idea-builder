@@ -855,6 +855,57 @@ export type Database = {
         }
         Relationships: []
       }
+      test_runs: {
+        Row: {
+          choices_log: Json
+          created_at: string
+          current_pairing_id: string | null
+          current_pairing_payload: Json | null
+          id: string
+          opener_payload: Json | null
+          opener_songs: string[] | null
+          pairing_count: number
+          pairings_used: number
+          persona_id: string
+          report: Json | null
+          session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          choices_log?: Json
+          created_at?: string
+          current_pairing_id?: string | null
+          current_pairing_payload?: Json | null
+          id?: string
+          opener_payload?: Json | null
+          opener_songs?: string[] | null
+          pairing_count?: number
+          pairings_used?: number
+          persona_id: string
+          report?: Json | null
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          choices_log?: Json
+          created_at?: string
+          current_pairing_id?: string | null
+          current_pairing_payload?: Json | null
+          id?: string
+          opener_payload?: Json | null
+          opener_songs?: string[] | null
+          pairing_count?: number
+          pairings_used?: number
+          persona_id?: string
+          report?: Json | null
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
