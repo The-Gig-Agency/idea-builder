@@ -750,8 +750,15 @@ export const recordChoice = createServerFn({ method: "POST" })
       if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
 
+    // Rotate variants so the same axis+direction doesn't repeat verbatim.
+    // Seed combines session + pairing + dim so it's stable but varies per round.
+    const { count: priorChoices } = await supabase
+      .from("choices")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.sessionId);
+    const variantSeed = (priorChoices ?? 0) + dimSeed(topDim) + (topDelta >= 0 ? 0 : 1);
     const phrase = REVEAL[topDim];
-    const direction = topDelta >= 0 ? phrase?.hi : phrase?.lo;
+    const direction = pickVariant(topDelta >= 0 ? phrase?.hi : phrase?.lo, variantSeed);
     const ms = data.msToDecide ?? null;
     // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
     const OPENERS = ["Nice.", "OK.", "Hm.", "Interesting.", "Cool pick.", "Alright.", "Noted."];
