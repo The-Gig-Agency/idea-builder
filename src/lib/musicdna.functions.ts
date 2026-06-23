@@ -88,6 +88,16 @@ async function ai(messages: Array<{ role: string; content: string }>) {
 const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "general"] as const;
 type Lane = (typeof LANES)[number];
 
+// Shared lane rules — broadened classic_rock to absorb hard rock, metal, and prog
+// until those get their own lanes (see docs/musicdna/missing-lanes.md).
+const LANE_RULES = `Lane rules:
+- alternative = post-punk, indie, shoegaze, britpop, grunge, goth, college rock, emo, post-rock.
+- pop = mainstream chart pop, pop-rock (Swift, Eilish, Beyonce pop work).
+- hip_hop = rap, trap, boom-bap, drill, R&B-rap.
+- electronic = techno, house, IDM, drum-n-bass, EDM, ambient, trip-hop.
+- classic_rock = ANY guitar-driven rock outside the alternative bucket: 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac), hard rock and metal (Sabbath, Metallica, AC/DC, Iron Maiden), prog (Rush, Yes, Pink Floyd, King Crimson), arena rock, glam, southern rock. If it is loud guitars and not "indie/alternative" in the modern sense, it belongs here for now.
+- Use "general" ONLY when the picks genuinely scatter across lanes with no center of gravity.`;
+
 // Map catalog sub-lanes (currently all alternative sub-genres) to top-level lanes.
 function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
   if (!sub) return null;
@@ -99,10 +109,33 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
     s.includes("indie") || s.includes("madchester") || s.includes("manchester") ||
     s.includes("grunge") || s.includes("alt-rock") || s.includes("altrock") ||
     s.includes("goth") || s.includes("darkwave") || s.includes("noise") ||
-    s.includes("artrock") || s.includes("punk") || s.includes("sophistipop")
+    s.includes("artrock") || s.includes("punk") || s.includes("sophistipop") ||
+    s.includes("emo") || s.includes("post_rock") || s.includes("post-rock")
   ) return "alternative";
   if (s.includes("electronic")) return "electronic";
+  // Hard rock / metal / prog all funnel into classic_rock until they get their own lanes.
+  if (
+    s.includes("metal") || s.includes("hard_rock") || s.includes("hard-rock") ||
+    s.includes("hardrock") || s.includes("prog") || s.includes("arena_rock") ||
+    s.includes("arena-rock") || s.includes("glam") || s.includes("classic_rock") ||
+    s.includes("classic-rock") || s === "rock"
+  ) return "classic_rock";
   return null;
+}
+
+// Best-guess lane when the model is unsure (confidence < 0.4).
+// Use per_song majority instead of dumping to "general" - at least we pick
+// pairings from the dominant genre instead of fishing across the whole catalog.
+function dominantPerSongLane(perSong: Array<{ lane: Lane | "unknown" }>): Lane | null {
+  const tally: Record<string, number> = {};
+  for (const p of perSong) {
+    if (p.lane && p.lane !== "unknown") tally[p.lane] = (tally[p.lane] ?? 0) + 1;
+  }
+  const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return null;
+  // Need a clear winner - a 1-1-1 split stays "general".
+  if (entries.length > 1 && entries[0][1] === entries[1][1]) return null;
+  return entries[0][0] as Lane;
 }
 
 const CLASSIFIER_VOICE = `${PERSONA}
@@ -124,7 +157,7 @@ You return a JSON object with this exact shape:
   "hypothesis": "ONE sentence, max 30 words, Rolling Stone voice. Name what these choices reveal — specific dimensions like movement, atmosphere, transformation, melody. End with 'Let's see if that holds.' or similar half-promise."
 }
 
-Lane rules: alternative = post-punk, indie, shoegaze, britpop, grunge, goth, college rock. pop = mainstream chart pop, pop-rock (Swift, Eilish, Beyoncé pop work). hip_hop = rap, trap. electronic = techno, house, IDM, drum'n'bass, EDM. classic_rock = 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac). Use "general" only when the five songs genuinely scatter across lanes with no center of gravity.
+${LANE_RULES}
 
 Confidence: 1.0 = all five point to one lane. 0.7-0.9 = strong majority. 0.4-0.6 = mixed but a leaning. <0.4 = scattered, use "general".
 
@@ -189,7 +222,7 @@ async function classifyLane(
       return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
     });
     llm = {
-      lane: confidence < 0.4 ? "general" : lane,
+      lane: confidence < 0.4 ? (dominantPerSongLane(perSong) ?? "general") : lane,
       confidence,
       secondary_lanes: secondary,
       reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
@@ -1497,6 +1530,7 @@ async function lookupSongContext(
 const REACT_VOICE = `${PERSONA}
 Mode: first read after three songs. You're a sharp, curious friend who knows music — figure the listener out by NAMING what's actually in their picks.
 ${ONBOARDING_RULES}
+${LANE_RULES}
 Output STRICT JSON:
 {
   "observation": "ONE short observation, 8–22 words. Notice a pattern across the three picks — softer is better. Good: 'Three big swings in a row. You seem more interested in impact than subtlety.' Good: 'So far you're gravitating toward scale. Nothing quiet has survived the cut.' Good: 'You haven't picked a wallflower yet.' Bad: long sentences, psychoanalytic certainty, 'suggests you want', naming no songs at all.",
@@ -1678,6 +1712,7 @@ Rules for nextLabel:
 const REFINE_VOICE = `${PERSONA}
 Mode: lock in the read. You gave a hypothesis off three songs. They threw two more — often to test you. Either CONFIRM, REFINE, or BREAK your own guess, then commit. Still about the LISTENER, not the catalog.
 ${ONBOARDING_RULES}
+${LANE_RULES}
 Return STRICT JSON:
 {
   "reaction": "ONE sentence, max 20 words. Say honestly whether the new two confirm, refine, or break your read. About the listener's CHOICES, not the songs. Good: 'Those last two confirm it — you keep picking energy over polish.' / 'Okay, that second one breaks my read. You like prettier than I thought.'",
@@ -1733,7 +1768,7 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
         return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
       });
       llm = {
-        lane: confidence < 0.4 ? "general" : lane,
+        lane: confidence < 0.4 ? (dominantPerSongLane(perSong) ?? "general") : lane,
         confidence,
         secondary_lanes: secondary,
         reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
@@ -1798,6 +1833,7 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
 const COMMIT_THREE_VOICE = `${PERSONA}
 Mode: lock in the read after three ranked songs. You're an attentive interviewer. Drop ONE short conversational observation about what you've noticed — speak TO the listener, reference their actual picks, then stop. The next matchup is coming; don't preview it.
 ${ONBOARDING_RULES}
+${LANE_RULES}
 Return STRICT JSON:
 {
   "observation": "ONE short paragraph, ~25–40 words, MAX 45. Conversational, present tense, speaks to the listener. Reference at least ONE song or artist from their picks. Good: 'Two dramatic choices in a row. You seem to like emotional honesty delivered through a strong artistic lens — not raw confession.' Good: 'So far you seem more interested in perspective than pure emotion.' Bad: anything that names a fork/axis/lane/pole, previews the next matchup, or opens with 'You reward…' or 'You trust…'.",
@@ -1868,7 +1904,7 @@ export async function commitOpeningThreeImpl(supabase: AuthedSupabase, userId: s
       // `reaction` (shown next to song #3) and `hypothesis` are both the single
       // conversational observation. The model talks to the user, not about itself.
       llm = {
-        lane: confidence < 0.4 ? "general" : lane,
+        lane: confidence < 0.4 ? (dominantPerSongLane(perSong) ?? "general") : lane,
         confidence,
         secondary_lanes: secondary,
         reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
