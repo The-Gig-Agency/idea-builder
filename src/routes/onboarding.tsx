@@ -55,8 +55,6 @@ type Entry = {
   topDim: string | null;
 };
 
-const DIR_GLYPH: Record<Entry["direction"], string> = { forming: "↑", holding: "→", revising: "↻" };
-const DIR_LABEL: Record<Entry["direction"], string> = { forming: "first read", holding: "holding", revising: "revising" };
 
 function LineReveal({
   lines,
