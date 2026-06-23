@@ -1,73 +1,121 @@
-## The shift
+## Test Harness Endpoints
 
-Stop showing the user our model. Show them attention.
+Four public endpoints under `/api/public/test/*` that let an agent drive a full MusicDNA session end-to-end without UI or auth. All keyed by a caller-supplied `persona_id` (free-form string) so the same agent can run multiple personas in parallel.
 
-The "fork ↔ axis" chip and the "if you pick X over Y, the fork lands on…" stakes line are ontology leaking into the UI. They make the system sound like it's grading itself out loud. Replace them with short, conversational observations that read like an interviewer noticing something — and then immediately get out of the way so the next pairing can land.
+### Endpoints
 
-## What changes
+**1. `POST /api/public/test/open`** — start a run
+```json
+// request
+{ "persona_id": "skeptic_v1", "songs": ["robyn__dancing_on_my_own", "..."], "pairing_count": 6 }
+// response
+{ "run_id": "uuid", "persona_id": "skeptic_v1", "lane": "pop", "sub_lane_mix": {...}, "hypothesis": "…critic intro text…", "pairings_remaining": 6 }
+```
+- `songs` = exactly 3 song_ids from the catalog
+- `pairing_count` = 6 or 20 (defaults to 6)
+- Creates a fresh row in a new `test_runs` table (no Supabase auth user created)
+- Calls the same lane/hypothesis logic the UI uses after the 3-song opener
 
-### 1. Kill the fork chip and the stakes line in the UI
+**2. `POST /api/public/test/pairing`** — fetch the next pairing
+```json
+// request
+{ "run_id": "uuid" }
+// response
+{
+  "pairing_id": "uuid",
+  "index": 1,
+  "total": 6,
+  "prompt": "…critic question text…",
+  "dimension": "polarization",
+  "song_a": { "song_id": "...", "title": "...", "artist": "..." },
+  "song_b": { "song_id": "...", "title": "...", "artist": "..." }
+}
+```
+- Picks the next within-lane pairing using existing selection logic
+- Returns 409 if a pairing is already open and unanswered (idempotent: returns the same one)
+- Returns 410 + `{ done: true }` when all pairings used
 
-In `src/routes/onboarding.tsx`, remove rendering of:
-- the fork chip ("Pop songwriting ↔ Mood & texture", etc.)
-- the stakes sentence ("If #4 leans X, I had you wrong")
-- any "The Fork" / axis-named language
+**3. `POST /api/public/test/choice`** — submit pick
+```json
+// request
+{ "run_id": "uuid", "pairing_id": "uuid", "choice": "A" }     // or "B", or "song_id": "..."
+// response
+{ "ok": true, "pairings_remaining": 5, "running_insight": "…short critic reaction…" }
+```
+- Validates `pairing_id` matches the currently open pairing for this run
+- Stores the choice; advances counter
 
-Keep one short observation line above the next pairing. That's it. The pairing itself is the next question — it doesn't need a preface explaining what it tests.
+**4. `GET /api/public/test/report?run_id=uuid`** — final report
+```json
+{
+  "run_id": "uuid",
+  "persona_id": "skeptic_v1",
+  "complete": true,
+  "lane": "pop",
+  "archetype": "...",
+  "synthesis": "…final critic write-up…",
+  "evidence": [ { "pairing_id": "...", "dimension": "...", "chose": "song_id", "rationale": "..." }, … ]
+}
+```
+- Returns `complete: false` with progress info if pairings still remain
 
-Optional small touch: a quiet "Round N" counter above the matchup (replaces the chip's visual slot), no scoring talk.
+### Data model
 
-### 2. Shorten the post-3 read drastically
+New table `test_runs` (separate from real `sessions` so we don't pollute production data):
 
-New target shape, ~25–40 words, one short paragraph:
+```text
+id uuid pk
+persona_id text not null
+lane text
+sub_lane_mix jsonb
+hypothesis text
+opener_song_ids text[]           -- the 3 starters
+pairing_count int                -- 6 or 20
+current_pairing_id uuid          -- open pairing awaiting a choice
+pairings_used int default 0
+report jsonb                     -- populated on finalize
+created_at, updated_at timestamptz
+```
 
-> Two dramatic choices in a row. You seem to like emotional honesty delivered through a strong artistic lens — not raw confession.
+Pairings/choices for test runs are stored inline in `test_runs.pairings jsonb[]` rather than in `pairings`/`choices` so reports stay self-contained and the production tables stay clean.
 
-Rules for the model:
-- Reference at least one song or artist by name.
-- One observation, conversational, present tense.
-- No axis names, no poles, no "fork", no "stakes", no "if #4…".
-- No verdict aphorisms (banned openers stay banned).
-- Max ~40 words. Hard cap enforced in prompt.
+RLS: enable, no policies for anon/authenticated. All access goes through `supabaseAdmin` from within the route handlers (loaded inside the handler, never at module scope).
 
-### 3. Same treatment for the mid-flow reads
+### Security
 
-`refineWithTwoMore` / `MID_VOICE` and any later "after 6" / "after 10" beats follow the same pattern. Cadence examples to match the user's note:
+- All four routes live under `/api/public/*` (auth-bypass prefix).
+- Protected by a shared header: `x-test-harness-secret: <TEST_HARNESS_SECRET>`. Timing-safe compare. Returns 401 otherwise.
+- I'll add `TEST_HARNESS_SECRET` via `add_secret` before wiring the handlers.
+- Input validated with Zod; song_ids cross-checked against `songs` table.
 
-- After 3: "So far, you seem more interested in perspective than pure emotion."
-- After 6: "You're surprisingly resistant to nostalgia."
-- After 10: "You keep choosing atmosphere over immediacy."
+### Logic reuse
 
-Short. Observational. No mechanism talk.
+The four handlers call shared helpers extracted from the existing `musicdna.functions.ts` flow:
+- `computeOpenerLaneAndHypothesis(songs)` 
+- `pickNextPairing(run)`
+- `applyChoice(run, pairing_id, choice)`
+- `finalizeReport(run)`
 
-### 4. JSON contract simplifies
+No changes to existing user-facing flow — only refactor to expose pure functions the handlers can call.
 
-`reactToThree` (and the mid reads) return just `{ observation }`. Drop `fork` and `stakes` from the contract and from the renderer. This also removes a class of "model forgot a field" failures.
+### Files
 
-### 5. Keep the engine smart, silently
+- `supabase/migrations/<ts>_test_runs.sql` — new `test_runs` table + grants + RLS
+- `src/lib/musicdna-core.server.ts` — extracted pure helpers (server-only)
+- `src/routes/api/public/test/open.ts`
+- `src/routes/api/public/test/pairing.ts`
+- `src/routes/api/public/test/choice.ts`
+- `src/routes/api/public/test/report.ts`
 
-`nextPairing` keeps the hypothesis-testing logic we added last round — it still picks pairings that discriminate between the user's leaning poles. The user just never sees the poles named. Engine and voice stop saying the same thing out loud; the engine does the work, the voice stays human.
+### Agent usage example
 
-Per-song reactions (`reactToOne`) keep the concrete-hook treatment from the prior round (year, producer, peer record when known) — those already feel like "someone paying attention" and the user called that out as working.
-
-## Scope
-
-- `src/lib/musicdna.functions.ts` — prompts for `reactToThree`, `refineWithTwoMore`, `MID_VOICE`; tighten word caps; drop `fork`/`stakes` from JSON contract; keep `nextPairing` logic as-is.
-- `src/routes/onboarding.tsx` — remove fork chip and stakes line; render single observation; optional quiet round counter.
-- `src/routes/_authenticated/1980.tsx` — same contract + UI change for the decade flow.
-
-## Out of scope
-
-- Per-song reaction shape (already good).
-- Pairing selection logic (stays).
-- Result page.
-- Any data/schema changes.
-
-## Voice rules (updated)
-
-- Speak to the user, not about the model.
-- Name songs/artists; never name axes or poles.
-- One observation per beat. ~25–40 words max.
-- Never preview what the next pick "tests."
-- Banned: "fork", "axis", "lane", "stakes", "if #4…", "I had you wrong", "the moment when", "you reward…", "you trust…".
-- Allowed: "Two of three…", "So far you seem…", "You keep choosing…", "Surprisingly…", "Closer to X than Y…" (as long as X/Y are songs or artists, not axes).
+```bash
+H="x-test-harness-secret: $SECRET"
+curl -XPOST .../api/public/test/open -H "$H" -d '{"persona_id":"p1","songs":[...],"pairing_count":6}'
+# → run_id
+curl -XPOST .../api/public/test/pairing -H "$H" -d '{"run_id":"..."}'
+# → pairing_id + song A/B
+curl -XPOST .../api/public/test/choice -H "$H" -d '{"run_id":"...","pairing_id":"...","choice":"A"}'
+# repeat 6x, then:
+curl ".../api/public/test/report?run_id=..." -H "$H"
+```
