@@ -261,6 +261,27 @@ export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => startSessionImpl(context.supabase, context.userId));
 
+// Weight applied to the 3-song prior dimensions when seeding session.vector.
+// Tuning intuition (see docs/musicdna/prior-weighting.md):
+//   priors ≈ 30% of final archetype signal, pairings ≈ 70%.
+// candidate_dimensions live in [-100, 100]; pairing deltas accumulate
+// ~90–200 on the dominant axis across 6 rounds, so 0.35 keeps priors as
+// a real but overrideable nudge.
+export const PRIOR_SEED_WEIGHT = 0.35;
+
+export function seedVectorFromPriors(
+  candidateDimensions: Record<string, unknown> | null | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!candidateDimensions) return out;
+  for (const [k, v] of Object.entries(candidateDimensions)) {
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out[k] = Math.round(v * PRIOR_SEED_WEIGHT);
+    }
+  }
+  return out;
+}
+
 export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -271,7 +292,10 @@ export async function startSessionImpl(supabase: AuthedSupabase, userId: string)
     const lane_confidence = Number(profile?.opening_lane_confidence ?? 0);
 
     // Seed probe candidates: secondary lanes from opening analysis, then a wildcard.
-    const analysis = (profile?.opening_analysis_json ?? {}) as { secondary_lanes?: string[] };
+    const analysis = (profile?.opening_analysis_json ?? {}) as {
+      secondary_lanes?: string[];
+      candidate_dimensions?: Record<string, number>;
+    };
     const secondaries = (analysis.secondary_lanes ?? []).filter((l): l is Lane =>
       (ALL_LANES as readonly string[]).includes(l) && l !== lane,
     );
@@ -279,11 +303,15 @@ export async function startSessionImpl(supabase: AuthedSupabase, userId: string)
     const wildcard = wildcardPool[Math.floor(Math.random() * wildcardPool.length)];
     const probe_candidate_lanes = Array.from(new Set([...secondaries, wildcard].filter(Boolean) as Lane[])).slice(0, 3);
 
+    // Seed vector with the 3-song prior so archetype math actually reflects
+    // the opener instead of being pairings-only.
+    const seedVector = seedVectorFromPriors(analysis.candidate_dimensions);
+
     const { data, error } = await supabase
       .from("sessions")
       .insert({
         user_id: userId,
-        vector: {},
+        vector: seedVector,
         lane,
         lane_confidence,
         probe_candidate_lanes,
@@ -2321,10 +2349,7 @@ async function ensureChatSessionForUser(
   const lane = (profile.opening_lane as string | null) ?? "general";
   const conf = Number(profile.opening_lane_confidence ?? 0);
   const dims = (profile.opening_analysis_json?.candidate_dimensions ?? {}) as Record<string, number>;
-  const vector: Record<string, number> = {};
-  for (const [k, v] of Object.entries(dims)) {
-    if (typeof v === "number" && Number.isFinite(v)) vector[k] = Math.round(v);
-  }
+  const vector = seedVectorFromPriors(dims);
   const { data: created, error } = await supabase
     .from("sessions")
     .insert({
