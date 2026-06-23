@@ -63,6 +63,7 @@ The first 3 songs are **not enough to fully diagnose taste**; they only need to 
 
 ```json
 {
+  "song_id": "artist_slug__title_slug",
   "title": "string",
   "artist": "string",
   "primary_lane": "alternative | pop | hip_hop | electronic | classic_rock",
