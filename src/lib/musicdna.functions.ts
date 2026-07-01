@@ -983,7 +983,7 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
       tests,
     });
     const probeState = probeEval.probe_state;
-    const nextLane: Lane = probeEval.next_lane;
+    const nextLane: Lane = probeEval.next_lane as Lane;
     if (probeEval.probe_lane) {
       if (probeEval.flipped && probeEval.flip_summary) {
         supabase.from("event_log").insert({
