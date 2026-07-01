@@ -1518,6 +1518,11 @@ Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
     await supabase.from("session_reasoning").upsert(reasoningRow, { onConflict: "session_id" });
     await supabase.from("sessions").update({
       archetype_id: best.id,
+      archetype_top3: top3,
+      archetype_score: scored[0] ? Math.round(scored[0].score * 1000) / 1000 : null,
+      archetype_margin: scored[0] ? Math.round(margin * 1000) / 1000 : null,
+      archetype_flagged: archetypeFlagged,
+      archetype_flag_reason: archetypeFlagReason,
       interpretation: narrative,
       completed_at: new Date().toISOString(),
     }).eq("id", data.sessionId);
