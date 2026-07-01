@@ -7,6 +7,7 @@ import '../../features/foundation/presentation/pages/foundation_home_page.dart';
 import '../../features/onboarding/domain/entities/started_music_session.dart';
 import '../../features/onboarding/presentation/cubit/onboarding_cubit.dart';
 import '../../features/onboarding/presentation/pages/onboarding_stub_page.dart';
+import '../../features/session/presentation/cubit/session_cubit.dart';
 import '../../features/session/presentation/pages/session_stub_page.dart';
 
 GoRouter buildAppRouter(AppDependencies dependencies) {
@@ -45,10 +46,17 @@ GoRouter buildAppRouter(AppDependencies dependencies) {
       ),
       GoRoute(
         path: '/session',
-        builder: (context, state) => SessionStubPage(
-          startedSession: state.extra is StartedMusicSession
-              ? state.extra as StartedMusicSession
-              : null,
+        builder: (context, state) => BlocProvider<SessionCubit>(
+          create: (_) => dependencies.createSessionCubit(
+            startedSession: state.extra is StartedMusicSession
+                ? state.extra as StartedMusicSession
+                : null,
+          )..initialize(),
+          child: SessionStubPage(
+            startedSession: state.extra is StartedMusicSession
+                ? state.extra as StartedMusicSession
+                : null,
+          ),
         ),
       ),
     ],
