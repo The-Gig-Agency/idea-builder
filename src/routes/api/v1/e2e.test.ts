@@ -144,7 +144,7 @@ d("REST v1 end-to-end", () => {
       expect(preflight.status).toBe(204);
       expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
     },
-    { timeout: 180_000 },
+    180_000,
   );
 
   it.runIf(shouldRun)("rejects malformed share tokens with a typed error envelope", async () => {
