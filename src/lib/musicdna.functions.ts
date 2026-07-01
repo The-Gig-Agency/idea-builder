@@ -2909,28 +2909,31 @@ export const currentRead = createServerFn({ method: "POST" })
       .map((d) => ({ d, v: vector[d] ?? 0 }))
       .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
     const top = ranked[0];
-    if (!top || Math.abs(top.v) < 4) {
-      return {
-        thesis: "Too early to call.\nKeep picking.\nI'm listening.",
-        hook: "Throw me another one.",
-        topDim: null,
-        strength: 0,
-      };
-    }
     // Rotate variants by current choice count so the running thesis evolves
     // round to round instead of repeating the same line on the same axis.
     const { count: choiceCount } = await supabase
       .from("choices")
       .select("id", { count: "exact", head: true })
       .eq("session_id", data.sessionId);
-    const variantSeed = (choiceCount ?? 0) + dimSeed(top.d) + (top.v >= 0 ? 0 : 1);
+    const round = choiceCount ?? 0;
+    // Gate identity claims: need real support AND enough rounds to make it
+    // sound like observation rather than assumption.
+    if (!top || Math.abs(top.v) < 12 || round < 5) {
+      return {
+        thesis: "Still listening.\nToo early to call.\nKeep picking.",
+        hook: "Throw me another one.",
+        topDim: top?.d ?? null,
+        strength: top ? Math.abs(top.v) : 0,
+      };
+    }
+    const variantSeed = round + dimSeed(top.d) + (top.v >= 0 ? 0 : 1);
     const beat = BEAT[top.d];
     const pole = pickVariant(top.v >= 0 ? beat?.hi : beat?.lo, variantSeed);
     if (!pole) {
-      const phrase = REVEAL[top.d];
-      const fallback = pickVariant(top.v >= 0 ? phrase?.hi : phrase?.lo, variantSeed);
+      const p = POLES[top.d]?.[top.v >= 0 ? "hi" : "lo"];
+      const line = pickByHash(p?.observations, variantSeed);
       return {
-        thesis: fallback ? `You keep choosing ${fallback.verdict}.` : `Leaning ${top.d}.`,
+        thesis: line ?? `Leaning ${top.d}.`,
         hook: "Let's see if that holds.",
         topDim: top.d,
         strength: Math.abs(top.v),
