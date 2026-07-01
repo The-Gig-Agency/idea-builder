@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_dna/src/features/onboarding/domain/entities/started_music_session.dart';
 import 'package:music_dna/src/features/session/domain/entities/session_pairing.dart';
+import 'package:music_dna/src/features/session/domain/entities/session_reveal.dart';
 import 'package:music_dna/src/features/session/domain/repositories/session_repository.dart';
 import 'package:music_dna/src/features/session/presentation/cubit/session_cubit.dart';
 
@@ -99,6 +100,83 @@ void main() {
     );
 
     test(
+      'builds a reveal and shared reading once the session is complete',
+      () async {
+        final repository = FakeSessionRepository(
+          nextPairings: <SessionRoundState>[
+            const SessionRoundState(
+              sessionId: 'session-1',
+              round: 2,
+              confidence: 0.77,
+              done: true,
+            ),
+          ],
+          reveal: const SessionReveal(
+            archetypeId: 'arch-1',
+            archetypeName: 'Architect',
+            interpretation: 'You keep choosing pressure over polish.',
+            vector: <String, double>{'intensity': 0.8},
+            allowedClaims: <RevealClaim>[
+              RevealClaim(
+                dimension: 'intensity',
+                preferred: 'pressure',
+                opposed: 'polish',
+                supportingChoices: 7,
+                testedTotal: 10,
+                confidence: 0.82,
+                examples: <RevealClaimExample>[
+                  RevealClaimExample(
+                    chosen: 'Song A',
+                    rejected: 'Song B',
+                    delta: 0.2,
+                  ),
+                ],
+                tradeoff: 'Pressure over polish',
+              ),
+            ],
+            counterarguments: <RevealCounterargument>[
+              RevealCounterargument(
+                claim: 'Maybe you just knew the songs better.',
+                impact: 'low',
+                notes: 'The pattern held across unfamiliar pairings too.',
+              ),
+            ],
+            shareToken: 'share-12345678',
+          ),
+          sharedReveal: SharedReveal(
+            sessionId: 'session-1',
+            shareToken: 'share-12345678',
+            completedAt: DateTime.parse('2026-07-01T00:00:00Z'),
+            lane: 'cinematic',
+            interpretation: 'Public reveal copy',
+            archetype: const SharedRevealArchetype(name: 'Architect'),
+            definingChoices: const <DefiningChoice>[
+              DefiningChoice(
+                chosen: 'Song A',
+                chosenArtist: 'Artist A',
+                rejected: 'Song B',
+                rejectedArtist: 'Artist B',
+              ),
+            ],
+          ),
+        );
+        final cubit = SessionCubit(
+          repository,
+          startedSession: _startedSession(),
+        );
+
+        addTearDown(cubit.close);
+
+        await cubit.initialize();
+        await cubit.revealSession();
+
+        expect(cubit.state.status, SessionStatus.revealed);
+        expect(cubit.state.reveal?.archetypeName, 'Architect');
+        expect(cubit.state.sharedReveal?.shareToken, 'share-12345678');
+      },
+    );
+
+    test(
       'moves to missingSession when no started session is available',
       () async {
         final cubit = SessionCubit(FakeSessionRepository());
@@ -121,12 +199,22 @@ class FakeSessionRepository implements SessionRepository {
       verdict: 'Decisive',
       why: 'Default feedback',
     ),
+    this.reveal = const SessionReveal(
+      interpretation: 'Default reveal',
+      vector: <String, double>{},
+      allowedClaims: <RevealClaim>[],
+      counterarguments: <RevealCounterargument>[],
+    ),
+    SharedReveal? sharedReveal,
   }) : _nextPairings = List<SessionRoundState>.from(
          nextPairings ?? const <SessionRoundState>[],
-       );
+       ),
+       _sharedReveal = sharedReveal;
 
   final List<SessionRoundState> _nextPairings;
   final SessionChoiceFeedback feedback;
+  final SessionReveal reveal;
+  final SharedReveal? _sharedReveal;
   String? lastChoiceSongId;
   int? lastChoiceMsToDecide;
 
@@ -150,6 +238,23 @@ class FakeSessionRepository implements SessionRepository {
     lastChoiceSongId = chosenSongId;
     lastChoiceMsToDecide = msToDecide;
     return feedback;
+  }
+
+  @override
+  Future<SessionReveal> revealSession({required String sessionId}) async {
+    return reveal;
+  }
+
+  @override
+  Future<SharedReveal> fetchSharedReveal({required String token}) async {
+    return _sharedReveal ??
+        SharedReveal(
+          sessionId: 'session-1',
+          shareToken: token,
+          completedAt: DateTime.parse('2026-07-01T00:00:00Z'),
+          interpretation: 'Fallback public reveal',
+          definingChoices: const <DefiningChoice>[],
+        );
   }
 }
 

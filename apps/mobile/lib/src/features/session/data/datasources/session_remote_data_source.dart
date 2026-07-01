@@ -33,6 +33,20 @@ class SessionRemoteDataSource {
     return _decodeJson(response);
   }
 
+  Future<Map<String, dynamic>> revealSession({
+    required String sessionId,
+  }) async {
+    final response = await _apiClient.post('/api/v1/session/$sessionId/reveal');
+    return _decodeJson(response);
+  }
+
+  Future<Map<String, dynamic>> fetchSharedReveal({
+    required String token,
+  }) async {
+    final response = await _apiClient.get('/api/v1/share/$token');
+    return _decodeJson(response);
+  }
+
   Map<String, dynamic> _decodeJson(http.Response response) {
     final body = response.body.isEmpty
         ? const <String, dynamic>{}
