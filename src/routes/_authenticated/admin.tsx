@@ -10,6 +10,7 @@ import {
   adminDelete,
   adminSetDiagnosticWeight,
   adminResidualQueue,
+  adminOntology,
 } from "@/lib/admin.functions";
 import {
   listDecadePrompts,
