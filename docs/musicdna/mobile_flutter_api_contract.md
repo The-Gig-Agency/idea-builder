@@ -1,20 +1,26 @@
-# MusicDNA Mobile Flutter API Contract
+# MusicDNA Flutter API Contract
 
-This document defines the first-pass REST surface for a Flutter mobile
-client. It is intentionally thin and engine-backed: Flutter owns auth UI,
-onboarding UI, pairing UI, reveal UI, and session recovery UX, while the
-backend owns MusicDNA inference, pairing selection, session progression,
-and reveal synthesis.
+This document defines the Flutter-facing contract for MusicDNA using the
+existing shared REST API. Flutter does not get a separate wrapper layer.
+Web, Flutter, desktop, and tooling all call the same `/api/v1/*` endpoints.
+
+The architecture boundary is:
+
+- Flutter owns auth UI, session UI, reveal UI, loading states, retries, and
+  recovery UX.
+- The backend owns session creation, pairing selection, scoring, reveal
+  generation, and public share shaping.
+- The engine remains the single source of truth for MusicDNA logic.
 
 ## Principles
 
 - Flutter must not reimplement MusicDNA engine logic client-side.
-- Supabase auth may still be used directly by mobile for sign-in/session
-  management, but MusicDNA gameplay and inference should flow through
-  backend REST transports.
-- REST responses should be typed and stable enough for Flutter BLoC/use
-  case/repository layers.
-- Errors should use one consistent envelope.
+- Flutter should call the existing `/api/v1/*` routes directly over HTTP.
+- Supabase auth is still handled client-side, but authenticated MusicDNA
+  requests use the Supabase bearer token.
+- Response shapes should be treated as stable DTOs for Flutter repository and
+  BLoC layers.
+- Clients must tolerate additive fields on `/v1` and ignore unknown keys.
 
 ## Auth Boundary
 
@@ -25,97 +31,61 @@ Mobile auth is split:
   - sign up
   - sign out
   - session restore
-- MusicDNA backend REST:
-  - opening analysis
-  - session start
-  - next pairing
+- MusicDNA REST:
+  - start session
+  - fetch next pairing
   - submit choice
-  - reveal
-  - history / resume
+  - finalize reveal
+  - fetch public share
 
-The mobile client should send the authenticated bearer token on REST calls.
+Authenticated requests send:
+
+```http
+Authorization: Bearer <supabase_access_token>
+```
+
+The current public route is:
+
+- `GET /api/v1/share/:token`
+
+## CORS
+
+The current `/api/v1/*` routes are already CORS-enabled and answer
+`OPTIONS` preflight requests. Flutter can call them directly over HTTPS.
 
 ## Error Envelope
 
-All REST endpoints should return this shape for handled failures:
+Handled failures use this shape:
 
 ```json
 {
   "error": {
     "code": "INVALID_INPUT",
-    "message": "five songs are required"
+    "message": "Session id must be a UUID"
   }
 }
 ```
 
-Initial error codes:
+Current codes:
 
 - `NOT_FOUND`
 - `UNAUTHORIZED`
 - `FORBIDDEN`
 - `INVALID_INPUT`
-- `CONFLICT`
 - `UPSTREAM`
 - `INTERNAL`
 
 ## Endpoint Set
 
-### 1. Analyze Opening Songs
+### 1. Start Session
 
-`POST /api/v1/mobile/musicdna/opening-analysis`
-
-Purpose:
-
-- Submit the user’s opening five songs
-- Persist the opening hypothesis / lane analysis
-- Return the analysis payload needed for onboarding UI
-
-Request:
-
-```json
-{
-  "songs": [
-    "A Forest — The Cure",
-    "Ceremony — New Order",
-    "Fools Gold — The Stone Roses",
-    "Blue Monday — New Order",
-    "Born Slippy .NUXX — Underworld"
-  ]
-}
-```
-
-Response:
-
-```json
-{
-  "lane": "alternative",
-  "confidence": 0.82,
-  "secondaryLanes": ["electronic"],
-  "reasoning": ["You keep choosing propulsion over polish."],
-  "hypothesis": "You trust songs that build pressure before they cash out. Let's see if that holds.",
-  "candidateDimensions": {
-    "movement": 62,
-    "atmosphere": 48
-  },
-  "perSong": [
-    {
-      "input": "A Forest — The Cure",
-      "lane": "alternative",
-      "source": "catalog",
-      "canonId": "..."
-    }
-  ]
-}
-```
-
-### 2. Start Session
-
-`POST /api/v1/mobile/musicdna/sessions`
+`POST /api/v1/session`
 
 Purpose:
 
-- Create a new diagnostic session from current profile priors
-- Return session metadata required to begin pairing flow
+- Start a new MusicDNA session for the authenticated user
+- Seed the session from the user's saved opening songs/profile priors
+- Return the session identity and initial lane
 
 Request:
 
@@ -127,28 +97,23 @@ Response:
 
 ```json
 {
-  "sessionId": "uuid",
+  "session_id": "uuid",
   "lane": "alternative",
-  "laneConfidence": 0.82
+  "lane_confidence": 0.87
 }
 ```
 
-### 3. Get Next Pairing
+### 2. Get Next Pairing
 
-`POST /api/v1/mobile/musicdna/sessions/{sessionId}/next-pairing`
+`GET /api/v1/session/{sessionId}/next`
 
 Purpose:
 
-- Retrieve the next pairing for a session
-- Tell mobile whether the session is complete
+- Return the next pairing for the session
+- Tell Flutter whether the session is complete
+- Return current round/progress confidence
 
-Request:
-
-```json
-{}
-```
-
-Response:
+In-progress response example:
 
 ```json
 {
@@ -157,165 +122,174 @@ Response:
   "confidence": 0.64,
   "pairing": {
     "id": "uuid",
-    "lane": "alternative",
-    "diagnosticWeight": 73,
     "tests": ["movement", "immersion"],
-    "songA": {
+    "hypothesis": "Slow-burn propulsion vs instant payoff",
+    "why_good": "Helps resolve movement against immersion",
+    "diagnostic_weight": 73,
+    "lane": "alternative",
+    "song_a": {
       "id": "uuid",
       "title": "A Forest",
       "artist": "The Cure",
       "year": 1980,
-      "primaryLane": "alternative",
-      "catalogLane": "goth_darkwave"
+      "primary_lane": "alternative",
+      "lane": "goth_darkwave"
     },
-    "songB": {
+    "song_b": {
       "id": "uuid",
       "title": "The Killing Moon",
       "artist": "Echo & the Bunnymen",
       "year": 1984,
-      "primaryLane": "alternative",
-      "catalogLane": "post_punk_new_wave"
+      "primary_lane": "alternative",
+      "lane": "post_punk_new_wave"
     }
   }
 }
 ```
 
-Completed response:
+Completed response example:
 
 ```json
 {
   "done": true,
-  "round": 20,
+  "round": 12,
   "confidence": 0.81,
   "pairing": null
 }
 ```
 
-### 4. Submit Choice
+### 3. Submit Choice
 
-`POST /api/v1/mobile/musicdna/sessions/{sessionId}/choices`
+`POST /api/v1/session/{sessionId}/choice`
 
 Purpose:
 
-- Record a user choice
-- Advance session state
-- Return round insight needed for mobile mid-session UI
+- Record a user choice for the current pairing
+- Update the session vector
+- Return deterministic round feedback used by Flutter mid-session UI
 
 Request:
 
 ```json
 {
-  "pairingId": "uuid",
-  "chosenSongId": "uuid"
+  "pairing_id": "uuid",
+  "chosen_song_id": "uuid",
+  "ms_to_decide": 4230
 }
 ```
 
-Response:
+Response example:
 
 ```json
 {
-  "saved": true,
-  "choiceId": "uuid",
-  "insight": {
-    "title": "Why that mattered",
-    "body": "You chose the long ascent over the instant anthem."
+  "vector": {
+    "movement": 42,
+    "atmosphere": 18
   },
-  "vectorUpdated": true
+  "verdict": "You went with the song that keeps moving.",
+  "why": "You reward build and pressure over instant release.",
+  "hesitation": "Fast call.",
+  "dim": "movement",
+  "delta": 12.4
 }
 ```
 
-### 5. Get Reveal
+### 4. Finalize Reveal
 
-`GET /api/v1/mobile/musicdna/sessions/{sessionId}/reveal`
+`POST /api/v1/session/{sessionId}/reveal`
 
 Purpose:
 
-- Return the session reveal / result payload for mobile results screens
+- Finalize the session
+- Assign the archetype
+- Generate the persisted reveal payload
+- Return the share token and result data needed by Flutter results UI
 
-Response:
+Response example:
 
 ```json
 {
-  "sessionId": "uuid",
+  "archetypeId": "uuid",
+  "archetypeName": "Architect",
+  "interpretation": "Across 7 of 12 matchups, you repeatedly favored songs that build pressure before release.",
+  "vector": {
+    "movement": 42,
+    "atmosphere": 18
+  },
+  "allowed_claims": [],
+  "counterarguments": [],
+  "share_token": "public-share-token"
+}
+```
+
+### 5. Public Share
+
+`GET /api/v1/share/{token}`
+
+Purpose:
+
+- Read a completed shared reveal without auth
+- Support both explicit share tokens and public session UUID back-compat
+
+Response example:
+
+```json
+{
+  "session_id": "uuid",
+  "share_token": "public-share-token",
+  "completed_at": "2026-06-30T18:22:11Z",
+  "lane": "Alternative",
+  "interpretation": "You're an Architect…",
   "archetype": {
     "id": "uuid",
-    "name": "The Nocturnal Builder",
-    "slug": "the-nocturnal-builder"
+    "name": "Architect",
+    "tagline": "Craftsmanship first.",
+    "description": null
   },
-  "headline": "You trust songs that build pressure before they break open.",
-  "summary": "You keep choosing motion, atmosphere, and cumulative payoff over the instant hook.",
-  "descriptors": ["propulsive", "immersive", "restless"],
-  "evidence": [
+  "defining_choices": [
     {
-      "dimension": "immersion",
-      "verdict": "slow reveal over immediacy",
-      "why": "You reward songs that take their time before they pay out."
+      "chosen": "A Forest",
+      "chosenArtist": "The Cure",
+      "rejected": "The Killing Moon",
+      "rejectedArtist": "Echo & the Bunnymen"
     }
-  ],
-  "share": {
-    "publicUrl": "https://...",
-    "shareText": "..."
-  }
+  ]
 }
 ```
 
-### 6. Resume Session / History
+## Not Yet Exposed As REST
 
-`GET /api/v1/mobile/musicdna/me/session`
+These flows still appear to live outside the current `/api/v1` surface:
 
-Purpose:
+- opening-song analysis submission
+- session history / resume endpoints
 
-- Return the user’s active in-progress session if one exists
-
-Response:
-
-```json
-{
-  "activeSession": {
-    "sessionId": "uuid",
-    "status": "in_progress",
-    "round": 7
-  }
-}
-```
-
-`GET /api/v1/mobile/musicdna/me/history`
-
-Purpose:
-
-- Return prior sessions and reveal summaries for profile/history UI
+Flutter should not assume those routes exist until they are added to the API
+and documented in [`docs/musicdna/api-v1.md`](/Users/rastakit/tga-workspace/idea-builder/docs/musicdna/api-v1.md).
 
 ## Flutter Integration Notes
 
 Recommended mobile layering:
 
 - data source:
-  - raw HTTP requests to `/api/v1/mobile/musicdna/*`
+  - raw HTTP requests to `/api/v1/session*` and `/api/v1/share/*`
 - repository:
   - maps response DTOs to domain entities
-  - maps error envelope to typed failures
+  - maps the shared error envelope to typed failures
 - use cases:
-  - analyze opening songs
   - start session
   - fetch next pairing
   - submit choice
-  - fetch reveal
-  - fetch resume/history
+  - finalize reveal
+  - fetch public share
 - bloc/state:
-  - onboarding flow
+  - session start/loading
   - live diagnostic session
   - reveal/results
-  - resume/recovery
+  - retry/recovery states
 
-## Current Repo Gap
+## Current Ticket Focus
 
-The current codebase already exposes MusicDNA logic via TanStack server
-functions in [`src/lib/musicdna.functions.ts`](/Users/rastakit/tga-workspace/idea-builder/src/lib/musicdna.functions.ts),
-but it does not yet expose this mobile-facing REST transport shape.
-
-That means the next backend implementation step is:
-
-1. extract or wrap stable service entrypoints around the current MusicDNA
-   logic
-2. expose them as `/api/v1/mobile/musicdna/*` routes
-3. make the response DTOs and error envelope match this contract
+`TGA-274` should align Flutter contract/types to the already-shipped REST API,
+not introduce a second mobile-specific wrapper. If new endpoints are needed
+later, they should extend the same `/api/v1` surface used by every client.

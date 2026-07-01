@@ -1,13 +1,11 @@
 import { z } from "zod";
 
-export const musicDnaMobileApiPaths = {
-  openingAnalysis: "/api/v1/mobile/musicdna/opening-analysis",
-  startSession: "/api/v1/mobile/musicdna/sessions",
-  nextPairing: (sessionId: string) => `/api/v1/mobile/musicdna/sessions/${sessionId}/next-pairing`,
-  submitChoice: (sessionId: string) => `/api/v1/mobile/musicdna/sessions/${sessionId}/choices`,
-  reveal: (sessionId: string) => `/api/v1/mobile/musicdna/sessions/${sessionId}/reveal`,
-  activeSession: "/api/v1/mobile/musicdna/me/session",
-  history: "/api/v1/mobile/musicdna/me/history",
+export const musicDnaApiV1Paths = {
+  startSession: "/api/v1/session",
+  nextPairing: (sessionId: string) => `/api/v1/session/${sessionId}/next`,
+  submitChoice: (sessionId: string) => `/api/v1/session/${sessionId}/choice`,
+  reveal: (sessionId: string) => `/api/v1/session/${sessionId}/reveal`,
+  share: (token: string) => `/api/v1/share/${token}`,
 } as const;
 
 export const musicDnaErrorCodeSchema = z.enum([
@@ -15,7 +13,6 @@ export const musicDnaErrorCodeSchema = z.enum([
   "UNAUTHORIZED",
   "FORBIDDEN",
   "INVALID_INPUT",
-  "CONFLICT",
   "UPSTREAM",
   "INTERNAL",
 ]);
@@ -27,131 +24,120 @@ export const musicDnaErrorEnvelopeSchema = z.object({
   }),
 });
 
-export const openingAnalysisRequestSchema = z.object({
-  songs: z.array(z.string().trim().min(1).max(200)).length(5),
-});
-
-export const openingAnalysisResponseSchema = z.object({
-  lane: z.string(),
-  confidence: z.number(),
-  secondaryLanes: z.array(z.string()).default([]),
-  reasoning: z.array(z.string()).default([]),
-  hypothesis: z.string(),
-  candidateDimensions: z.record(z.string(), z.number()).default({}),
-  perSong: z
-    .array(
-      z.object({
-        input: z.string(),
-        lane: z.string(),
-        source: z.enum(["llm", "catalog"]),
-        canonId: z.string().optional(),
-      }),
-    )
-    .default([]),
-});
+export const startSessionRequestSchema = z.object({}).strict();
 
 export const startSessionResponseSchema = z.object({
-  sessionId: z.string().uuid(),
+  session_id: z.string().uuid(),
   lane: z.string(),
-  laneConfidence: z.number(),
+  lane_confidence: z.number(),
 });
 
 export const pairingSongSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   artist: z.string(),
-  year: z.number().nullable().optional(),
-  primaryLane: z.string(),
-  catalogLane: z.string().nullable().optional(),
+  year: z.number().nullable(),
+  primary_lane: z.string(),
+  lane: z.string().nullable().optional(),
 });
 
-export const pairingDtoSchema = z.object({
+export const pairingSchema = z.object({
   id: z.string().uuid(),
-  lane: z.string(),
-  diagnosticWeight: z.number(),
   tests: z.array(z.string()).default([]),
-  songA: pairingSongSchema,
-  songB: pairingSongSchema,
+  hypothesis: z.string().nullable().optional(),
+  why_good: z.string().nullable().optional(),
+  diagnostic_weight: z.number(),
+  lane: z.string().nullable().optional(),
+  song_a: pairingSongSchema,
+  song_b: pairingSongSchema,
 });
 
 export const nextPairingResponseSchema = z.object({
   done: z.boolean(),
   round: z.number(),
   confidence: z.number(),
-  pairing: pairingDtoSchema.nullable(),
+  pairing: pairingSchema.nullable(),
 });
 
 export const submitChoiceRequestSchema = z.object({
-  pairingId: z.string().uuid(),
-  chosenSongId: z.string().uuid(),
+  pairing_id: z.string().uuid(),
+  chosen_song_id: z.string().uuid(),
+  ms_to_decide: z.number().int().nonnegative().max(600000).optional(),
 });
+
+export const vectorSchema = z.record(z.string(), z.number());
 
 export const submitChoiceResponseSchema = z.object({
-  saved: z.boolean(),
-  choiceId: z.string().uuid(),
-  insight: z
-    .object({
-      title: z.string(),
-      body: z.string(),
-    })
-    .optional(),
-  vectorUpdated: z.boolean(),
-});
-
-export const revealEvidenceSchema = z.object({
-  dimension: z.string(),
+  vector: vectorSchema,
   verdict: z.string(),
   why: z.string(),
+  hesitation: z.string().nullable(),
+  dim: z.string(),
+  delta: z.number(),
+});
+
+export const counterargumentSchema = z.object({
+  claim: z.string(),
+  impact: z.enum(["low", "medium", "high"]),
+  notes: z.string(),
+});
+
+export const revealClaimExampleSchema = z.object({
+  dimension: z.string(),
+  preferred: z.string(),
+  opposed: z.string(),
+  supporting_choices: z.number(),
+  tested_total: z.number(),
+  confidence: z.number(),
+  examples: z.array(
+    z.object({
+      chosen: z.string(),
+      rejected: z.string(),
+      delta: z.number(),
+    }),
+  ),
+  tradeoff: z.string(),
 });
 
 export const revealResponseSchema = z.object({
-  sessionId: z.string().uuid(),
-  archetype: z.object({
-    id: z.string().uuid().optional(),
-    name: z.string(),
-    slug: z.string(),
-  }),
-  headline: z.string(),
-  summary: z.string(),
-  descriptors: z.array(z.string()).default([]),
-  evidence: z.array(revealEvidenceSchema).default([]),
-  share: z
-    .object({
-      publicUrl: z.string().url().optional(),
-      shareText: z.string().optional(),
-    })
-    .optional(),
+  archetypeId: z.string().uuid().nullable().optional(),
+  archetypeName: z.string().nullable().optional(),
+  interpretation: z.string(),
+  vector: vectorSchema,
+  allowed_claims: z.array(revealClaimExampleSchema).default([]),
+  counterarguments: z.array(counterargumentSchema).default([]),
+  share_token: z.string(),
 });
 
-export const activeSessionResponseSchema = z.object({
-  activeSession: z
-    .object({
-      sessionId: z.string().uuid(),
-      status: z.string(),
-      round: z.number(),
-    })
-    .nullable(),
+export const publicArchetypeSchema = z.object({
+  id: z.string().uuid().nullable().optional(),
+  name: z.string(),
+  tagline: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
 });
 
-export const historyItemSchema = z.object({
-  sessionId: z.string().uuid(),
-  archetypeName: z.string().optional(),
-  archetypeSlug: z.string().optional(),
-  completedAt: z.string().datetime().optional(),
-  headline: z.string().optional(),
+export const definingChoiceSchema = z.object({
+  chosen: z.string(),
+  chosenArtist: z.string(),
+  rejected: z.string(),
+  rejectedArtist: z.string(),
 });
 
-export const historyResponseSchema = z.object({
-  items: z.array(historyItemSchema).default([]),
+export const shareResponseSchema = z.object({
+  session_id: z.string().uuid(),
+  share_token: z.string(),
+  completed_at: z.string(),
+  lane: z.string().nullable().optional(),
+  interpretation: z.string(),
+  archetype: publicArchetypeSchema,
+  defining_choices: z.array(definingChoiceSchema).default([]),
 });
 
 export type MusicDnaErrorEnvelope = z.infer<typeof musicDnaErrorEnvelopeSchema>;
-export type OpeningAnalysisRequest = z.infer<typeof openingAnalysisRequestSchema>;
-export type OpeningAnalysisResponse = z.infer<typeof openingAnalysisResponseSchema>;
+export type StartSessionRequest = z.infer<typeof startSessionRequestSchema>;
 export type StartSessionResponse = z.infer<typeof startSessionResponseSchema>;
 export type NextPairingResponse = z.infer<typeof nextPairingResponseSchema>;
 export type SubmitChoiceRequest = z.infer<typeof submitChoiceRequestSchema>;
 export type SubmitChoiceResponse = z.infer<typeof submitChoiceResponseSchema>;
 export type RevealResponse = z.infer<typeof revealResponseSchema>;
-export type ActiveSessionResponse = z.infer<typeof activeSessionResponseSchema>;
-export type HistoryResponse = z.infer<typeof historyResponseSchema>;
+export type ShareResponse = z.infer<typeof shareResponseSchema>;
