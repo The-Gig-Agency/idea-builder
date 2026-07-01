@@ -41,11 +41,18 @@ describe("createLovableLlmGateway", () => {
 
   it("throws when the api key is absent", async () => {
     const { impl } = mockFetch({});
-    const gw = createLovableLlmGateway({ apiKey: undefined, fetchImpl: impl });
-    await expect(
-      gw.complete({ model: "m", prompt: "x" }),
-    ).rejects.toThrow(/LOVABLE_API_KEY missing/);
+    const prev = process.env.LOVABLE_API_KEY;
+    delete process.env.LOVABLE_API_KEY;
+    try {
+      const gw = createLovableLlmGateway({ fetchImpl: impl });
+      await expect(
+        gw.complete({ model: "m", prompt: "x" }),
+      ).rejects.toThrow(/LOVABLE_API_KEY missing/);
+    } finally {
+      if (prev !== undefined) process.env.LOVABLE_API_KEY = prev;
+    }
   });
+
 
   it("surfaces upstream errors with status + snippet", async () => {
     const { impl } = mockFetch("rate limited", { status: 429 });
