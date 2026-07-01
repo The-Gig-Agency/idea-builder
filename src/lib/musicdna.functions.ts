@@ -281,6 +281,9 @@ export const startSession = createServerFn({ method: "POST" })
 // Prior seeding lives in the engine so priors weighting is testable and
 // shared by any future caller (see src/musicdna/engine/priors.ts).
 import { PRIOR_SEED_WEIGHT, seedVectorFromPriors } from "@/musicdna/engine/priors";
+import { buildStartSessionSeed } from "@/musicdna/engine/session";
+import { selectPairing, shouldStop, assertWithinLane, type PairingCandidate } from "@/musicdna/engine/pairing";
+import { applyChoice, evaluateProbe, type ProbeState as EngineProbeState } from "@/musicdna/engine/choice";
 export { PRIOR_SEED_WEIGHT, seedVectorFromPriors };
 
 
@@ -291,39 +294,28 @@ export async function startSessionImpl(supabase: AuthedSupabase, userId: string)
       .select("opening_lane, opening_lane_confidence, opening_analysis_json")
       .eq("user_id", userId)
       .maybeSingle();
-    const lane = ((profile?.opening_lane as Lane | null) ?? "general") as Lane;
-    const lane_confidence = Number(profile?.opening_lane_confidence ?? 0);
 
-    // Seed probe candidates: secondary lanes from opening analysis, then a wildcard.
-    const analysis = (profile?.opening_analysis_json ?? {}) as {
-      secondary_lanes?: string[];
-      candidate_dimensions?: Record<string, number>;
-    };
-    const secondaries = (analysis.secondary_lanes ?? []).filter((l): l is Lane =>
-      (ALL_LANES as readonly string[]).includes(l) && l !== lane,
-    );
-    const wildcardPool = ALL_LANES.filter((l) => l !== lane && !secondaries.includes(l));
-    const wildcard = wildcardPool[Math.floor(Math.random() * wildcardPool.length)];
-    const probe_candidate_lanes = Array.from(new Set([...secondaries, wildcard].filter(Boolean) as Lane[])).slice(0, 3);
-
-    // Seed vector with the 3-song prior so archetype math actually reflects
-    // the opener instead of being pairings-only.
-    const seedVector = seedVectorFromPriors(analysis.candidate_dimensions);
+    // Pure: lane + confidence + probe candidates + seed vector.
+    const seed = buildStartSessionSeed({
+      profile: profile as never,
+      all_lanes: ALL_LANES,
+      rng: { next: () => Math.random() },
+    });
 
     const { data, error } = await supabase
       .from("sessions")
       .insert({
         user_id: userId,
-        vector: seedVector,
-        lane,
-        lane_confidence,
-        probe_candidate_lanes,
+        vector: seed.seed_vector,
+        lane: seed.lane,
+        lane_confidence: seed.lane_confidence,
+        probe_candidate_lanes: seed.probe_candidate_lanes,
         probe_state: { probes_shown: [], pending: {}, lane_alignment: {}, flips: [] },
       })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { sessionId: data.id, lane, lane_confidence };
+    return { sessionId: data.id, lane: seed.lane, lane_confidence: seed.lane_confidence };
 }
 
 // ============ Next pairing ============
@@ -369,20 +361,13 @@ export async function nextPairingImpl(supabase: AuthedSupabase, data: { sessionI
     const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
     const round = usedIds.size;
     const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
-    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
-    const confidence = confidentAxes / DIMS.length;
-    const canStop = round >= 12 && confidence >= 0.6;
-    if (canStop) {
-      return { pairing: null, round, confidence, done: true as const };
+    const stop = shouldStop({ round, vector, dims: DIMS as readonly string[] });
+    if (stop.done) {
+      return { pairing: null, round, confidence: stop.confidence, done: true as const };
     }
 
-    // Cross-lane probes intentionally disabled: pairings stay within the user's
-    // lane. Dimensions are read inside the lane, not across lanes. See
-    // mem://product/within-lane-only.md.
+    // Cross-lane probes intentionally disabled — see mem://product/within-lane-only.md.
     void probeCandidates; void PROBE_ROUNDS;
-
-    // Invariant: nothing should ever queue a cross-lane probe. If a regression
-    // re-enables it, fail loud here instead of silently shipping the wrong UX.
     if (Object.keys(probeState.pending).length > 0) {
       throw new Error(
         `within-lane invariant violated: probe_state.pending is non-empty (${JSON.stringify(probeState.pending)}). ` +
@@ -390,82 +375,39 @@ export async function nextPairingImpl(supabase: AuthedSupabase, data: { sessionI
       );
     }
 
-
-
-    // -------- Normal lane-scoped fetch --------
+    // -------- Fetch lane-scoped pool, fall back to general when empty --------
     let pairingsRes = sessionLane === "general"
       ? await supabase.from("pairings").select(pairingSelect).eq("active", true)
       : await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", sessionLane);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
 
-    let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+    const rng = { next: () => Math.random() };
+    let picked = selectPairing({
+      pool: (pairingsRes.data ?? []) as unknown as PairingCandidate[],
+      vector,
+      used_ids: usedIds,
+      session_lane: sessionLane,
+      dims: DIMS as readonly string[],
+      rng,
+    });
 
-    // Same-artist diagnostic pairings are micro-Bowie decisions, not lane
-    // decisions. Drop them. If this empties the pool, fall back to general
-    // and re-apply the filter there.
-    const differentArtist = (p: typeof pool[number]) => {
-      const a = (p.song_a?.artist ?? "").trim().toLowerCase();
-      const b = (p.song_b?.artist ?? "").trim().toLowerCase();
-      return a !== "" && b !== "" && a !== b;
-    };
-    pool = pool.filter(differentArtist);
-
-    if (!pool.length && sessionLane !== "general") {
+    if (picked.kind === "empty" && sessionLane !== "general") {
       pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
       if (pairingsRes.error) throw new Error(pairingsRes.error.message);
-      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id)).filter(differentArtist);
+      picked = selectPairing({
+        pool: (pairingsRes.data ?? []) as unknown as PairingCandidate[],
+        vector,
+        used_ids: usedIds,
+        session_lane: sessionLane,
+        dims: DIMS as readonly string[],
+        rng,
+      });
     }
-    if (!pool.length) {
-      return { pairing: null, round, confidence, done: true as const };
+    if (picked.kind === "empty") {
+      return { pairing: null, round, confidence: stop.confidence, done: true as const };
     }
-
-    // Hypothesis-challenging filter+boost: the next matchup should *test the
-    // fork the critic just named*, not grab any high-weight pair. We identify
-    // axes the working read leans hardest on (the live fork) and prefer pairings
-    // whose `tests` include one of them. Hard filter when possible; fall back
-    // to a 1.5x boost if filtering would empty the pool.
-    const leaningAxes = new Set(
-      (DIMS as readonly string[])
-        .map((d) => ({ d, v: Math.abs(vector[d] ?? 0) }))
-        .filter((x) => x.v >= 15)
-        .sort((a, b) => b.v - a.v)
-        .slice(0, 3)
-        .map((x) => x.d),
-    );
-    const testsFork = (p: typeof pool[number]) => {
-      const tests = ((p.tests as string[] | null) ?? []) as string[];
-      return tests.some((t) => leaningAxes.has(t));
-    };
-    if (leaningAxes.size > 0) {
-      const forkPool = pool.filter(testsFork);
-      if (forkPool.length > 0) pool = forkPool;
-    }
-    const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
-    const scored = pool.map((p) => {
-      const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
-      const axisNeed = tests.reduce((s, d) => s + need(d), 0) / Math.max(1, tests.length);
-      const challengesHypothesis = leaningAxes.size > 0 && tests.some((t) => leaningAxes.has(t));
-      const challengeBoost = challengesHypothesis ? 1.5 : 1;
-      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed) * challengeBoost;
-      return { p, w };
-    });
-    const total = scored.reduce((s, x) => s + x.w, 0);
-    let r = Math.random() * total;
-    const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
-    const pickedLane = (pick.p as { lane?: string | null }).lane ?? null;
-    if (
-      sessionLane !== "general" &&
-      pickedLane &&
-      pickedLane !== sessionLane &&
-      pickedLane !== "general"
-    ) {
-      throw new Error(
-        `within-lane invariant violated: nextPairing picked lane="${pickedLane}" for session lane="${sessionLane}". ` +
-          `See mem://product/within-lane-only.md.`,
-      );
-    }
-    return { pairing: pick.p, round: round + 1, confidence, done: false as const };
-
+    assertWithinLane((picked.pairing as { lane?: string | null }).lane ?? null, sessionLane);
+    return { pairing: picked.pairing, round: round + 1, confidence: stop.confidence, done: false as const };
 }
 
 
@@ -933,21 +875,20 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
     const winner = chosenIsA ? pairing.song_a : pairing.song_b;
     const loser = chosenIsA ? pairing.song_b : pairing.song_a;
     const rejectedSongId = chosenIsA ? pairing.song_b_id : pairing.song_a_id;
-    const w = (pairing.diagnostic_weight || 50) / 100;
     const priorVec: Record<string, number> = { ...(session.vector as Record<string, number>) };
-    const vec: Record<string, number> = { ...priorVec };
+    const applied = applyChoice({
+      prior_vector: priorVec,
+      winner: winner as unknown as Record<string, number>,
+      loser: loser as unknown as Record<string, number>,
+      tests: (pairing.tests as string[] | null) ?? [],
+      diagnostic_weight: pairing.diagnostic_weight,
+      fallback_dims: DIMS as readonly string[],
+    });
+    const vec = applied.vector;
     const tests: string[] = pairing.tests?.length ? pairing.tests : (DIMS as readonly string[]).slice();
-    let topDim = tests[0] ?? "movement";
-    let topDelta = 0;
-    const deltaVec: Record<string, number> = {};
-    for (const dim of tests) {
-      const a = (winner as Record<string, number>)?.[dim] ?? 50;
-      const b = (loser as Record<string, number>)?.[dim] ?? 50;
-      const delta = a - b;
-      deltaVec[dim] = delta;
-      vec[dim] = (vec[dim] ?? 0) + delta * w;
-      if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
-    }
+    const topDim = applied.top_dim;
+    const topDelta = applied.top_delta;
+    const deltaVec = applied.delta_vector;
 
     // Round-aware reveal builder.
     // Rounds 1–2 stay curious (no identity claims). Round 3+ adds a hedged
@@ -1026,60 +967,36 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
       throw new Error(cErr.message);
     }
 
-    // -------- Probe scoring & silent lane flip --------
-    const probeState: ProbeState = {
+    // -------- Probe scoring & silent lane flip (pure engine) --------
+    const probeIn: EngineProbeState = {
       probes_shown: session.probe_state?.probes_shown ?? [],
       pending: session.probe_state?.pending ?? {},
       lane_alignment: session.probe_state?.lane_alignment ?? {},
       flips: session.probe_state?.flips ?? [],
     };
-    let nextLane: Lane = session.lane;
-    const probeLane = probeState.pending[data.pairingId];
-    if (probeLane) {
-      // Cosine alignment between this choice's delta and the user's running vector.
-      // High positive cosine = the probe lane "rewards what you already reward".
-      const keys = Object.keys(deltaVec);
-      let dot = 0, magD = 0, magV = 0;
-      for (const k of keys) {
-        const d = deltaVec[k] ?? 0;
-        const v = priorVec[k] ?? 0;
-        dot += d * v; magD += d * d; magV += v * v;
-      }
-      const cosine = magD > 0 && magV > 0 ? dot / (Math.sqrt(magD) * Math.sqrt(magV)) : 0;
-      const magnitude = tests.reduce((s, dim) => s + Math.abs(deltaVec[dim] ?? 0), 0);
-      const win = cosine >= 0.2 ? 1 : 0;
-
-      const prev = probeState.lane_alignment[probeLane] ?? { wins: 0, total: 0, magnitude: 0, cosine_sum: 0 };
-      probeState.lane_alignment[probeLane] = {
-        wins: prev.wins + win,
-        total: prev.total + 1,
-        magnitude: prev.magnitude + magnitude,
-        cosine_sum: prev.cosine_sum + cosine,
-      };
-      probeState.probes_shown.push({ round: probeState.probes_shown.length + 1, pairing_id: data.pairingId, lane: probeLane });
-      delete probeState.pending[data.pairingId];
-
-      // Flip rule: ≥2 probes in this lane, win rate ≥ 0.75, avg cosine ≥ 0.3,
-      // and current lane confidence isn't already overwhelming.
-      const tally = probeState.lane_alignment[probeLane];
-      const winRate = tally.total ? tally.wins / tally.total : 0;
-      const avgCos = tally.total ? tally.cosine_sum / tally.total : 0;
-      if (tally.total >= 2 && winRate >= 0.75 && avgCos >= 0.3 && !probeState.flips.find((f) => f.to === probeLane)) {
-        const reason = `probe lane ${probeLane}: ${tally.wins}/${tally.total} wins, avg cosine ${avgCos.toFixed(2)}`;
-        probeState.flips.push({
-          round: probeState.probes_shown.length,
-          from: session.lane,
-          to: probeLane,
-          reason,
-        });
-        nextLane = probeLane;
-        // Fire-and-forget event log; never block the response.
+    const probeEval = evaluateProbe({
+      pairing_id: data.pairingId,
+      probe_state: probeIn,
+      session_lane: session.lane,
+      delta_vector: deltaVec,
+      prior_vector: priorVec,
+      tests,
+    });
+    const probeState = probeEval.probe_state;
+    const nextLane: Lane = probeEval.next_lane as Lane;
+    if (probeEval.probe_lane) {
+      if (probeEval.flipped && probeEval.flip_summary) {
         supabase.from("event_log").insert({
           user_id: userId,
           session_id: data.sessionId,
           event_type: "lane_flipped",
           pairing_id: data.pairingId,
-          props: { from: session.lane, to: probeLane, win_rate: winRate, avg_cosine: avgCos } as never,
+          props: {
+            from: session.lane,
+            to: probeEval.probe_lane,
+            win_rate: probeEval.flip_summary.win_rate,
+            avg_cosine: probeEval.flip_summary.avg_cosine,
+          } as never,
           client: "server",
         }).then(() => undefined, () => undefined);
       } else {
@@ -1088,7 +1005,12 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
           session_id: data.sessionId,
           event_type: "lane_probed",
           pairing_id: data.pairingId,
-          props: { lane: probeLane, cosine, magnitude, win } as never,
+          props: {
+            lane: probeEval.probe_lane,
+            cosine: probeEval.cosine,
+            magnitude: probeEval.magnitude,
+            win: probeEval.win,
+          } as never,
           client: "server",
         }).then(() => undefined, () => undefined);
       }

@@ -20,9 +20,9 @@ src/musicdna/
     descriptors.ts ✅ migrated — deriveDescriptors (mood read off axes)
     voice.ts      ✅ migrated — hedges, hesitation, hash-stable variant picks
     critic.ts     ✅ migrated (voice constants) — CRITIC_PERSONA + CRITIC_VOICE_EDITORIAL
-    pairing.ts      TODO — selectNextPairing
-    session.ts      TODO — startSession / getSession
-    choice.ts       TODO — submitChoice (probe alignment, lane flips, vector update)
+    pairing.ts    ✅ migrated — selectPairing (fork filter + weighted pick), shouldStop, assertWithinLane
+    session.ts    ✅ migrated — buildStartSessionSeed (lane + confidence + probes + seed vector)
+    choice.ts     ✅ migrated — applyChoice (vector math), evaluateProbe (cosine + flip)
     index.ts        TODO — MusicDNAEngine factory: (deps) => { ... }
   adapters/
     llm-gateway.ts ✅ migrated — LLMGateway impl over Lovable AI Gateway
@@ -66,10 +66,26 @@ src/musicdna/
      Lovable AI Gateway. Only place that knows the URL, model default, and
      `LOVABLE_API_KEY`. `musicdna.functions.ts` `ai()` is a 1-liner over
      `callLovableAi`. Test count now 48 passing.
-8. **Next**: extract `pairing.ts` / `session.ts` / `choice.ts` from
-   `musicdna.functions.ts` into pure engine modules behind the ports.
-   Server-fns / routes become 3-line wrappers, and golden-fixture tests
-   can pin the interactive loop.
+8. ✅ Extracted the interactive-loop math into pure engine modules:
+   - `engine/session.ts` — `buildStartSessionSeed` produces lane,
+     confidence, probe candidates, and seed vector from the opening
+     analysis. `startSessionImpl` is now a 3-line wrapper around read →
+     seed → insert.
+   - `engine/pairing.ts` — `selectPairing` owns the fork-filter,
+     axis-need scoring, and weighted random pick. `shouldStop` and
+     `assertWithinLane` extracted alongside. `nextPairingImpl` reads the
+     pool from Supabase and hands it to the engine.
+   - `engine/choice.ts` — `applyChoice` owns the delta / weighted vector
+     update / top-dim logic. `evaluateProbe` owns cosine alignment, probe
+     tally updates, and the flip decision. `recordChoiceImpl` now delegates
+     to both; event logging stays at the transport layer. Test count now
+     **64 passing** (added session/pairing/choice suites).
+9. **Next**: define the `MusicDNAEngine` factory in `engine/index.ts` —
+   `(deps) => { startSession, nextPairing, submitChoice, reveal }` —
+   backed by a real `SupabaseGateway` adapter in `adapters/supabase.ts`.
+   Once the factory exists, the server-fns and `/api/v1` routes both
+   become `engine.<method>(...)` calls, and golden-fixture tests can
+   drive the whole loop with an in-memory gateway.
 
 
 
