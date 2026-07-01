@@ -19,14 +19,15 @@ src/musicdna/
     priors.ts     ✅ migrated — seedVectorFromPriors (opening-3 seeding)
     descriptors.ts ✅ migrated — deriveDescriptors (mood read off axes)
     voice.ts      ✅ migrated — hedges, hesitation, hash-stable variant picks
-    critic.ts       TODO — full prompt builder + LLM orchestration
+    critic.ts     ✅ migrated (voice constants) — CRITIC_PERSONA + CRITIC_VOICE_EDITORIAL
     pairing.ts      TODO — selectNextPairing
     session.ts      TODO — startSession / getSession
     choice.ts       TODO — submitChoice (probe alignment, lane flips, vector update)
     index.ts        TODO — MusicDNAEngine factory: (deps) => { ... }
   adapters/
+    llm-gateway.ts ✅ migrated — LLMGateway impl over Lovable AI Gateway
     supabase.ts     TODO — SupabaseGateway impl (user- or admin-scoped)
-    llm.ts          TODO — LLMGateway impl over Lovable AI Gateway
+
 ```
 
 
