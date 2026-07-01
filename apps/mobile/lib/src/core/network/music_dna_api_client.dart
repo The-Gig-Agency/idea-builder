@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
+
+import 'app_api_exception.dart';
 
 typedef AccessTokenProvider = Future<String?> Function();
 
@@ -20,15 +23,39 @@ class MusicDnaApiClient {
   Uri buildUri(String path) => _baseUri.resolve(path);
 
   Future<http.Response> get(String path) async {
-    return _httpClient.get(buildUri(path), headers: await _headers());
+    try {
+      return _httpClient.get(buildUri(path), headers: await _headers());
+    } on SocketException {
+      throw AppApiException(
+        kind: AppApiErrorKind.network,
+        message: 'No network connection is available right now.',
+      );
+    } on http.ClientException catch (error) {
+      throw AppApiException(
+        kind: AppApiErrorKind.network,
+        message: error.message,
+      );
+    }
   }
 
   Future<http.Response> post(String path, {Map<String, dynamic>? body}) async {
-    return _httpClient.post(
-      buildUri(path),
-      headers: await _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    try {
+      return _httpClient.post(
+        buildUri(path),
+        headers: await _headers(),
+        body: body == null ? null : jsonEncode(body),
+      );
+    } on SocketException {
+      throw AppApiException(
+        kind: AppApiErrorKind.network,
+        message: 'No network connection is available right now.',
+      );
+    } on http.ClientException catch (error) {
+      throw AppApiException(
+        kind: AppApiErrorKind.network,
+        message: error.message,
+      );
+    }
   }
 
   Future<Map<String, String>> _headers() async {

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_dna/src/core/network/app_api_exception.dart';
 import 'package:music_dna/src/features/onboarding/domain/entities/started_music_session.dart';
 import 'package:music_dna/src/features/onboarding/domain/repositories/onboarding_repository.dart';
 import 'package:music_dna/src/features/onboarding/presentation/cubit/onboarding_cubit.dart';
@@ -48,6 +49,31 @@ void main() {
       expect(cubit.state.submissionStatus, OnboardingSubmissionStatus.failure);
       expect(cubit.state.errorMessage, contains('network down'));
     });
+
+    test(
+      'marks reauthentication required when the API returns unauthorized',
+      () async {
+        final cubit = OnboardingCubit(
+          FakeOnboardingRepository(
+            error: const AppApiException(
+              kind: AppApiErrorKind.unauthorized,
+              message: 'Token expired',
+            ),
+          ),
+        );
+
+        addTearDown(cubit.close);
+
+        await cubit.submitOpeningThree(songs: const <String>['A', 'B', 'C']);
+
+        expect(
+          cubit.state.submissionStatus,
+          OnboardingSubmissionStatus.failure,
+        );
+        expect(cubit.state.requiresReauthentication, isTrue);
+        expect(cubit.state.errorMessage, contains('Sign in again'));
+      },
+    );
   });
 }
 

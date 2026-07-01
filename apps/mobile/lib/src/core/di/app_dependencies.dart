@@ -5,6 +5,7 @@ import '../../features/auth/data/datasources/auth_remote_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
+import '../../features/onboarding/domain/entities/started_music_session.dart';
 import '../../features/onboarding/data/datasources/onboarding_remote_data_source.dart';
 import '../../features/onboarding/data/repositories/onboarding_repository_impl.dart';
 import '../../features/onboarding/domain/repositories/onboarding_repository.dart';
@@ -13,8 +14,8 @@ import '../../features/session/data/datasources/session_remote_data_source.dart'
 import '../../features/session/data/repositories/session_repository_impl.dart';
 import '../../features/session/domain/repositories/session_repository.dart';
 import '../../features/session/presentation/cubit/session_cubit.dart';
-import '../../features/onboarding/domain/entities/started_music_session.dart';
 import '../config/app_config.dart';
+import '../logging/app_logger.dart';
 import '../network/music_dna_api_client.dart';
 
 class AppDependencies {
@@ -31,6 +32,7 @@ class AppDependencies {
   final AppConfig config;
   final SupabaseClient supabase;
 
+  late final AppLogger logger = const AppLogger();
   late final AuthRemoteDataSource authRemoteDataSource;
   late final AuthRepository authRepository;
   late final AuthRouterNotifier authRouterNotifier = AuthRouterNotifier(
@@ -48,14 +50,18 @@ class AppDependencies {
   );
 
   AuthCubit createAuthCubit() {
-    return AuthCubit(authRepository)..initialize();
+    return AuthCubit(authRepository, logger: logger)..initialize();
   }
 
   OnboardingCubit createOnboardingCubit() {
-    return OnboardingCubit(onboardingRepository);
+    return OnboardingCubit(onboardingRepository, logger: logger);
   }
 
   SessionCubit createSessionCubit({StartedMusicSession? startedSession}) {
-    return SessionCubit(sessionRepository, startedSession: startedSession);
+    return SessionCubit(
+      sessionRepository,
+      startedSession: startedSession,
+      logger: logger,
+    );
   }
 }

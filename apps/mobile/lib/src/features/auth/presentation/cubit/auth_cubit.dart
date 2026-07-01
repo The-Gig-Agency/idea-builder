@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/logging/app_logger.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -58,13 +59,19 @@ class AuthState extends Equatable {
 }
 
 class AuthCubit extends Cubit<AuthState> {
-  AuthCubit(this._authRepository) : super(const AuthState.loading());
+  AuthCubit(this._authRepository, {AppLogger? logger})
+    : _logger = logger ?? const AppLogger(),
+      super(const AuthState.loading());
 
   final AuthRepository _authRepository;
+  final AppLogger _logger;
   StreamSubscription<AuthUser?>? _subscription;
 
   void initialize() {
     final currentUser = _authRepository.currentUser;
+    _logger.event('auth.initialize', <String, Object?>{
+      'hasCurrentUser': currentUser != null,
+    });
     emit(
       currentUser == null
           ? const AuthState.unauthenticated()
@@ -74,6 +81,9 @@ class AuthCubit extends Cubit<AuthState> {
     _subscription ??= _authRepository.observeAuthState().listen((
       AuthUser? user,
     ) {
+      _logger.event('auth.state_changed', <String, Object?>{
+        'authenticated': user != null,
+      });
       emit(
         user == null
             ? state.copyWith(
@@ -92,6 +102,7 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> signIn({required String email, required String password}) async {
+    _logger.event('auth.sign_in_requested', <String, Object?>{'email': email});
     emit(
       state.copyWith(
         submissionStatus: AuthSubmissionStatus.submitting,
@@ -103,6 +114,9 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         password: password,
       );
+      _logger.event('auth.sign_in_succeeded', <String, Object?>{
+        'userId': user.id,
+      });
       emit(
         state.copyWith(
           status: AuthStatus.authenticated,
@@ -112,6 +126,9 @@ class AuthCubit extends Cubit<AuthState> {
         ),
       );
     } catch (error) {
+      _logger.error('auth.sign_in_failed', error, <String, Object?>{
+        'email': email,
+      });
       emit(
         state.copyWith(
           submissionStatus: AuthSubmissionStatus.failure,
@@ -122,6 +139,7 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> signUp({required String email, required String password}) async {
+    _logger.event('auth.sign_up_requested', <String, Object?>{'email': email});
     emit(
       state.copyWith(
         submissionStatus: AuthSubmissionStatus.submitting,
@@ -133,6 +151,9 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         password: password,
       );
+      _logger.event('auth.sign_up_succeeded', <String, Object?>{
+        'userId': user.id,
+      });
       emit(
         state.copyWith(
           status: AuthStatus.authenticated,
@@ -142,6 +163,9 @@ class AuthCubit extends Cubit<AuthState> {
         ),
       );
     } catch (error) {
+      _logger.error('auth.sign_up_failed', error, <String, Object?>{
+        'email': email,
+      });
       emit(
         state.copyWith(
           submissionStatus: AuthSubmissionStatus.failure,
@@ -152,6 +176,7 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> signOut() {
+    _logger.event('auth.sign_out_requested');
     return _authRepository.signOut();
   }
 

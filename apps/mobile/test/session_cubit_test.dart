@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:music_dna/src/core/network/app_api_exception.dart';
 import 'package:music_dna/src/features/onboarding/domain/entities/started_music_session.dart';
 import 'package:music_dna/src/features/session/domain/entities/session_pairing.dart';
 import 'package:music_dna/src/features/session/domain/entities/session_reveal.dart';
@@ -189,6 +190,29 @@ void main() {
         expect(cubit.state.errorMessage, isNull);
       },
     );
+
+    test(
+      'requests reauthentication when the pairing API returns unauthorized',
+      () async {
+        final cubit = SessionCubit(
+          FakeSessionRepository(
+            nextPairingsError: const AppApiException(
+              kind: AppApiErrorKind.unauthorized,
+              message: 'expired token',
+            ),
+          ),
+          startedSession: _startedSession(),
+        );
+
+        addTearDown(cubit.close);
+
+        await cubit.initialize();
+
+        expect(cubit.state.status, SessionStatus.failure);
+        expect(cubit.state.requiresReauthentication, isTrue);
+        expect(cubit.state.errorMessage, contains('Sign in again'));
+      },
+    );
   });
 }
 
@@ -206,6 +230,7 @@ class FakeSessionRepository implements SessionRepository {
       counterarguments: <RevealCounterargument>[],
     ),
     SharedReveal? sharedReveal,
+    this.nextPairingsError,
   }) : _nextPairings = List<SessionRoundState>.from(
          nextPairings ?? const <SessionRoundState>[],
        ),
@@ -215,6 +240,7 @@ class FakeSessionRepository implements SessionRepository {
   final SessionChoiceFeedback feedback;
   final SessionReveal reveal;
   final SharedReveal? _sharedReveal;
+  final Object? nextPairingsError;
   String? lastChoiceSongId;
   int? lastChoiceMsToDecide;
 
@@ -222,6 +248,9 @@ class FakeSessionRepository implements SessionRepository {
   Future<SessionRoundState> fetchNextPairing({
     required String sessionId,
   }) async {
+    if (nextPairingsError != null) {
+      throw nextPairingsError!;
+    }
     if (_nextPairings.isEmpty) {
       throw StateError('No more pairings queued');
     }

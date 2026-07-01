@@ -170,6 +170,12 @@ class _SessionStubPageState extends State<SessionStubPage> {
                     onPrimary: () => state.currentRound?.done == true
                         ? context.read<SessionCubit>().revealSession()
                         : context.read<SessionCubit>().initialize(),
+                    secondaryLabel: state.requiresReauthentication
+                        ? 'Sign in again'
+                        : null,
+                    onSecondary: state.requiresReauthentication
+                        ? () => context.go('/auth')
+                        : null,
                   ),
                   SessionStatus.missingSession => _FallbackCard(
                     title: 'Start from onboarding first',
@@ -474,6 +480,8 @@ class _FallbackCard extends StatelessWidget {
     required this.body,
     required this.primaryLabel,
     required this.onPrimary,
+    this.secondaryLabel,
+    this.onSecondary,
     this.primaryEnabled = true,
     this.busy = false,
   });
@@ -482,6 +490,8 @@ class _FallbackCard extends StatelessWidget {
   final String body;
   final String primaryLabel;
   final VoidCallback onPrimary;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
   final bool primaryEnabled;
   final bool busy;
 
@@ -503,15 +513,26 @@ class _FallbackCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(body),
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: primaryEnabled ? onPrimary : null,
-              child: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(primaryLabel),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                FilledButton(
+                  onPressed: primaryEnabled ? onPrimary : null,
+                  child: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(primaryLabel),
+                ),
+                if (secondaryLabel != null && onSecondary != null)
+                  OutlinedButton(
+                    onPressed: onSecondary,
+                    child: Text(secondaryLabel!),
+                  ),
+              ],
             ),
           ],
         ),

@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/logging/app_logger.dart';
+import '../../../../core/network/app_api_exception.dart';
 import '../../../onboarding/domain/entities/started_music_session.dart';
 import '../../domain/entities/session_pairing.dart';
 import '../../domain/entities/session_reveal.dart';
@@ -27,6 +29,7 @@ class SessionState extends Equatable {
     this.reveal,
     this.sharedReveal,
     this.errorMessage,
+    this.requiresReauthentication = false,
   });
 
   final SessionStatus status;
@@ -36,6 +39,7 @@ class SessionState extends Equatable {
   final SessionReveal? reveal;
   final SharedReveal? sharedReveal;
   final String? errorMessage;
+  final bool requiresReauthentication;
 
   String? get sessionId => startedSession?.sessionId ?? currentRound?.sessionId;
 
@@ -53,6 +57,7 @@ class SessionState extends Equatable {
     bool clearSharedReveal = false,
     String? errorMessage,
     bool clearErrorMessage = false,
+    bool? requiresReauthentication,
   }) {
     return SessionState(
       status: status ?? this.status,
@@ -72,6 +77,8 @@ class SessionState extends Equatable {
       errorMessage: clearErrorMessage
           ? null
           : errorMessage ?? this.errorMessage,
+      requiresReauthentication:
+          requiresReauthentication ?? this.requiresReauthentication,
     );
   }
 
@@ -84,17 +91,26 @@ class SessionState extends Equatable {
     reveal,
     sharedReveal,
     errorMessage,
+    requiresReauthentication,
   ];
 }
 
 class SessionCubit extends Cubit<SessionState> {
-  SessionCubit(this._repository, {StartedMusicSession? startedSession})
-    : super(SessionState(startedSession: startedSession));
+  SessionCubit(
+    this._repository, {
+    StartedMusicSession? startedSession,
+    AppLogger? logger,
+  }) : _logger = logger ?? const AppLogger(),
+       super(SessionState(startedSession: startedSession));
 
   final SessionRepository _repository;
+  final AppLogger _logger;
 
   Future<void> initialize() async {
     final sessionId = state.sessionId;
+    _logger.event('session.initialize', <String, Object?>{
+      'hasSessionId': sessionId?.isNotEmpty == true,
+    });
     if (sessionId == null || sessionId.isEmpty) {
       emit(
         state.copyWith(
@@ -103,6 +119,7 @@ class SessionCubit extends Cubit<SessionState> {
           clearReveal: true,
           clearSharedReveal: true,
           clearErrorMessage: true,
+          requiresReauthentication: false,
         ),
       );
       return;
@@ -114,6 +131,7 @@ class SessionCubit extends Cubit<SessionState> {
         clearReveal: true,
         clearSharedReveal: true,
         clearErrorMessage: true,
+        requiresReauthentication: false,
       ),
     );
 
@@ -129,11 +147,18 @@ class SessionCubit extends Cubit<SessionState> {
   }) async {
     final sessionId = state.sessionId;
     final pairingId = state.currentRound?.pairing?.id;
+    _logger.event('session.choice_requested', <String, Object?>{
+      'sessionId': sessionId,
+      'pairingId': pairingId,
+      'chosenSongId': chosenSongId,
+      'msToDecide': msToDecide,
+    });
     if (sessionId == null || pairingId == null) {
       emit(
         state.copyWith(
           status: SessionStatus.failure,
           errorMessage: 'No active pairing is available yet.',
+          requiresReauthentication: false,
         ),
       );
       return;
@@ -150,13 +175,23 @@ class SessionCubit extends Cubit<SessionState> {
         chosenSongId: chosenSongId,
         msToDecide: msToDecide,
       );
+      _logger.event('session.choice_succeeded', <String, Object?>{
+        'sessionId': sessionId,
+        'pairingId': pairingId,
+      });
       emit(state.copyWith(lastFeedback: feedback, clearErrorMessage: true));
       await _loadNextPairing(sessionId: sessionId, keepFeedback: true);
     } catch (error) {
+      _logger.error('session.choice_failed', error, <String, Object?>{
+        'sessionId': sessionId,
+        'pairingId': pairingId,
+      });
+      final apiError = error is AppApiException ? error : null;
       emit(
         state.copyWith(
           status: SessionStatus.failure,
-          errorMessage: _readableError(error),
+          errorMessage: _readableError(apiError ?? error),
+          requiresReauthentication: apiError?.isAuthRelated == true,
         ),
       );
     }
@@ -170,24 +205,33 @@ class SessionCubit extends Cubit<SessionState> {
         status: state.currentRound?.pairing != null
             ? SessionStatus.ready
             : state.status,
+        requiresReauthentication: false,
       ),
     );
   }
 
   Future<void> revealSession() async {
     final sessionId = state.sessionId;
+    _logger.event('session.reveal_requested', <String, Object?>{
+      'sessionId': sessionId,
+    });
     if (sessionId == null || sessionId.isEmpty) {
       emit(
         state.copyWith(
           status: SessionStatus.failure,
           errorMessage: 'No active session is available yet.',
+          requiresReauthentication: false,
         ),
       );
       return;
     }
 
     emit(
-      state.copyWith(status: SessionStatus.revealing, clearErrorMessage: true),
+      state.copyWith(
+        status: SessionStatus.revealing,
+        clearErrorMessage: true,
+        requiresReauthentication: false,
+      ),
     );
 
     try {
@@ -198,6 +242,10 @@ class SessionCubit extends Cubit<SessionState> {
           token: reveal.shareToken!,
         );
       }
+      _logger.event('session.reveal_succeeded', <String, Object?>{
+        'sessionId': sessionId,
+        'shareToken': reveal.shareToken,
+      });
 
       emit(
         state.copyWith(
@@ -205,13 +253,19 @@ class SessionCubit extends Cubit<SessionState> {
           reveal: reveal,
           sharedReveal: sharedReveal,
           clearErrorMessage: true,
+          requiresReauthentication: false,
         ),
       );
     } catch (error) {
+      _logger.error('session.reveal_failed', error, <String, Object?>{
+        'sessionId': sessionId,
+      });
+      final apiError = error is AppApiException ? error : null;
       emit(
         state.copyWith(
           status: SessionStatus.failure,
-          errorMessage: _readableError(error),
+          errorMessage: _readableError(apiError ?? error),
+          requiresReauthentication: apiError?.isAuthRelated == true,
         ),
       );
     }
@@ -225,6 +279,12 @@ class SessionCubit extends Cubit<SessionState> {
       final nextRound = await _repository.fetchNextPairing(
         sessionId: sessionId,
       );
+      _logger.event('session.next_pairing_loaded', <String, Object?>{
+        'sessionId': sessionId,
+        'round': nextRound.round,
+        'done': nextRound.done,
+        'hasPairing': nextRound.pairing != null,
+      });
       emit(
         state.copyWith(
           status: nextRound.done || nextRound.pairing == null
@@ -235,25 +295,44 @@ class SessionCubit extends Cubit<SessionState> {
           clearReveal: true,
           clearSharedReveal: true,
           clearErrorMessage: true,
+          requiresReauthentication: false,
         ),
       );
     } catch (error) {
+      _logger.error('session.next_pairing_failed', error, <String, Object?>{
+        'sessionId': sessionId,
+      });
+      final apiError = error is AppApiException ? error : null;
       emit(
         state.copyWith(
           status: SessionStatus.failure,
-          errorMessage: _readableError(error),
+          errorMessage: _readableError(apiError ?? error),
+          requiresReauthentication: apiError?.isAuthRelated == true,
         ),
       );
     }
   }
 
   String _readableError(Object error) {
-    final message = error.toString().trim();
-    if (message.startsWith('SessionRemoteDataSourceException:')) {
-      return message
-          .replaceFirst('SessionRemoteDataSourceException:', '')
-          .trim();
+    if (error is AppApiException) {
+      switch (error.kind) {
+        case AppApiErrorKind.unauthorized:
+        case AppApiErrorKind.forbidden:
+          return 'Your session expired. Sign in again to keep going.';
+        case AppApiErrorKind.network:
+          return 'You appear to be offline. Reconnect and retry this step.';
+        case AppApiErrorKind.invalidInput:
+          return error.message;
+        case AppApiErrorKind.upstream:
+        case AppApiErrorKind.internal:
+        case AppApiErrorKind.unknown:
+          return error.message.isEmpty
+              ? 'We could not continue your session right now.'
+              : error.message;
+      }
     }
+
+    final message = error.toString().trim();
     return message.isEmpty ? 'Something went wrong.' : message;
   }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/network/app_api_exception.dart';
 import '../../../../core/network/music_dna_api_client.dart';
 
 class OnboardingRemoteDataSource {
@@ -32,26 +33,41 @@ class OnboardingRemoteDataSource {
     if (response.statusCode >= 400) {
       final error = body['error'];
       if (error is Map<String, dynamic>) {
-        final message = error['message'];
-        throw OnboardingRemoteDataSourceException(
-          message is String && message.isNotEmpty
-              ? message
+        final message = error['message'] as String?;
+        final code = error['code'] as String?;
+        throw AppApiException(
+          kind: _mapErrorKind(code),
+          statusCode: response.statusCode,
+          message: message?.isNotEmpty == true
+              ? message!
               : 'Something went wrong.',
         );
       }
 
-      throw const OnboardingRemoteDataSourceException('Something went wrong.');
+      throw AppApiException(
+        kind: AppApiErrorKind.unknown,
+        statusCode: response.statusCode,
+        message: 'Something went wrong.',
+      );
     }
 
     return body;
   }
-}
 
-class OnboardingRemoteDataSourceException implements Exception {
-  const OnboardingRemoteDataSourceException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => 'OnboardingRemoteDataSourceException: $message';
+  AppApiErrorKind _mapErrorKind(String? code) {
+    switch (code) {
+      case 'UNAUTHORIZED':
+        return AppApiErrorKind.unauthorized;
+      case 'FORBIDDEN':
+        return AppApiErrorKind.forbidden;
+      case 'INVALID_INPUT':
+        return AppApiErrorKind.invalidInput;
+      case 'UPSTREAM':
+        return AppApiErrorKind.upstream;
+      case 'INTERNAL':
+        return AppApiErrorKind.internal;
+      default:
+        return AppApiErrorKind.unknown;
+    }
+  }
 }
