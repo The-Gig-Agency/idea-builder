@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { assignArchetype } from "@/musicdna/engine/archetypes";
 
 // Shared Supabase client type used by the *Impl exports below. The test
 // harness (src/routes/api/public/test/$action.ts) calls these Impl variants
@@ -1425,7 +1426,7 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
         archetype_flag_reason: archetypeFlagReason,
       },
       output: { patterns, counterarguments, allowed_claims, blocked_claims } as never,
-      confidence: scored[0]?.score ?? null,
+      confidence: assignment?.score ?? null,
     });
 
     // -------- Layer 5: Critic (AI narrative, constrained) --------
@@ -1441,7 +1442,7 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
     // Pick the confidence tier from the winning cosine score. Each archetype
     // ships its own phrasings for 20/50/80/95, so the critic's opening hedge
     // tracks the actual evidence instead of always sounding equally sure.
-    const bestScore = scored[0]?.score ?? 0;
+    const bestScore = assignment?.score ?? 0;
     const tier = bestScore >= 0.95 ? "95"
                : bestScore >= 0.80 ? "80"
                : bestScore >= 0.50 ? "50"
@@ -1531,8 +1532,8 @@ Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
     await supabase.from("sessions").update({
       archetype_id: best.id,
       archetype_top3: top3,
-      archetype_score: scored[0] ? Math.round(scored[0].score * 1000) / 1000 : null,
-      archetype_margin: scored[0] ? Math.round(margin * 1000) / 1000 : null,
+      archetype_score: assignment ? assignment.score : null,
+      archetype_margin: assignment ? assignment.margin : null,
       archetype_flagged: archetypeFlagged,
       archetype_flag_reason: archetypeFlagReason,
       interpretation: narrative,
