@@ -289,44 +289,34 @@ export { PRIOR_SEED_WEIGHT, seedVectorFromPriors };
 
 
 export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
+export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("opening_lane, opening_lane_confidence, opening_analysis_json")
       .eq("user_id", userId)
       .maybeSingle();
-    const lane = ((profile?.opening_lane as Lane | null) ?? "general") as Lane;
-    const lane_confidence = Number(profile?.opening_lane_confidence ?? 0);
 
-    // Seed probe candidates: secondary lanes from opening analysis, then a wildcard.
-    const analysis = (profile?.opening_analysis_json ?? {}) as {
-      secondary_lanes?: string[];
-      candidate_dimensions?: Record<string, number>;
-    };
-    const secondaries = (analysis.secondary_lanes ?? []).filter((l): l is Lane =>
-      (ALL_LANES as readonly string[]).includes(l) && l !== lane,
-    );
-    const wildcardPool = ALL_LANES.filter((l) => l !== lane && !secondaries.includes(l));
-    const wildcard = wildcardPool[Math.floor(Math.random() * wildcardPool.length)];
-    const probe_candidate_lanes = Array.from(new Set([...secondaries, wildcard].filter(Boolean) as Lane[])).slice(0, 3);
-
-    // Seed vector with the 3-song prior so archetype math actually reflects
-    // the opener instead of being pairings-only.
-    const seedVector = seedVectorFromPriors(analysis.candidate_dimensions);
+    // Pure: lane + confidence + probe candidates + seed vector.
+    const seed = buildStartSessionSeed({
+      profile: profile as never,
+      all_lanes: ALL_LANES,
+      rng: { next: () => Math.random() },
+    });
 
     const { data, error } = await supabase
       .from("sessions")
       .insert({
         user_id: userId,
-        vector: seedVector,
-        lane,
-        lane_confidence,
-        probe_candidate_lanes,
+        vector: seed.seed_vector,
+        lane: seed.lane,
+        lane_confidence: seed.lane_confidence,
+        probe_candidate_lanes: seed.probe_candidate_lanes,
         probe_state: { probes_shown: [], pending: {}, lane_alignment: {}, flips: [] },
       })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { sessionId: data.id, lane, lane_confidence };
+    return { sessionId: data.id, lane: seed.lane, lane_confidence: seed.lane_confidence };
 }
 
 // ============ Next pairing ============
