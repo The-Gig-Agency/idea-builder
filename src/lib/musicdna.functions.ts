@@ -1379,8 +1379,16 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
     // Score every archetype, keep top 3, and flag residuals so we can build
     // the "did any listener escape all current archetypes?" review queue.
     const vector = (session.vector ?? {}) as Record<string, number>;
-    const scored: { id: string; name: string; score: number }[] = [];
-    for (const a of archetypes) {
+    type ArchetypeRow = {
+      id: string;
+      name: string;
+      signature_axes: Record<string, number> | null;
+      core_question: string | null;
+      commentary_keywords: string[] | null;
+      confidence_thresholds: Record<string, string> | null;
+    };
+    const scored: { row: ArchetypeRow; score: number }[] = [];
+    for (const a of archetypes as unknown as ArchetypeRow[]) {
       const axes = (a.signature_axes ?? {}) as Record<string, number>;
       const keys = Object.keys(axes);
       if (!keys.length) continue;
@@ -1392,16 +1400,17 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       }
       const denom = Math.sqrt(magA) * Math.sqrt(magB);
       const score = denom > 0 ? dot / denom : 0;
-      scored.push({ id: a.id, name: a.name, score });
+      scored.push({ row: a, score });
     }
     scored.sort((a, b) => b.score - a.score);
     const top3 = scored.slice(0, 3).map((s) => ({
-      archetype_id: s.id,
-      name: s.name,
+      archetype_id: s.row.id,
+      name: s.row.name,
       score: Math.round(s.score * 1000) / 1000,
     }));
-    const best = scored[0]
-      ? { id: scored[0].id as string | null, name: scored[0].name, score: scored[0].score }
+    const bestRow = scored[0]?.row ?? null;
+    const best = bestRow
+      ? { id: bestRow.id as string | null, name: bestRow.name, score: scored[0].score }
       : { id: null as string | null, name: "", score: -Infinity };
     const runnerUp = scored[1]?.score ?? 0;
     const margin = scored[0] ? Math.max(0, scored[0].score - runnerUp) : 0;
