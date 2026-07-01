@@ -875,21 +875,20 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
     const winner = chosenIsA ? pairing.song_a : pairing.song_b;
     const loser = chosenIsA ? pairing.song_b : pairing.song_a;
     const rejectedSongId = chosenIsA ? pairing.song_b_id : pairing.song_a_id;
-    const w = (pairing.diagnostic_weight || 50) / 100;
     const priorVec: Record<string, number> = { ...(session.vector as Record<string, number>) };
-    const vec: Record<string, number> = { ...priorVec };
+    const applied = applyChoice({
+      prior_vector: priorVec,
+      winner: winner as unknown as Record<string, number>,
+      loser: loser as unknown as Record<string, number>,
+      tests: (pairing.tests as string[] | null) ?? [],
+      diagnostic_weight: pairing.diagnostic_weight,
+      fallback_dims: DIMS as readonly string[],
+    });
+    const vec = applied.vector;
     const tests: string[] = pairing.tests?.length ? pairing.tests : (DIMS as readonly string[]).slice();
-    let topDim = tests[0] ?? "movement";
-    let topDelta = 0;
-    const deltaVec: Record<string, number> = {};
-    for (const dim of tests) {
-      const a = (winner as Record<string, number>)?.[dim] ?? 50;
-      const b = (loser as Record<string, number>)?.[dim] ?? 50;
-      const delta = a - b;
-      deltaVec[dim] = delta;
-      vec[dim] = (vec[dim] ?? 0) + delta * w;
-      if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
-    }
+    const topDim = applied.top_dim;
+    const topDelta = applied.top_delta;
+    const deltaVec = applied.delta_vector;
 
     // Round-aware reveal builder.
     // Rounds 1–2 stay curious (no identity claims). Round 3+ adds a hedged
