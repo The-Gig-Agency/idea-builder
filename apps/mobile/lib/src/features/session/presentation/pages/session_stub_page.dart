@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../onboarding/domain/entities/started_music_session.dart';
+
 class SessionStubPage extends StatelessWidget {
-  const SessionStubPage({super.key});
+  const SessionStubPage({this.startedSession, super.key});
+
+  final StartedMusicSession? startedSession;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +31,39 @@ class SessionStubPage extends StatelessWidget {
               'for next pairing, choice submission, and reveal.',
             ),
             const SizedBox(height: 20),
+            if (startedSession != null) ...<Widget>[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Session handoff is working',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Session ID: ${startedSession!.sessionId}'),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Opener lane: ${startedSession!.analysisLane} '
+                        '(${startedSession!.analysisConfidence.toStringAsFixed(2)})',
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Session lane: ${startedSession!.sessionLane} '
+                        '(${startedSession!.sessionLaneConfidence.toStringAsFixed(2)})',
+                      ),
+                      const SizedBox(height: 8),
+                      Text(startedSession!.hypothesis),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(16),
