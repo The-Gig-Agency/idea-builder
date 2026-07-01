@@ -20,6 +20,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as Authenticated1980RouteImport } from './routes/_authenticated/1980'
 import { Route as ApiV1SessionRouteImport } from './routes/api/v1/session'
 import { Route as ApiV1ShareTokenRouteImport } from './routes/api/v1/share.$token'
+import { Route as ApiV1OnboardingOpenerRouteImport } from './routes/api/v1/onboarding.opener'
 import { Route as ApiPublicTestActionRouteImport } from './routes/api/public/test/$action'
 import { Route as ApiV1SessionIdRevealRouteImport } from './routes/api/v1/session.$id.reveal'
 import { Route as ApiV1SessionIdNextRouteImport } from './routes/api/v1/session.$id.next'
@@ -79,6 +80,11 @@ const ApiV1ShareTokenRoute = ApiV1ShareTokenRouteImport.update({
   path: '/api/v1/share/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1OnboardingOpenerRoute = ApiV1OnboardingOpenerRouteImport.update({
+  id: '/api/v1/onboarding/opener',
+  path: '/api/v1/onboarding/opener',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTestActionRoute = ApiPublicTestActionRouteImport.update({
   id: '/api/public/test/$action',
   path: '/api/public/test/$action',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/s/$sessionId': typeof SSessionIdRoute
   '/api/v1/session': typeof ApiV1SessionRouteWithChildren
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
+  '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
   '/api/v1/session/$id/next': typeof ApiV1SessionIdNextRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/s/$sessionId': typeof SSessionIdRoute
   '/api/v1/session': typeof ApiV1SessionRouteWithChildren
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
+  '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
   '/api/v1/session/$id/next': typeof ApiV1SessionIdNextRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/s/$sessionId': typeof SSessionIdRoute
   '/api/v1/session': typeof ApiV1SessionRouteWithChildren
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
+  '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
   '/api/v1/session/$id/next': typeof ApiV1SessionIdNextRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/s/$sessionId'
     | '/api/v1/session'
     | '/api/public/test/$action'
+    | '/api/v1/onboarding/opener'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
     | '/api/v1/session/$id/next'
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/s/$sessionId'
     | '/api/v1/session'
     | '/api/public/test/$action'
+    | '/api/v1/onboarding/opener'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
     | '/api/v1/session/$id/next'
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/s/$sessionId'
     | '/api/v1/session'
     | '/api/public/test/$action'
+    | '/api/v1/onboarding/opener'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
     | '/api/v1/session/$id/next'
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   SSessionIdRoute: typeof SSessionIdRoute
   ApiV1SessionRoute: typeof ApiV1SessionRouteWithChildren
   ApiPublicTestActionRoute: typeof ApiPublicTestActionRoute
+  ApiV1OnboardingOpenerRoute: typeof ApiV1OnboardingOpenerRoute
   ApiV1ShareTokenRoute: typeof ApiV1ShareTokenRoute
 }
 
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1ShareTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/onboarding/opener': {
+      id: '/api/v1/onboarding/opener'
+      path: '/api/v1/onboarding/opener'
+      fullPath: '/api/v1/onboarding/opener'
+      preLoaderRoute: typeof ApiV1OnboardingOpenerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/test/$action': {
       id: '/api/public/test/$action'
       path: '/api/public/test/$action'
@@ -364,6 +384,7 @@ const rootRouteChildren: RootRouteChildren = {
   SSessionIdRoute: SSessionIdRoute,
   ApiV1SessionRoute: ApiV1SessionRouteWithChildren,
   ApiPublicTestActionRoute: ApiPublicTestActionRoute,
+  ApiV1OnboardingOpenerRoute: ApiV1OnboardingOpenerRoute,
   ApiV1ShareTokenRoute: ApiV1ShareTokenRoute,
 }
 export const routeTree = rootRouteImport
