@@ -33,6 +33,8 @@ This means `Ceremony` can remain `post_punk_new_wave`, `A Forest` can remain `go
 - `docs/musicdna/product_gotchas.md`: standing risk checklist to keep product, data, and inference claims honest.
 - `docs/musicdna/multi_lane_pairings_seed.md`: notes for the Pop, Hip-Hop, Electronic, and Classic Rock pairing seed.
 - `docs/musicdna/intelligence_layer.md`: evidence-first AI reasoning framework for Analyst and Critic layers.
+- `docs/musicdna/engine-integration.md`: how to wire `createEngine(deps)` into a new transport and how to build a new adapter for a port.
+- `docs/musicdna/engine-migration.md`: status log for the extraction from `musicdna.functions.ts` into `src/musicdna/engine/`.
 - `tools/musicdna/generate_alternative_canon.cjs`: deterministic seed-canon generator.
 - `tools/musicdna/validate_canon.cjs`: CSV-aware canon validator.
 - `data/musicdna/alternative_diagnostic_canon_seed.csv`: generated Alternative/Post-Punk diagnostic canon seed.
