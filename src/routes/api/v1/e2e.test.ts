@@ -68,6 +68,8 @@ const d = shouldRun ? describe : describe.skip;
 d("REST v1 end-to-end", () => {
   // Long-running: opener + reveal both hit the LLM; each choice is a DB round-trip.
   it(
+    "session → next → choice × N → reveal → share",
+    async () => {
       // 1. Bootstrap persona + opening analysis.
       const opener = await harness("opener", {
         persona_id: PERSONA_ID,
