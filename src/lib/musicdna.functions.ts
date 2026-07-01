@@ -967,60 +967,36 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
       throw new Error(cErr.message);
     }
 
-    // -------- Probe scoring & silent lane flip --------
-    const probeState: ProbeState = {
+    // -------- Probe scoring & silent lane flip (pure engine) --------
+    const probeIn: EngineProbeState = {
       probes_shown: session.probe_state?.probes_shown ?? [],
       pending: session.probe_state?.pending ?? {},
       lane_alignment: session.probe_state?.lane_alignment ?? {},
       flips: session.probe_state?.flips ?? [],
     };
-    let nextLane: Lane = session.lane;
-    const probeLane = probeState.pending[data.pairingId];
-    if (probeLane) {
-      // Cosine alignment between this choice's delta and the user's running vector.
-      // High positive cosine = the probe lane "rewards what you already reward".
-      const keys = Object.keys(deltaVec);
-      let dot = 0, magD = 0, magV = 0;
-      for (const k of keys) {
-        const d = deltaVec[k] ?? 0;
-        const v = priorVec[k] ?? 0;
-        dot += d * v; magD += d * d; magV += v * v;
-      }
-      const cosine = magD > 0 && magV > 0 ? dot / (Math.sqrt(magD) * Math.sqrt(magV)) : 0;
-      const magnitude = tests.reduce((s, dim) => s + Math.abs(deltaVec[dim] ?? 0), 0);
-      const win = cosine >= 0.2 ? 1 : 0;
-
-      const prev = probeState.lane_alignment[probeLane] ?? { wins: 0, total: 0, magnitude: 0, cosine_sum: 0 };
-      probeState.lane_alignment[probeLane] = {
-        wins: prev.wins + win,
-        total: prev.total + 1,
-        magnitude: prev.magnitude + magnitude,
-        cosine_sum: prev.cosine_sum + cosine,
-      };
-      probeState.probes_shown.push({ round: probeState.probes_shown.length + 1, pairing_id: data.pairingId, lane: probeLane });
-      delete probeState.pending[data.pairingId];
-
-      // Flip rule: ≥2 probes in this lane, win rate ≥ 0.75, avg cosine ≥ 0.3,
-      // and current lane confidence isn't already overwhelming.
-      const tally = probeState.lane_alignment[probeLane];
-      const winRate = tally.total ? tally.wins / tally.total : 0;
-      const avgCos = tally.total ? tally.cosine_sum / tally.total : 0;
-      if (tally.total >= 2 && winRate >= 0.75 && avgCos >= 0.3 && !probeState.flips.find((f) => f.to === probeLane)) {
-        const reason = `probe lane ${probeLane}: ${tally.wins}/${tally.total} wins, avg cosine ${avgCos.toFixed(2)}`;
-        probeState.flips.push({
-          round: probeState.probes_shown.length,
-          from: session.lane,
-          to: probeLane,
-          reason,
-        });
-        nextLane = probeLane;
-        // Fire-and-forget event log; never block the response.
+    const probeEval = evaluateProbe({
+      pairing_id: data.pairingId,
+      probe_state: probeIn,
+      session_lane: session.lane,
+      delta_vector: deltaVec,
+      prior_vector: priorVec,
+      tests,
+    });
+    const probeState = probeEval.probe_state;
+    const nextLane: Lane = probeEval.next_lane;
+    if (probeEval.probe_lane) {
+      if (probeEval.flipped && probeEval.flip_summary) {
         supabase.from("event_log").insert({
           user_id: userId,
           session_id: data.sessionId,
           event_type: "lane_flipped",
           pairing_id: data.pairingId,
-          props: { from: session.lane, to: probeLane, win_rate: winRate, avg_cosine: avgCos } as never,
+          props: {
+            from: session.lane,
+            to: probeEval.probe_lane,
+            win_rate: probeEval.flip_summary.win_rate,
+            avg_cosine: probeEval.flip_summary.avg_cosine,
+          } as never,
           client: "server",
         }).then(() => undefined, () => undefined);
       } else {
@@ -1029,7 +1005,12 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
           session_id: data.sessionId,
           event_type: "lane_probed",
           pairing_id: data.pairingId,
-          props: { lane: probeLane, cosine, magnitude, win } as never,
+          props: {
+            lane: probeEval.probe_lane,
+            cosine: probeEval.cosine,
+            magnitude: probeEval.magnitude,
+            win: probeEval.win,
+          } as never,
           client: "server",
         }).then(() => undefined, () => undefined);
       }
