@@ -20,8 +20,11 @@ import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as Authenticated1980RouteImport } from './routes/_authenticated/1980'
+import { Route as ApiV1SessionsRouteImport } from './routes/api/v1/sessions'
 import { Route as ApiV1SessionRouteImport } from './routes/api/v1/session'
+import { Route as ApiV1AccountRouteImport } from './routes/api/v1/account'
 import { Route as ApiV1ShareTokenRouteImport } from './routes/api/v1/share.$token'
+import { Route as ApiV1SessionIdRouteImport } from './routes/api/v1/session.$id'
 import { Route as ApiV1OnboardingOpenerRouteImport } from './routes/api/v1/onboarding.opener'
 import { Route as ApiPublicTestActionRouteImport } from './routes/api/public/test/$action'
 import { Route as ApiV1SessionIdRevealRouteImport } from './routes/api/v1/session.$id.reveal'
@@ -82,15 +85,30 @@ const Authenticated1980Route = Authenticated1980RouteImport.update({
   path: '/1980',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiV1SessionsRoute = ApiV1SessionsRouteImport.update({
+  id: '/api/v1/sessions',
+  path: '/api/v1/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiV1SessionRoute = ApiV1SessionRouteImport.update({
   id: '/api/v1/session',
   path: '/api/v1/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1AccountRoute = ApiV1AccountRouteImport.update({
+  id: '/api/v1/account',
+  path: '/api/v1/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1ShareTokenRoute = ApiV1ShareTokenRouteImport.update({
   id: '/api/v1/share/$token',
   path: '/api/v1/share/$token',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1SessionIdRoute = ApiV1SessionIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiV1SessionRoute,
 } as any)
 const ApiV1OnboardingOpenerRoute = ApiV1OnboardingOpenerRouteImport.update({
   id: '/api/v1/onboarding/opener',
@@ -103,19 +121,19 @@ const ApiPublicTestActionRoute = ApiPublicTestActionRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1SessionIdRevealRoute = ApiV1SessionIdRevealRouteImport.update({
-  id: '/$id/reveal',
-  path: '/$id/reveal',
-  getParentRoute: () => ApiV1SessionRoute,
+  id: '/reveal',
+  path: '/reveal',
+  getParentRoute: () => ApiV1SessionIdRoute,
 } as any)
 const ApiV1SessionIdNextRoute = ApiV1SessionIdNextRouteImport.update({
-  id: '/$id/next',
-  path: '/$id/next',
-  getParentRoute: () => ApiV1SessionRoute,
+  id: '/next',
+  path: '/next',
+  getParentRoute: () => ApiV1SessionIdRoute,
 } as any)
 const ApiV1SessionIdChoiceRoute = ApiV1SessionIdChoiceRouteImport.update({
-  id: '/$id/choice',
-  path: '/$id/choice',
-  getParentRoute: () => ApiV1SessionRoute,
+  id: '/choice',
+  path: '/choice',
+  getParentRoute: () => ApiV1SessionIdRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -129,9 +147,12 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/api/v1/account': typeof ApiV1AccountRoute
   '/api/v1/session': typeof ApiV1SessionRouteWithChildren
+  '/api/v1/sessions': typeof ApiV1SessionsRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
   '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
+  '/api/v1/session/$id': typeof ApiV1SessionIdRouteWithChildren
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
   '/api/v1/session/$id/next': typeof ApiV1SessionIdNextRoute
@@ -148,9 +169,12 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/api/v1/account': typeof ApiV1AccountRoute
   '/api/v1/session': typeof ApiV1SessionRouteWithChildren
+  '/api/v1/sessions': typeof ApiV1SessionsRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
   '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
+  '/api/v1/session/$id': typeof ApiV1SessionIdRouteWithChildren
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
   '/api/v1/session/$id/next': typeof ApiV1SessionIdNextRoute
@@ -169,9 +193,12 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/api/v1/account': typeof ApiV1AccountRoute
   '/api/v1/session': typeof ApiV1SessionRouteWithChildren
+  '/api/v1/sessions': typeof ApiV1SessionsRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
   '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
+  '/api/v1/session/$id': typeof ApiV1SessionIdRouteWithChildren
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
   '/api/v1/session/$id/next': typeof ApiV1SessionIdNextRoute
@@ -190,9 +217,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/profile'
     | '/s/$sessionId'
+    | '/api/v1/account'
     | '/api/v1/session'
+    | '/api/v1/sessions'
     | '/api/public/test/$action'
     | '/api/v1/onboarding/opener'
+    | '/api/v1/session/$id'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
     | '/api/v1/session/$id/next'
@@ -209,9 +239,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/profile'
     | '/s/$sessionId'
+    | '/api/v1/account'
     | '/api/v1/session'
+    | '/api/v1/sessions'
     | '/api/public/test/$action'
     | '/api/v1/onboarding/opener'
+    | '/api/v1/session/$id'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
     | '/api/v1/session/$id/next'
@@ -229,9 +262,12 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/profile'
     | '/s/$sessionId'
+    | '/api/v1/account'
     | '/api/v1/session'
+    | '/api/v1/sessions'
     | '/api/public/test/$action'
     | '/api/v1/onboarding/opener'
+    | '/api/v1/session/$id'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
     | '/api/v1/session/$id/next'
@@ -247,7 +283,9 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
   SSessionIdRoute: typeof SSessionIdRoute
+  ApiV1AccountRoute: typeof ApiV1AccountRoute
   ApiV1SessionRoute: typeof ApiV1SessionRouteWithChildren
+  ApiV1SessionsRoute: typeof ApiV1SessionsRoute
   ApiPublicTestActionRoute: typeof ApiPublicTestActionRoute
   ApiV1OnboardingOpenerRoute: typeof ApiV1OnboardingOpenerRoute
   ApiV1ShareTokenRoute: typeof ApiV1ShareTokenRoute
@@ -332,11 +370,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Authenticated1980RouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/v1/sessions': {
+      id: '/api/v1/sessions'
+      path: '/api/v1/sessions'
+      fullPath: '/api/v1/sessions'
+      preLoaderRoute: typeof ApiV1SessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/session': {
       id: '/api/v1/session'
       path: '/api/v1/session'
       fullPath: '/api/v1/session'
       preLoaderRoute: typeof ApiV1SessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/account': {
+      id: '/api/v1/account'
+      path: '/api/v1/account'
+      fullPath: '/api/v1/account'
+      preLoaderRoute: typeof ApiV1AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1/share/$token': {
@@ -345,6 +397,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/v1/share/$token'
       preLoaderRoute: typeof ApiV1ShareTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/session/$id': {
+      id: '/api/v1/session/$id'
+      path: '/$id'
+      fullPath: '/api/v1/session/$id'
+      preLoaderRoute: typeof ApiV1SessionIdRouteImport
+      parentRoute: typeof ApiV1SessionRoute
     }
     '/api/v1/onboarding/opener': {
       id: '/api/v1/onboarding/opener'
@@ -362,24 +421,24 @@ declare module '@tanstack/react-router' {
     }
     '/api/v1/session/$id/reveal': {
       id: '/api/v1/session/$id/reveal'
-      path: '/$id/reveal'
+      path: '/reveal'
       fullPath: '/api/v1/session/$id/reveal'
       preLoaderRoute: typeof ApiV1SessionIdRevealRouteImport
-      parentRoute: typeof ApiV1SessionRoute
+      parentRoute: typeof ApiV1SessionIdRoute
     }
     '/api/v1/session/$id/next': {
       id: '/api/v1/session/$id/next'
-      path: '/$id/next'
+      path: '/next'
       fullPath: '/api/v1/session/$id/next'
       preLoaderRoute: typeof ApiV1SessionIdNextRouteImport
-      parentRoute: typeof ApiV1SessionRoute
+      parentRoute: typeof ApiV1SessionIdRoute
     }
     '/api/v1/session/$id/choice': {
       id: '/api/v1/session/$id/choice'
-      path: '/$id/choice'
+      path: '/choice'
       fullPath: '/api/v1/session/$id/choice'
       preLoaderRoute: typeof ApiV1SessionIdChoiceRouteImport
-      parentRoute: typeof ApiV1SessionRoute
+      parentRoute: typeof ApiV1SessionIdRoute
     }
   }
 }
@@ -399,16 +458,28 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
-interface ApiV1SessionRouteChildren {
+interface ApiV1SessionIdRouteChildren {
   ApiV1SessionIdChoiceRoute: typeof ApiV1SessionIdChoiceRoute
   ApiV1SessionIdNextRoute: typeof ApiV1SessionIdNextRoute
   ApiV1SessionIdRevealRoute: typeof ApiV1SessionIdRevealRoute
 }
 
-const ApiV1SessionRouteChildren: ApiV1SessionRouteChildren = {
+const ApiV1SessionIdRouteChildren: ApiV1SessionIdRouteChildren = {
   ApiV1SessionIdChoiceRoute: ApiV1SessionIdChoiceRoute,
   ApiV1SessionIdNextRoute: ApiV1SessionIdNextRoute,
   ApiV1SessionIdRevealRoute: ApiV1SessionIdRevealRoute,
+}
+
+const ApiV1SessionIdRouteWithChildren = ApiV1SessionIdRoute._addFileChildren(
+  ApiV1SessionIdRouteChildren,
+)
+
+interface ApiV1SessionRouteChildren {
+  ApiV1SessionIdRoute: typeof ApiV1SessionIdRouteWithChildren
+}
+
+const ApiV1SessionRouteChildren: ApiV1SessionRouteChildren = {
+  ApiV1SessionIdRoute: ApiV1SessionIdRouteWithChildren,
 }
 
 const ApiV1SessionRouteWithChildren = ApiV1SessionRoute._addFileChildren(
@@ -424,7 +495,9 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
   SSessionIdRoute: SSessionIdRoute,
+  ApiV1AccountRoute: ApiV1AccountRoute,
   ApiV1SessionRoute: ApiV1SessionRouteWithChildren,
+  ApiV1SessionsRoute: ApiV1SessionsRoute,
   ApiPublicTestActionRoute: ApiPublicTestActionRoute,
   ApiV1OnboardingOpenerRoute: ApiV1OnboardingOpenerRoute,
   ApiV1ShareTokenRoute: ApiV1ShareTokenRoute,
@@ -432,13 +505,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
