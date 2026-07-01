@@ -23,11 +23,12 @@ src/musicdna/
     pairing.ts    ✅ migrated — selectPairing (fork filter + weighted pick), shouldStop, assertWithinLane
     session.ts    ✅ migrated — buildStartSessionSeed (lane + confidence + probes + seed vector)
     choice.ts     ✅ migrated — applyChoice (vector math), evaluateProbe (cosine + flip)
-    index.ts        TODO — MusicDNAEngine factory: (deps) => { ... }
+    index.ts        ✅ createEngine(deps) factory + seededRng / fixedClock helpers
+    errors.ts       ✅ EngineErrorException + code→status map for route envelopes
+    testing.ts      ✅ InMemorySupabaseGateway + ScriptedLLMGateway for golden fixtures
   adapters/
-    llm-gateway.ts ✅ migrated — LLMGateway impl over Lovable AI Gateway
-    supabase.ts     TODO — SupabaseGateway impl (user- or admin-scoped)
-
+    llm-gateway.ts  ✅ LLMGateway impl over Lovable AI Gateway
+    supabase.ts     ✅ SupabaseGateway impl wrapping a SupabaseClient
 ```
 
 
@@ -80,12 +81,13 @@ src/musicdna/
      tally updates, and the flip decision. `recordChoiceImpl` now delegates
      to both; event logging stays at the transport layer. Test count now
      **64 passing** (added session/pairing/choice suites).
-9. **Next**: define the `MusicDNAEngine` factory in `engine/index.ts` —
-   `(deps) => { startSession, nextPairing, submitChoice, reveal }` —
-   backed by a real `SupabaseGateway` adapter in `adapters/supabase.ts`.
-   Once the factory exists, the server-fns and `/api/v1` routes both
-   become `engine.<method>(...)` calls, and golden-fixture tests can
-   drive the whole loop with an in-memory gateway.
+9. ✅ Wrapped everything behind `createEngine(deps)` in `engine/index.ts`.
+   `adapters/supabase.ts` implements the `SupabaseGateway` port over a real
+   `SupabaseClient`. `engine/testing.ts` ships an in-memory gateway and a
+   scripted LLM gateway. `engine/errors.ts` defines `EngineErrorException`
+   with a code→HTTP-status map for the route envelope. Golden-fixture loop
+   test (`engine/index.test.ts`) drives seed → pairing → choice → probe →
+   archetype end-to-end with zero I/O. Test count now **68 passing**.
 
 
 
