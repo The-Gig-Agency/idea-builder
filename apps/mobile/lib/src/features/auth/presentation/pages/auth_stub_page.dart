@@ -46,7 +46,7 @@ class _AuthStubPageState extends State<AuthStubPage> {
 
             if (state.submissionStatus == AuthSubmissionStatus.success &&
                 state.status == AuthStatus.authenticated) {
-              context.go('/');
+              context.go(_mode == _AuthFormMode.signUp ? '/onboarding' : '/');
             }
           },
           builder: (context, state) {
