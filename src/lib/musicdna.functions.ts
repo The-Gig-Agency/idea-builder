@@ -1239,7 +1239,7 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
 
     // -------- Pull raw evidence --------
     const [archRes, choicesRes] = await Promise.all([
-      supabase.from("archetypes").select("id,name,tagline,signature_axes"),
+      supabase.from("archetypes").select("id,name,tagline,signature_axes,core_question,commentary_keywords,confidence_thresholds"),
       supabase
         .from("choices")
         .select(`
@@ -1379,8 +1379,16 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
     // Score every archetype, keep top 3, and flag residuals so we can build
     // the "did any listener escape all current archetypes?" review queue.
     const vector = (session.vector ?? {}) as Record<string, number>;
-    const scored: { id: string; name: string; score: number }[] = [];
-    for (const a of archetypes) {
+    type ArchetypeRow = {
+      id: string;
+      name: string;
+      signature_axes: Record<string, number> | null;
+      core_question: string | null;
+      commentary_keywords: string[] | null;
+      confidence_thresholds: Record<string, string> | null;
+    };
+    const scored: { row: ArchetypeRow; score: number }[] = [];
+    for (const a of archetypes as unknown as ArchetypeRow[]) {
       const axes = (a.signature_axes ?? {}) as Record<string, number>;
       const keys = Object.keys(axes);
       if (!keys.length) continue;
@@ -1392,16 +1400,17 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       }
       const denom = Math.sqrt(magA) * Math.sqrt(magB);
       const score = denom > 0 ? dot / denom : 0;
-      scored.push({ id: a.id, name: a.name, score });
+      scored.push({ row: a, score });
     }
     scored.sort((a, b) => b.score - a.score);
     const top3 = scored.slice(0, 3).map((s) => ({
-      archetype_id: s.id,
-      name: s.name,
+      archetype_id: s.row.id,
+      name: s.row.name,
       score: Math.round(s.score * 1000) / 1000,
     }));
-    const best = scored[0]
-      ? { id: scored[0].id as string | null, name: scored[0].name, score: scored[0].score }
+    const bestRow = scored[0]?.row ?? null;
+    const best = bestRow
+      ? { id: bestRow.id as string | null, name: bestRow.name, score: scored[0].score }
       : { id: null as string | null, name: "", score: -Infinity };
     const runnerUp = scored[1]?.score ?? 0;
     const margin = scored[0] ? Math.max(0, scored[0].score - runnerUp) : 0;
@@ -1456,9 +1465,30 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       ? counterarguments.map((c) => `- ${c.claim} (${c.impact} impact — ${c.notes})`).join("\n")
       : "- (none)";
 
+    // Pick the confidence tier from the winning cosine score. Each archetype
+    // ships its own phrasings for 20/50/80/95, so the critic's opening hedge
+    // tracks the actual evidence instead of always sounding equally sure.
+    const bestScore = scored[0]?.score ?? 0;
+    const tier = bestScore >= 0.95 ? "95"
+               : bestScore >= 0.80 ? "80"
+               : bestScore >= 0.50 ? "50"
+               : "20";
+    const thresholds = (bestRow?.confidence_thresholds ?? {}) as Record<string, string>;
+    const openingHedge = thresholds[tier] ?? null;
+    const keywords = (bestRow?.commentary_keywords ?? []) as string[];
+    const coreQuestion = bestRow?.core_question ?? null;
+
+    const archetypeVoiceBlock = bestRow
+      ? `\nARCHETYPE (aesthetic, not personality): ${bestRow.name}${coreQuestion ? ` — core question: "${coreQuestion}"` : ""}. Cosine confidence: ${Math.round(bestScore * 100)}%.
+Opening hedge for this confidence tier (use as your first move; do not quote verbatim if it doesn't fit the flow): "${openingHedge ?? ""}"
+Draw from this archetype's vocabulary where natural (do not list, do not overuse, no more than 3-4 of these across the write-up): ${keywords.slice(0, 24).join(", ") || "(none)"}.`
+      : "";
+
     const criticPrompt = `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
 Cite the evidence inline (e.g. "across 7 of 12 matchups"). If a strong counter-hypothesis exists, name it. \
-If no claims cleared the threshold, say so plainly — do not invent.
+If no claims cleared the threshold, say so plainly — do not invent. \
+Frame the archetype as what this listener SEEKS from music, not who they are as a person.
+${archetypeVoiceBlock}
 
 ALLOWED CLAIMS:
 ${evidenceBlock}
@@ -1496,6 +1526,8 @@ Archetype assigned by cosine match: ${best.name || "Unassigned"}.`;
         allowed_claims: allowed_claims.length,
         counterarguments: counterarguments.length,
         archetype: best.name,
+        confidence_tier: tier,
+        cosine_score: Math.round(bestScore * 1000) / 1000,
       },
       output: { length: narrative.length } as never,
       narrative: narrative || null,
