@@ -1,9 +1,11 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/app/app.dart';
 import 'src/core/config/app_config.dart';
 import 'src/core/di/app_dependencies.dart';
+import 'src/core/logging/app_bloc_observer.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +21,7 @@ Future<void> bootstrap() async {
     config: config,
     supabase: Supabase.instance.client,
   );
+  Bloc.observer = AppBlocObserver(dependencies.logger);
 
   runApp(MusicDnaMobileApp(dependencies: dependencies));
 }

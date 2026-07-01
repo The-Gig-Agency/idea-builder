@@ -112,6 +112,18 @@ class _OnboardingStubPageState extends State<OnboardingStubPage> {
                               ),
                             ),
                           ),
+                          if (state.submissionStatus ==
+                                  OnboardingSubmissionStatus.failure &&
+                              state.requiresReauthentication) ...<Widget>[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () => context.go('/auth'),
+                                child: const Text('Sign in again'),
+                              ),
+                            ),
+                          ],
                           if (state.errorMessage != null) ...<Widget>[
                             const SizedBox(height: 12),
                             Text(

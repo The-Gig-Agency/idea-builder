@@ -49,6 +49,10 @@ flutter build ios --release --dart-define-from-file=config/prod.local.json
 
 4. Archive from `ios/Runner.xcworkspace`
 
+Detailed release gate and QA checklist:
+
+- [`/Users/rastakit/tga-workspace/idea-builder/apps/mobile/docs/release_qa_checklist.md`](/Users/rastakit/tga-workspace/idea-builder/apps/mobile/docs/release_qa_checklist.md)
+
 ## Expected Mobile Flow
 
 The shared backend contract for the app lives in:
@@ -63,3 +67,12 @@ Current intended onboarding/session path:
 4. `GET /api/v1/session/:id/next`
 5. `POST /api/v1/session/:id/choice`
 6. `POST /api/v1/session/:id/reveal`
+
+## Recovery And Observability
+
+The mobile app now hardens a few key failure paths:
+
+- expired/invalid auth routes users toward signing in again
+- network failures return retry-oriented messaging
+- pairing/reveal failures stay recoverable from the same screen
+- Cubit transitions and critical flow actions emit structured debug logs
