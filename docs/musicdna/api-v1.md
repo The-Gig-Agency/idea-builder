@@ -109,3 +109,28 @@ Response:
   ignore unknown fields.
 - Removing fields, renaming fields, or changing types is a break — bump the
   version.
+
+## End-to-end tests
+
+`src/routes/api/v1/e2e.test.ts` drives the full REST loop
+(`session → next → choice × N → reveal → share`) through the real routes
+over HTTP. It self-skips unless both env vars are set:
+
+```bash
+MUSICDNA_E2E_BASE_URL=http://localhost:8080 \
+AGENT_TEST_HARNESS_KEY=<same value as the server secret> \
+bunx vitest run src/routes/api/v1/e2e.test.ts
+```
+
+How it works:
+1. `POST /api/public/test/opener` — bootstraps a synthetic Supabase user +
+   opening analysis (auth-bypassing harness gated by
+   `AGENT_TEST_HARNESS_KEY`).
+2. `POST /api/public/test/bearer` — resets that user's password and returns a
+   fresh access token so the test can hit the real bearer-protected routes.
+3. The test then walks `/api/v1/session`, `/next`, `/choice`, `/reveal`, and
+   the public `/share/:token` end-to-end and asserts the auth boundary,
+   CORS preflight, and the typed error envelope.
+
+Point `MUSICDNA_E2E_BASE_URL` at `http://localhost:8080` for a local dev
+server or at the preview URL to smoke-test a deployed build.
