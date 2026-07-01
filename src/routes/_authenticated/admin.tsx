@@ -29,12 +29,13 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 type Entity = "songs" | "pairings" | "archetypes";
-type Tab = Entity | "decade_prompts" | "residuals";
+type Tab = Entity | "decade_prompts" | "residuals" | "ontology";
 const ENTITIES: { key: Tab; label: string }[] = [
   { key: "songs", label: "Songs" },
   { key: "pairings", label: "Pairings" },
   { key: "archetypes", label: "Archetypes" },
   { key: "decade_prompts", label: "Decade Prompts" },
+  { key: "ontology", label: "Ontology" },
   { key: "residuals", label: "Residuals" },
 ];
 
