@@ -150,7 +150,7 @@ Mode: taste-reader. You read five songs a user named as ones they love and produ
 
 You return a JSON object with this exact shape:
 {
-  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": {
@@ -159,7 +159,7 @@ You return a JSON object with this exact shape:
     "confidence": -100..100, "tension": -100..100, "texture": -100..100,
     "transformation": -100..100
   },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|unknown"}],
   "reasoning": ["one short observation", "..."],
   "hypothesis": "ONE sentence, max 30 words, Rolling Stone voice. Name what these choices reveal — specific dimensions like movement, atmosphere, transformation, melody. End with 'Let's see if that holds.' or similar half-promise."
 }
@@ -295,7 +295,7 @@ export const analyzeOpeningSongs = createServerFn({ method: "POST" })
 export const generateOpeningHypothesis = analyzeOpeningSongs;
 
 // ============ Start session ============
-const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock"];
+const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal"];
 
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1545,7 +1545,7 @@ Output STRICT JSON:
   "stakes": "Leave empty.",
   "reaction": "Legacy field. Copy the observation verbatim.",
   "hypothesis_v1": "Legacy field. Copy the observation verbatim.",
-  "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
   "confidence": 0.0-1.0,
   "suspected_dimensions": ["movement","atmosphere","immersion","scale","community","perspective","confidence","tension","texture","transformation"]
 }
@@ -1723,11 +1723,11 @@ ${LANE_RULES}
 Return STRICT JSON:
 {
   "reaction": "ONE sentence, max 20 words. Say honestly whether the new two confirm, refine, or break your read. About the listener's CHOICES, not the songs. Good: 'Those last two confirm it — you keep picking energy over polish.' / 'Okay, that second one breaks my read. You like prettier than I thought.'",
-  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|unknown"}],
   "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
   "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
 }
@@ -1844,11 +1844,11 @@ ${LANE_RULES}
 Return STRICT JSON:
 {
   "observation": "ONE short paragraph, ~25–40 words, MAX 45. Conversational, present tense, speaks to the listener. Reference at least ONE song or artist from their picks. Good: 'Two dramatic choices in a row. You seem to like emotional honesty delivered through a strong artistic lens — not raw confession.' Good: 'So far you seem more interested in perspective than pure emotion.' Bad: anything that names a fork/axis/lane/pole, previews the next matchup, or opens with 'You reward…' or 'You trust…'.",
-  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "general",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|unknown"}],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|unknown"}],
   "reasoning": ["one short observation about the LISTENER (not the song)", "..."]
 }
 No prose, no markdown fences. Three songs is not enough for certainty — keep confidence honest (0.3–0.6). The candidate_dimensions, lane, and secondary_lanes are for the engine; the LISTENER never sees them, so do not reference them in the observation.`;
