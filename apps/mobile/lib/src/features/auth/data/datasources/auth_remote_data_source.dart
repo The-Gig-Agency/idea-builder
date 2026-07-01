@@ -9,6 +9,16 @@ abstract class AuthRemoteDataSource {
 
   Stream<domain.AuthUser?> observeAuthState();
 
+  Future<domain.AuthUser> signIn({
+    required String email,
+    required String password,
+  });
+
+  Future<domain.AuthUser> signUp({
+    required String email,
+    required String password,
+  });
+
   Future<void> signOut();
 }
 
@@ -28,6 +38,44 @@ class SupabaseAuthRemoteDataSource implements AuthRemoteDataSource {
   }
 
   @override
+  Future<domain.AuthUser> signIn({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _supabase.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
+    final user = response.user;
+    if (user == null) {
+      throw const AuthRemoteDataSourceException(
+        'Supabase did not return a user for sign in.',
+      );
+    }
+
+    return _requireUser(user);
+  }
+
+  @override
+  Future<domain.AuthUser> signUp({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _supabase.auth.signUp(
+      email: email,
+      password: password,
+    );
+    final user = response.user;
+    if (user == null) {
+      throw const AuthRemoteDataSourceException(
+        'Supabase did not return a user for sign up.',
+      );
+    }
+
+    return _requireUser(user);
+  }
+
+  @override
   Future<void> signOut() {
     return _supabase.auth.signOut();
   }
@@ -39,4 +87,17 @@ class SupabaseAuthRemoteDataSource implements AuthRemoteDataSource {
 
     return domain.AuthUser(id: user.id, email: user.email);
   }
+
+  domain.AuthUser _requireUser(User user) {
+    return domain.AuthUser(id: user.id, email: user.email);
+  }
+}
+
+class AuthRemoteDataSourceException implements Exception {
+  const AuthRemoteDataSourceException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'AuthRemoteDataSourceException: $message';
 }

@@ -69,11 +69,26 @@ class FoundationHomePage extends StatelessWidget {
                             : 'No active session yet.',
                       ),
                       const SizedBox(height: 12),
-                      if (signedIn)
-                        OutlinedButton(
-                          onPressed: () => context.read<AuthCubit>().signOut(),
-                          child: const Text('Sign out'),
-                        ),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          FilledButton.tonal(
+                            onPressed: () => context.go('/auth'),
+                            child: Text(
+                              signedIn
+                                  ? 'Manage account'
+                                  : 'Sign in or sign up',
+                            ),
+                          ),
+                          if (signedIn)
+                            OutlinedButton(
+                              onPressed: () =>
+                                  context.read<AuthCubit>().signOut(),
+                              child: const Text('Sign out'),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

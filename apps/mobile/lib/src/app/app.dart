@@ -17,7 +17,7 @@ class MusicDnaMobileApp extends StatefulWidget {
 
 class _MusicDnaMobileAppState extends State<MusicDnaMobileApp> {
   late final AuthCubit _authCubit;
-  late final router = buildAppRouter(widget.dependencies.config);
+  late final router = buildAppRouter(widget.dependencies);
 
   @override
   void initState() {
@@ -28,6 +28,7 @@ class _MusicDnaMobileAppState extends State<MusicDnaMobileApp> {
   @override
   void dispose() {
     _authCubit.close();
+    widget.dependencies.authRouterNotifier.dispose();
     super.dispose();
   }
 
