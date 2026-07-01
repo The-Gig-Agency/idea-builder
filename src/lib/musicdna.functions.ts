@@ -316,26 +316,10 @@ export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => startSessionImpl(context.supabase, context.userId));
 
-// Weight applied to the 3-song prior dimensions when seeding session.vector.
-// Tuning intuition (see docs/musicdna/prior-weighting.md):
-//   priors ≈ 30% of final archetype signal, pairings ≈ 70%.
-// candidate_dimensions live in [-100, 100]; pairing deltas accumulate
-// ~90–200 on the dominant axis across 6 rounds, so 0.35 keeps priors as
-// a real but overrideable nudge.
-export const PRIOR_SEED_WEIGHT = 0.35;
+// Prior seeding lives in the engine so priors weighting is testable and
+// shared by any future caller (see src/musicdna/engine/priors.ts).
+export { PRIOR_SEED_WEIGHT, seedVectorFromPriors } from "@/musicdna/engine/priors";
 
-export function seedVectorFromPriors(
-  candidateDimensions: Record<string, unknown> | null | undefined,
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (!candidateDimensions) return out;
-  for (const [k, v] of Object.entries(candidateDimensions)) {
-    if (typeof v === "number" && Number.isFinite(v)) {
-      out[k] = Math.round(v * PRIOR_SEED_WEIGHT);
-    }
-  }
-  return out;
-}
 
 export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
     const { data: profile } = await supabase
