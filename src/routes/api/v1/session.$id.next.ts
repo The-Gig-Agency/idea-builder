@@ -5,8 +5,8 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { errorResponse, jsonResponse, preflightResponse } from "../../_cors";
-import { HttpError, verifyBearer } from "../../_auth";
+import { errorResponse, jsonResponse, preflightResponse } from "./_cors";
+import { HttpError, verifyBearer } from "./_auth";
 import { nextPairingImpl } from "@/lib/musicdna.functions";
 
 const UUID = z.string().uuid();
