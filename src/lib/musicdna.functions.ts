@@ -925,7 +925,9 @@ const pickVariant = pickByHash;
 
 // Derived descriptors — pure read off the 10 axes, kept in the engine so the
 // synthesis prompt and any future client share one set of thresholds.
-export { deriveDescriptors } from "@/musicdna/engine/descriptors";
+import { deriveDescriptors } from "@/musicdna/engine/descriptors";
+export { deriveDescriptors };
+
 
 
 
