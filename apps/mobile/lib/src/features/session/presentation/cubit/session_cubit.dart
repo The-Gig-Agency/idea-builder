@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../onboarding/domain/entities/started_music_session.dart';
 import '../../domain/entities/session_pairing.dart';
+import '../../domain/entities/session_reveal.dart';
 import '../../domain/repositories/session_repository.dart';
 
 enum SessionStatus {
@@ -11,6 +12,8 @@ enum SessionStatus {
   ready,
   submitting,
   completed,
+  revealing,
+  revealed,
   failure,
   missingSession,
 }
@@ -21,6 +24,8 @@ class SessionState extends Equatable {
     this.startedSession,
     this.currentRound,
     this.lastFeedback,
+    this.reveal,
+    this.sharedReveal,
     this.errorMessage,
   });
 
@@ -28,6 +33,8 @@ class SessionState extends Equatable {
   final StartedMusicSession? startedSession;
   final SessionRoundState? currentRound;
   final SessionChoiceFeedback? lastFeedback;
+  final SessionReveal? reveal;
+  final SharedReveal? sharedReveal;
   final String? errorMessage;
 
   String? get sessionId => startedSession?.sessionId ?? currentRound?.sessionId;
@@ -40,6 +47,10 @@ class SessionState extends Equatable {
     bool clearCurrentRound = false,
     SessionChoiceFeedback? lastFeedback,
     bool clearLastFeedback = false,
+    SessionReveal? reveal,
+    bool clearReveal = false,
+    SharedReveal? sharedReveal,
+    bool clearSharedReveal = false,
     String? errorMessage,
     bool clearErrorMessage = false,
   }) {
@@ -54,6 +65,10 @@ class SessionState extends Equatable {
       lastFeedback: clearLastFeedback
           ? null
           : lastFeedback ?? this.lastFeedback,
+      reveal: clearReveal ? null : reveal ?? this.reveal,
+      sharedReveal: clearSharedReveal
+          ? null
+          : sharedReveal ?? this.sharedReveal,
       errorMessage: clearErrorMessage
           ? null
           : errorMessage ?? this.errorMessage,
@@ -66,6 +81,8 @@ class SessionState extends Equatable {
     startedSession,
     currentRound,
     lastFeedback,
+    reveal,
+    sharedReveal,
     errorMessage,
   ];
 }
@@ -83,6 +100,8 @@ class SessionCubit extends Cubit<SessionState> {
         state.copyWith(
           status: SessionStatus.missingSession,
           clearCurrentRound: true,
+          clearReveal: true,
+          clearSharedReveal: true,
           clearErrorMessage: true,
         ),
       );
@@ -90,7 +109,12 @@ class SessionCubit extends Cubit<SessionState> {
     }
 
     emit(
-      state.copyWith(status: SessionStatus.loading, clearErrorMessage: true),
+      state.copyWith(
+        status: SessionStatus.loading,
+        clearReveal: true,
+        clearSharedReveal: true,
+        clearErrorMessage: true,
+      ),
     );
 
     await _loadNextPairing(
@@ -150,6 +174,49 @@ class SessionCubit extends Cubit<SessionState> {
     );
   }
 
+  Future<void> revealSession() async {
+    final sessionId = state.sessionId;
+    if (sessionId == null || sessionId.isEmpty) {
+      emit(
+        state.copyWith(
+          status: SessionStatus.failure,
+          errorMessage: 'No active session is available yet.',
+        ),
+      );
+      return;
+    }
+
+    emit(
+      state.copyWith(status: SessionStatus.revealing, clearErrorMessage: true),
+    );
+
+    try {
+      final reveal = await _repository.revealSession(sessionId: sessionId);
+      SharedReveal? sharedReveal;
+      if (reveal.shareToken != null && reveal.shareToken!.isNotEmpty) {
+        sharedReveal = await _repository.fetchSharedReveal(
+          token: reveal.shareToken!,
+        );
+      }
+
+      emit(
+        state.copyWith(
+          status: SessionStatus.revealed,
+          reveal: reveal,
+          sharedReveal: sharedReveal,
+          clearErrorMessage: true,
+        ),
+      );
+    } catch (error) {
+      emit(
+        state.copyWith(
+          status: SessionStatus.failure,
+          errorMessage: _readableError(error),
+        ),
+      );
+    }
+  }
+
   Future<void> _loadNextPairing({
     required String sessionId,
     required bool keepFeedback,
@@ -165,6 +232,8 @@ class SessionCubit extends Cubit<SessionState> {
               : SessionStatus.ready,
           currentRound: nextRound,
           clearLastFeedback: !keepFeedback,
+          clearReveal: true,
+          clearSharedReveal: true,
           clearErrorMessage: true,
         ),
       );

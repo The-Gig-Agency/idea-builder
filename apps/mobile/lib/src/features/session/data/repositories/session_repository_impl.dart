@@ -1,4 +1,5 @@
 import '../../domain/entities/session_pairing.dart';
+import '../../domain/entities/session_reveal.dart';
 import '../../domain/repositories/session_repository.dart';
 import '../datasources/session_remote_data_source.dart';
 
@@ -37,6 +38,44 @@ class SessionRepositoryImpl implements SessionRepository {
       hesitation: response['hesitation'] as String?,
       dimension: response['dim'] as String?,
       delta: _readDouble(response['delta']),
+    );
+  }
+
+  @override
+  Future<SessionReveal> revealSession({required String sessionId}) async {
+    final response = await _remoteDataSource.revealSession(
+      sessionId: sessionId,
+    );
+    return SessionReveal(
+      archetypeId: response['archetypeId'] as String?,
+      archetypeName: response['archetypeName'] as String?,
+      interpretation: response['interpretation'] as String? ?? '',
+      vector: _readVector(response['vector']),
+      allowedClaims: _readAllowedClaims(response['allowed_claims']),
+      counterarguments: _readCounterarguments(response['counterarguments']),
+      shareToken: response['share_token'] as String?,
+    );
+  }
+
+  @override
+  Future<SharedReveal> fetchSharedReveal({required String token}) async {
+    final response = await _remoteDataSource.fetchSharedReveal(token: token);
+    final archetypeData = response['archetype'];
+    return SharedReveal(
+      sessionId: response['session_id'] as String,
+      shareToken: response['share_token'] as String,
+      completedAt: DateTime.parse(response['completed_at'] as String),
+      lane: response['lane'] as String?,
+      interpretation: response['interpretation'] as String? ?? '',
+      archetype: archetypeData is Map<String, dynamic>
+          ? SharedRevealArchetype(
+              id: archetypeData['id'] as String?,
+              name: archetypeData['name'] as String? ?? '',
+              tagline: archetypeData['tagline'] as String?,
+              description: archetypeData['description'] as String?,
+            )
+          : null,
+      definingChoices: _readDefiningChoices(response['defining_choices']),
     );
   }
 
@@ -104,5 +143,86 @@ class SessionRepositoryImpl implements SessionRepository {
       return value.toDouble();
     }
     return 0;
+  }
+
+  Map<String, double> _readVector(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value.map((key, rawValue) => MapEntry(key, _readDouble(rawValue)));
+    }
+    return const <String, double>{};
+  }
+
+  List<RevealClaim> _readAllowedClaims(Object? value) {
+    if (value is! List) {
+      return const <RevealClaim>[];
+    }
+
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map((claim) {
+          return RevealClaim(
+            dimension: claim['dimension'] as String? ?? '',
+            preferred: claim['preferred'] as String? ?? '',
+            opposed: claim['opposed'] as String? ?? '',
+            supportingChoices: _readInt(claim['supporting_choices']),
+            testedTotal: _readInt(claim['tested_total']),
+            confidence: _readDouble(claim['confidence']),
+            examples: _readClaimExamples(claim['examples']),
+            tradeoff: claim['tradeoff'] as String? ?? '',
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<RevealClaimExample> _readClaimExamples(Object? value) {
+    if (value is! List) {
+      return const <RevealClaimExample>[];
+    }
+
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map((example) {
+          return RevealClaimExample(
+            chosen: example['chosen'] as String? ?? '',
+            rejected: example['rejected'] as String? ?? '',
+            delta: _readDouble(example['delta']),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<RevealCounterargument> _readCounterarguments(Object? value) {
+    if (value is! List) {
+      return const <RevealCounterargument>[];
+    }
+
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map((counter) {
+          return RevealCounterargument(
+            claim: counter['claim'] as String? ?? '',
+            impact: counter['impact'] as String? ?? '',
+            notes: counter['notes'] as String? ?? '',
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<DefiningChoice> _readDefiningChoices(Object? value) {
+    if (value is! List) {
+      return const <DefiningChoice>[];
+    }
+
+    return value
+        .whereType<Map<String, dynamic>>()
+        .map((choice) {
+          return DefiningChoice(
+            chosen: choice['chosen'] as String? ?? '',
+            chosenArtist: choice['chosenArtist'] as String? ?? '',
+            rejected: choice['rejected'] as String? ?? '',
+            rejectedArtist: choice['rejectedArtist'] as String? ?? '',
+          );
+        })
+        .toList(growable: false);
   }
 }
