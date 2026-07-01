@@ -26,6 +26,7 @@ const LANE_LABEL: Record<string, string> = {
   electronic: "Electronic",
   classic_rock: "Classic Rock",
   metal: "Metal",
+  r_and_b: "R&B / Soul",
   general: "General",
 };
 

@@ -85,7 +85,7 @@ async function ai(messages: Array<{ role: string; content: string }>) {
 }
 
 // ============ Lane classifier ============
-const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "general"] as const;
+const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "r_and_b", "general"] as const;
 type Lane = (typeof LANES)[number];
 
 // Shared lane rules — classic_rock keeps hard rock/prog; metal now routes to its
@@ -96,6 +96,7 @@ const LANE_RULES = `Lane rules:
 - hip_hop = rap, trap, boom-bap, drill, R&B-rap.
 - electronic = techno, house, IDM, drum-n-bass, EDM, ambient, trip-hop.
 - metal = heavy metal, thrash, doom, black metal, death metal, nu metal, metalcore, prog metal. Sabbath, Metallica, Iron Maiden, Slayer, Tool, Mastodon, Deftones, Korn, Gojira, Pantera.
+- r_and_b = R&B, soul, neo-soul, quiet storm, contemporary soul, vocal-led groove music. Marvin Gaye, Stevie Wonder, D'Angelo, Frank Ocean, SZA, The Weeknd, Solange.
 - classic_rock = 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac), hard rock, prog (Rush, Yes, Pink Floyd, King Crimson), arena rock, glam, southern rock. If it is loud guitars and not "indie/alternative" in the modern sense, it belongs here for now.
 - country = classic country, outlaw country, contemporary country, alt-country, Americana, country-pop, Nashville. Cash, Hank Williams, Willie Nelson, Sturgill Simpson, Kacey Musgraves, Chris Stapleton, Zach Bryan, Jelly Roll, Kenny Rogers, Merle Haggard, Dolly Parton, Miranda Lambert, Luke Combs, Morgan Wallen.
 - Use "general" ONLY when the picks genuinely scatter across lanes with no center of gravity.`;
@@ -126,6 +127,7 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
     s.includes("nashville")
   ) return "country";
   if (s.includes("electronic")) return "electronic";
+  if (s.includes("r&b") || s.includes("r_and_b") || s.includes("neo-soul") || s.includes("neosoul") || s.includes("soul") || s.includes("quiet storm") || s.includes("contemporary soul")) return "r_and_b";
   // Hard rock / prog funnel into classic_rock. Metal has its own lane.
   if (
     s.includes("hard_rock") || s.includes("hard-rock") ||
