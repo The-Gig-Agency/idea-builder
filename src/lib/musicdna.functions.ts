@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { assignArchetype } from "@/musicdna/engine/archetypes";
+import { CRITIC_PERSONA as PERSONA, CRITIC_VOICE_EDITORIAL as VOICE } from "@/musicdna/engine/critic";
+import { callLovableAi, DEFAULT_MODEL as MODEL } from "@/musicdna/adapters/llm-gateway";
 
 // Shared Supabase client type used by the *Impl exports below. The test
 // harness (src/routes/api/public/test/$action.ts) calls these Impl variants
@@ -11,8 +13,7 @@ import { assignArchetype } from "@/musicdna/engine/archetypes";
 // the auth middleware so agents can drive end-to-end runs without auth.
 export type AuthedSupabase = SupabaseClient<Database>;
 
-const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
+
 
 // Canonical 10 axes. Source of truth: public.axes (9 rows) + transformation.
 // Moods (nostalgic, dreamy, dark, hopeful, romantic, etc.) are DERIVED from
