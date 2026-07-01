@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["APPLE_TEAM_ID.com.thegigagency.musicDna"],
+        "components": [
+          { "/": "/s/*", "comment": "Public share reveals" }
+        ]
+      }
+    ]
+  }
+}
