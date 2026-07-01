@@ -126,6 +126,12 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
     s.includes("bluegrass") || s.includes("alt_country") || s.includes("alt-country") ||
     s.includes("nashville")
   ) return "country";
+  if (
+    s.includes("r_and_b") || s.includes("rnb") || s === "r&b" || s.includes("r-and-b") ||
+    s.includes("soul") || s.includes("neo_soul") || s.includes("neo-soul") ||
+    s.includes("quiet_storm") || s.includes("quiet-storm") || s.includes("pbr&b") ||
+    s.includes("contemporary_r") || s.includes("motown") || s.includes("funk_soul")
+  ) return "r_and_b";
   if (s.includes("electronic")) return "electronic";
   if (s.includes("r&b") || s.includes("r_and_b") || s.includes("neo-soul") || s.includes("neosoul") || s.includes("soul") || s.includes("quiet storm") || s.includes("contemporary soul")) return "r_and_b";
   // Hard rock / prog funnel into classic_rock. Metal has its own lane.
@@ -303,7 +309,7 @@ export const analyzeOpeningSongs = createServerFn({ method: "POST" })
 export const generateOpeningHypothesis = analyzeOpeningSongs;
 
 // ============ Start session ============
-const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country"];
+const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "r_and_b"];
 
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
