@@ -189,7 +189,7 @@ function EntityTable({ entity, onEdit }: { entity: Entity; onEdit: (row: Row) =>
             className="border hairline rounded-sm bg-background px-3 py-1.5 text-sm"
           >
             <option value="">All lanes</option>
-            {["alternative", "pop", "hip_hop", "electronic", "classic_rock", "general"].map((l) => (
+            {["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "general"].map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
