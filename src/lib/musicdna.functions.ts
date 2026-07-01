@@ -1434,9 +1434,16 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       prompt_version: "analyst.v1",
       status: "ok",
       latency_ms: 0,
-      input_summary: { choices: choices.length, archetypes: archetypes.length },
+      input_summary: {
+        choices: choices.length,
+        archetypes: archetypes.length,
+        archetype_top3: top3,
+        archetype_margin: Math.round(margin * 1000) / 1000,
+        archetype_flagged: archetypeFlagged,
+        archetype_flag_reason: archetypeFlagReason,
+      },
       output: { patterns, counterarguments, allowed_claims, blocked_claims } as never,
-      confidence: allowed_claims[0]?.confidence ?? null,
+      confidence: scored[0]?.score ?? null,
     });
 
     // -------- Layer 5: Critic (AI narrative, constrained) --------
