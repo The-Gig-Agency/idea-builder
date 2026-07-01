@@ -1465,9 +1465,30 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       ? counterarguments.map((c) => `- ${c.claim} (${c.impact} impact — ${c.notes})`).join("\n")
       : "- (none)";
 
+    // Pick the confidence tier from the winning cosine score. Each archetype
+    // ships its own phrasings for 20/50/80/95, so the critic's opening hedge
+    // tracks the actual evidence instead of always sounding equally sure.
+    const bestScore = scored[0]?.score ?? 0;
+    const tier = bestScore >= 0.95 ? "95"
+               : bestScore >= 0.80 ? "80"
+               : bestScore >= 0.50 ? "50"
+               : "20";
+    const thresholds = (bestRow?.confidence_thresholds ?? {}) as Record<string, string>;
+    const openingHedge = thresholds[tier] ?? null;
+    const keywords = (bestRow?.commentary_keywords ?? []) as string[];
+    const coreQuestion = bestRow?.core_question ?? null;
+
+    const archetypeVoiceBlock = bestRow
+      ? `\nARCHETYPE (aesthetic, not personality): ${bestRow.name}${coreQuestion ? ` — core question: "${coreQuestion}"` : ""}. Cosine confidence: ${Math.round(bestScore * 100)}%.
+Opening hedge for this confidence tier (use as your first move; do not quote verbatim if it doesn't fit the flow): "${openingHedge ?? ""}"
+Draw from this archetype's vocabulary where natural (do not list, do not overuse, no more than 3-4 of these across the write-up): ${keywords.slice(0, 24).join(", ") || "(none)"}.`
+      : "";
+
     const criticPrompt = `Write 3-4 sentences about this listener. Use ONLY the allowed claims below. \
 Cite the evidence inline (e.g. "across 7 of 12 matchups"). If a strong counter-hypothesis exists, name it. \
-If no claims cleared the threshold, say so plainly — do not invent.
+If no claims cleared the threshold, say so plainly — do not invent. \
+Frame the archetype as what this listener SEEKS from music, not who they are as a person.
+${archetypeVoiceBlock}
 
 ALLOWED CLAIMS:
 ${evidenceBlock}
