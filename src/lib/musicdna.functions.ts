@@ -1239,7 +1239,7 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
 
     // -------- Pull raw evidence --------
     const [archRes, choicesRes] = await Promise.all([
-      supabase.from("archetypes").select("id,name,tagline,signature_axes"),
+      supabase.from("archetypes").select("id,name,tagline,signature_axes,core_question,commentary_keywords,confidence_thresholds"),
       supabase
         .from("choices")
         .select(`
