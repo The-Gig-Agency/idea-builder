@@ -27,6 +27,54 @@ Codes: `NOT_FOUND` (404), `UNAUTHORIZED` (401), `FORBIDDEN` (403),
 
 ## Endpoints
 
+### `POST /api/v1/session`
+
+Start a new MusicDNA session for the authenticated user. Uses the user's
+opening 3 songs (stored on `profiles`) to seed the session vector, pick the
+primary lane, and choose probe candidate lanes.
+
+Response:
+
+```json
+{ "session_id": "…", "lane": "alternative", "lane_confidence": 0.87 }
+```
+
+### `GET /api/v1/session/:id/next`
+
+Return the next pairing (or `null` when the session is out of pairings).
+Also returns progress + probe state so the client can render round X of Y.
+Session ownership is enforced by RLS on the caller's token.
+
+### `POST /api/v1/session/:id/choice`
+
+Body:
+
+```json
+{ "pairing_id": "…", "chosen_song_id": "…", "ms_to_decide": 4230 }
+```
+
+Records the choice, updates the session vector, and returns whatever
+`recordChoiceImpl` returns (updated progress, lane flip signals, etc.).
+
+### `POST /api/v1/session/:id/reveal`
+
+Finalize the session. Runs the pure engine `assignArchetype` over the
+current vector, generates the Analyst reasoning artifacts, calls the Critic
+LLM under the evidence-threshold constraints, and persists the reveal.
+
+Response:
+
+```json
+{
+  "archetypeId": "…",
+  "archetypeName": "Architect",
+  "interpretation": "Across 7 of 12 matchups…",
+  "vector": { "movement": 42, "…": 0 },
+  "allowed_claims": [ … ],
+  "counterarguments": [ … ]
+}
+```
+
 ### `GET /api/v1/share/:token`
 
 Public read of a completed, shared session. Accepts either the opaque
@@ -53,17 +101,6 @@ Response:
   ]
 }
 ```
-
-### Planned (next iteration)
-
-- `POST /api/v1/session` — start a session
-- `POST /api/v1/choice` — submit a pairing choice, get next pairing + progress
-- `GET /api/v1/session/:id` — snapshot of an in-progress session
-- `POST /api/v1/reveal` — finalize + return archetype/commentary
-
-These require moving the interactive loop out of
-`src/lib/musicdna.functions.ts` and into `engine/{session,choice,pairing,critic}.ts`.
-See `engine-migration.md` for the migration order.
 
 ## Versioning policy
 

@@ -40,17 +40,20 @@ src/musicdna/
 
 1. ✅ Engine skeleton + `scoring.ts` + tests.
 2. ✅ `archetypes.ts` + tests — pure assignment, margin, flag reasons.
-3. ✅ `reveal.ts` (public share) + tests, and `GET /api/v1/share/:token`
-   REST endpoint using the same helper `src/lib/share.functions.ts` will be
-   switched to in the next pass.
-4. **Next**: switch `share.functions.ts` and the finalize server fn to import
-   `assignArchetype` / `buildPublicReveal` from the engine (thin wrappers),
-   so web and REST share one code path.
-5. `critic.ts` — prompt building + LLM invocation behind `LLMGateway`.
-6. `pairing.ts` + `session.ts` + `choice.ts` — the interactive loop. Add
-   `POST /api/v1/session`, `POST /api/v1/choice`, `GET /api/v1/session/:id`,
-   `POST /api/v1/reveal`.
-7. Golden-fixture regression tests over historical sessions.
+3. ✅ `reveal.ts` (public share) + tests, and `GET /api/v1/share/:token`.
+4. ✅ `share.functions.ts` and `finalizeSessionImpl` now import
+   `buildPublicReveal` / `assignArchetype` from the engine — web and REST
+   share one code path for scoring, margin, and public share DTOs.
+5. ✅ REST v1 surface for the interactive loop: `POST /api/v1/session`,
+   `GET /api/v1/session/:id/next`, `POST /api/v1/session/:id/choice`,
+   `POST /api/v1/session/:id/reveal`. Routes verify Supabase bearer via
+   `_auth.ts` and delegate to the same `*Impl` helpers the web server
+   functions call. Zero duplicate implementation.
+6. **Next**: extract `critic.ts` (prompt building + LLM gateway) and
+   `pairing.ts` / `session.ts` / `choice.ts` from `musicdna.functions.ts`
+   into pure engine modules behind ports. Routes/server-fns become 3-line
+   wrappers, and golden-fixture tests can pin the interactive loop.
+
 
 ## Testing
 

@@ -1,10 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { buildPublicReveal, type PublicRevealInput } from "@/musicdna/engine/reveal";
 
 // Public read of a single completed session, addressed by an opaque share_token
 // (NOT by the internal session UUID). The token is generated server-side, has
 // no relationship to the auth user, and is only minted for completed readings
 // the user explicitly shared. No PII surfaced.
+//
+// Thin wrapper: DB fetch here, DTO shaping in engine/reveal.ts. The REST
+// endpoint /api/v1/share/:token calls the exact same `buildPublicReveal`.
 export const getPublicSession = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) =>
     z.object({
@@ -50,11 +54,21 @@ export const getPublicSession = createServerFn({ method: "GET" })
     }>)
       .filter((c) => c.chosen && c.rejected)
       .map((c) => ({
-        chosen: c.chosen!.title,
-        chosenArtist: c.chosen!.artist,
-        rejected: c.rejected!.title,
-        rejectedArtist: c.rejected!.artist,
+        chosen_title: c.chosen!.title,
+        chosen_artist: c.chosen!.artist,
+        rejected_title: c.rejected!.title,
+        rejected_artist: c.rejected!.artist,
       }));
 
-    return { session, definingChoices };
+    const reveal = buildPublicReveal({
+      session: session as PublicRevealInput["session"],
+      definingChoices,
+    });
+
+    // Keep the legacy web shape for /s/:token (session + definingChoices),
+    // built from the same engine DTO so there's still one source of truth.
+    return {
+      session,
+      definingChoices: reveal.defining_choices,
+    };
   });
