@@ -337,6 +337,7 @@ async function handleBearer(req: Request) {
     access_token: signIn.data.session.access_token,
     expires_at: signIn.data.session.expires_at ?? null,
   });
+}
 
 async function dispatch(req: Request, action: string) {
   if (!authorized(req)) return err(401, "invalid or missing x-test-harness-secret");
@@ -348,6 +349,7 @@ async function dispatch(req: Request, action: string) {
       case "report": return await handleReport(req);
       case "reset":  return await handleReset(req);
       case "status": return await handleStatus(req);
+      case "bearer": return await handleBearer(req);
       default:       return err(404, `unknown action: ${action}`);
     }
   } catch (e) {
