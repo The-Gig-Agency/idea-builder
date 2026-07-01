@@ -152,6 +152,58 @@ d("REST v1 end-to-end", () => {
     expect(bad.status).toBe(400);
     expect((bad.body.error as Json)?.code).toBe("INVALID_INPUT");
   });
+
+  // Mobile signup path: bootstrap a persona WITHOUT priming opener, then
+  // drive onboarding purely through /api/v1/* + a bearer token. Proves a
+  // Flutter client that just called supabase_flutter.signUp() can complete
+  // onboarding and start a session with zero web-only endpoints.
+  it.runIf(shouldRun)(
+    "mobile signup flow: bearer → /onboarding/opener → /session",
+    async () => {
+      const personaId = `e2e_v1_mobile_${Date.now().toString(36)}`;
+
+      // 1. Bootstrap persona (creates auth user + test_runs row, no opener).
+      const reset = await harness("reset", { persona_id: personaId });
+      expect(reset.ok).toBe(true);
+
+      // 2. Mint bearer for that fresh persona.
+      const bearer = await harness("bearer", { persona_id: personaId });
+      const token = bearer.access_token as string;
+      expect(token).toBeTruthy();
+
+      // 3. POST /api/v1/onboarding/opener — the route Flutter will call.
+      const opener = await v1(
+        "/api/v1/onboarding/opener",
+        { method: "POST", body: JSON.stringify({ songs: OPENER_SONGS }) },
+        token,
+      );
+      expect(opener.status).toBe(200);
+      expect(opener.body.ok).toBe(true);
+      expect(typeof opener.body.lane).toBe("string");
+
+      // 4. /api/v1/session now succeeds.
+      const start = await v1("/api/v1/session", { method: "POST" }, token);
+      expect(start.status).toBe(200);
+      expect(start.body.session_id).toMatch(/^[0-9a-f-]{36}$/i);
+
+      // 5. Unauthenticated call to opener is rejected.
+      const unauth = await v1("/api/v1/onboarding/opener", {
+        method: "POST",
+        body: JSON.stringify({ songs: OPENER_SONGS }),
+      });
+      expect(unauth.status).toBe(401);
+
+      // 6. Bad body is rejected with the uniform error envelope.
+      const bad = await v1(
+        "/api/v1/onboarding/opener",
+        { method: "POST", body: JSON.stringify({ songs: [] }) },
+        token,
+      );
+      expect(bad.status).toBe(400);
+      expect((bad.body.error as Json)?.code).toBe("INVALID_INPUT");
+    },
+    180_000,
+  );
 });
 
 if (!shouldRun) {

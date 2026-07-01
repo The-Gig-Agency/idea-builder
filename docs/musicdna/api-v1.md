@@ -27,6 +27,35 @@ Codes: `NOT_FOUND` (404), `UNAUTHORIZED` (401), `FORBIDDEN` (403),
 
 ## Endpoints
 
+### `POST /api/v1/onboarding/opener`
+
+Post-signup opening analysis. Call this once, immediately after the user
+signs up, with the 3 songs they picked. Runs the LLM analysis (lane guess,
+seed vector, secondary lanes) and persists it to the caller's `profiles`
+row. `POST /api/v1/session` requires this to have completed at least once.
+
+Body:
+
+```json
+{ "songs": ["Fake Empire - The National", "Dreams - Fleetwood Mac", "Space Song - Beach House"] }
+```
+
+- `songs`: exactly 3 free-text strings, each 1–200 chars. Format
+  `"Title - Artist"` is preferred but not required; catalog resolution is
+  server-side.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "lane": "alternative",
+  "lane_confidence": 0.62,
+  "hypothesis": "Three songs in — already a shape, not a portrait…",
+  "secondary_lanes": ["indie", "folk"]
+}
+```
+
 ### `POST /api/v1/session`
 
 Start a new MusicDNA session for the authenticated user. Uses the user's
@@ -101,6 +130,26 @@ Response:
   ]
 }
 ```
+
+## Mobile / Flutter signup flow
+
+Authentication itself is not part of `/api/v1/*`. Clients talk to Supabase
+Auth directly with the appropriate SDK (`supabase_flutter` on mobile,
+`@supabase/supabase-js` on web) for signup, sign-in, password reset, and
+OAuth. Once the SDK returns a session, the client passes its `access_token`
+as `Authorization: Bearer …` to every `/api/v1/*` call.
+
+End-to-end mobile onboarding is three REST calls:
+
+1. `supabase_flutter.signUp(email, password)` — returns a session.
+2. `POST /api/v1/onboarding/opener` with the 3 opening songs — persists the
+   opening analysis to `profiles`.
+3. `POST /api/v1/session` — seeds a session from the profile and returns a
+   `session_id`; the client then loops `next → choice → reveal` and finally
+   reads `GET /api/v1/share/:token` for the public reveal.
+
+`POST /api/v1/session` will error with `INVALID_INPUT` if step 2 has not
+completed for the current user. Rerun the opener with 3 songs and retry.
 
 ## Versioning policy
 
