@@ -1,92 +1,71 @@
-## Context
+# MusicDNA Engine — Service Extraction & /api/v1
 
-You flagged four calibration issues after playing the metal lane:
+You're right on every point. The move isn't "make Flutter work" — it's **separate the domain from the transport**. One engine, many clients (web today, Flutter next, tests always). Below is the concrete refactor.
 
-1. **Overcommits too early** — round 3–4 already sounds certain.
-2. **Copy re-states the axis instead of the choice** — "You want the song to become something" is the same sentence as "songs that go somewhere."
-3. **"You sat with that one" repeats** — hesitation copy has one line, used three times.
-4. **A few opaque lines leak internal vocabulary** ("a singer who isn't asking") and some observations over-leap ("communal → rooms full of people").
-
-None of this touches the pairing engine, the vector math, or the analyst/critic split. It's all voice, pacing, and vocabulary breadth. That's the lens for this plan.
-
-## What we'll change
-
-### 1. Confidence-by-round pacing
-
-Introduce a per-round hedge ladder that wraps the verdict line. Rounds 1–2 stay curious; certainty grows.
+## Target shape
 
 ```text
-1  Interesting.
-2  I think I see a pattern...
-3  Early read...
-4  Starting to believe...
-5  Fairly confident...
-6+ I'm convinced...
+src/musicdna/engine/            ← the IP. Pure TS. Knows nothing about HTTP or React.
+  session.ts        startSession, getSession
+  pairing.ts        selectNextPairing
+  choice.ts         submitChoice
+  scoring.ts        cosine, vector math
+  archetypes.ts     archetype assignment + confidence ladder
+  critic.ts         Critic prompt builder + LLM call
+  reveal.ts         buildReveal, buildShareCard
+  types.ts          shared DTOs (Session, Pairing, Choice, Reveal, …)
+  ports.ts          interfaces: SupabaseGateway, LLMGateway, Clock, Rng
+  index.ts          MusicDNAEngine factory: (deps) => { startSession, submitChoice, … }
+
+src/musicdna/adapters/
+  supabase.ts       SupabaseGateway impl (uses admin OR user client, injected)
+  llm.ts            LLMGateway impl (Lovable AI Gateway)
+
+src/lib/musicdna.functions.ts   ← thin. createServerFn → engine.submitChoice(...)
+src/routes/api/v1/session.ts             POST /api/v1/session
+src/routes/api/v1/session.$id.ts         GET  /api/v1/session/:id
+src/routes/api/v1/choice.ts              POST /api/v1/choice
+src/routes/api/v1/reveal.ts              POST /api/v1/reveal
+src/routes/api/v1/share.$token.ts        GET  /api/v1/share/:token
 ```
 
-Applied in `recordChoice` (the `verdict` builder around line 850) and in the beat/hook generator. Also gate the running-thesis language ("Wide keeps winning", "Conviction over becoming") behind round ≥ 5 AND ≥ 3 supporting choices on that dimension. Before that threshold the beat is descriptive of the single pick, not the pattern.
+Engine takes gateways as constructor deps → same code runs in a server fn, a REST route, or a test with in-memory fakes. No duplicate implementation, ever.
 
-### 2. Comment archetypes (8–12 variants per pole)
+## Verb-based v1 contract
 
-Today `REVEAL[dim].hi/lo` has 3 verdict/why variants. Two problems:
-- The "verdict" is the axis name ("forward motion over stillness") and the "why" often just re-phrases it.
-- 3 variants is not enough — repeats are visible inside a 10-round session.
-
-Restructure each pole into two layers:
-
-```ts
-type PoleCopy = {
-  axis_label: string;          // used ONCE per session per pole, if at all
-  observations: string[];      // 8–12 short lines, each a *different angle*
-  hedges_by_round: [...];      // ladder above
-};
-```
-
-Each `observations` array covers different flavors of the same tradeoff (borrowing your Becoming > Snapshot list). The reveal builder picks by `(session_id + round + dim + direction)` hash so the same session never repeats a line and consecutive rounds don't reuse a flavor.
-
-Also: rotate the "verdict/axis" line out entirely after the first time we've named that axis in the session. Once we've said "songs that go somewhere over songs that hold their shape," subsequent hits on `transformation.hi` skip the axis restatement and go straight to a fresh observation ("You reward ambition over efficiency.", "You don't need the chorus in the first minute.", etc.).
-
-### 3. Hesitation library tied to timing
-
-Replace the two hard-coded strings ("Snap call. No hesitation." / "You sat with that one.") with a timing-bucketed library:
+The client drives the game; it never computes scoring/archetypes/vectors/commentary.
 
 ```text
-< 500ms    Instinct.
-500–1200   Immediate.
-1200–2500  No debate.
-2500–5000  Had to think.
-5000–8000  That was a battle.
-8000+      You really wrestled with that one.
+POST /api/v1/session              → { session_id, first_pairing, progress }
+POST /api/v1/choice               body: { session_id, pairing_id, chosen_song_id, ms_to_decide }
+                                  → { next_pairing | null, progress, confidence, commentary? }
+GET  /api/v1/session/:id          → { session, pairings_so_far, progress, confidence }
+POST /api/v1/reveal               body: { session_id }
+                                  → { archetype, tagline, commentary, confidence, defining_choices, share_token }
+GET  /api/v1/share/:token         → public read (existing share.functions.ts logic, moved to engine)
 ```
 
-Each bucket gets 6–10 variants; pick by hash of (pairing_id + round) so no session repeats a line. Persist the bucket on `choices.metadata` so it's available for the final synthesis ("the two you fought hardest for were X and Y").
+Auth: everything except `/share/:token` requires a Supabase bearer token — verified in the route handler with the same helper the auth middleware uses, then the engine is called with a user-scoped SupabaseGateway. `/api/public/*` is reserved for webhooks; `/api/v1/*` is the authenticated client API.
 
-### 4. Kill opaque lines, soften leaps
+CORS: `OPTIONS` handler + `Access-Control-Allow-*` on every response (including errors) so Flutter and future clients work cross-origin.
 
-- Audit every `why` string for internal-vocabulary phrases. Specifically fix: "a singer who isn't asking", "posture as music", "cathedral over kitchen" without setup, and any line that names a dimension the user hasn't been shown ("becoming", "witness"). Rule: if a smart friend at a bar wouldn't nod, cut it.
-- Soften pole → identity leaps. Rewrite lines like "You hear songs in rooms full of people" as "Early read: you're drawn toward songs that invite people in rather than shutting the world out." Add hedges when observation → identity distance is large (community, perspective, confidence).
-- Add a lightweight lint (dev-only console warn in `recordChoice`) that flags any reveal string containing tokens from a small forbidden list (`becoming`, `witness`, `posture`, `axis`, `dimension`) so we catch regressions.
+## Refactor plan (incremental, no big-bang)
 
-### 5. Lean into the good voice
+1. **Create the engine skeleton** — `src/musicdna/engine/*` with types, ports, and empty function stubs. No behavior change yet.
+2. **Move logic out of `musicdna.functions.ts`** into `engine/*`, one concern at a time (scoring → archetypes → critic → pairing → session/choice → reveal). Each server fn becomes a 3-line wrapper: build gateways from `context`, call engine, return DTO. Web keeps working the whole time.
+3. **Do the same for `share.functions.ts`** — move logic into `engine/reveal.ts`, keep the server fn as a thin wrapper.
+4. **Add `/api/v1/*` server routes** — each route: verify bearer, build gateways, call the same engine method the server fn calls. Zod-validate input. Uniform error envelope `{ error: { code, message } }`.
+5. **Add engine tests** — `src/musicdna/engine/__tests__/*` using in-memory SupabaseGateway + a scripted LLMGateway. Golden fixtures: "user with these 8 choices → Architect at 80% confidence." This is the regression net for cosine/archetype tweaks.
+6. **Document** — `docs/musicdna/engine.md` (ports, DTOs, invariants) and `docs/musicdna/api-v1.md` (endpoints, request/response, auth, errors, versioning policy). Flutter reads only these.
 
-You called out the "front and center, not a background hum" line as the target voice. Rewrite the archetype libraries in that register — punchy, specific, a little irreverent, no therapy-speak. This is a copy pass, done alongside step 2.
+## What stays out of scope for this pass
 
-## Files touched
+- Rate limiting, API keys for non-Supabase clients, OpenAPI spec generation — worth doing, but after the engine boundary exists.
+- Flutter code itself.
+- Renaming `/v1` later: the whole point of shipping `v1` now is we never have to.
 
-- `src/lib/musicdna.functions.ts` — `REVEAL`, `BEAT`, `recordChoice` (verdict/speedBeat builder around 843–856), plus a small `hedgeForRound(round)` helper and `pickObservation(dim, direction, session, round)` selector.
-- No schema changes. Hesitation bucket can go into the existing `choices` row via a nullable JSON column if we already have one; otherwise skipped from persistence and only used in copy (I'll confirm during build).
-- No changes to analyst/critic, pairing selection, lane logic, or scoring.
+## Deliverable of step 1 (this next turn, if you approve)
 
-## What we're explicitly NOT doing
+Just the engine skeleton + ports + DTOs + one migrated concern (`scoring.ts`, since it's pure and easy to test) with a passing test. Web unchanged. Then we iterate concern-by-concern.
 
-- No new dimensions, no changes to lane routing or metal seeds.
-- No AI rewrite of reveal copy — deterministic library only. The critic stays where it is (final synthesis).
-- No changes to the pairing engine or evidence thresholds in the analyst.
-
-## Ticket for later (out of scope)
-
-The lanes-still-missing doc at `docs/musicdna/missing-lanes.md` — no changes here, just noting it's separate.
-
-## Rollout / verification
-
-After the edit: run a metal session end-to-end in the preview, confirm (a) rounds 1–2 don't make identity claims, (b) no reveal line repeats verbatim in 10 rounds, (c) no line uses the forbidden vocabulary, (d) hesitation copy varies with timing bucket.
+Approve and I'll start with step 1.
