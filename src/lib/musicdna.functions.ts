@@ -919,34 +919,14 @@ const BEAT: Record<string, { hi: BeatVariant[]; lo: BeatVariant[] }> = {
   },
 };
 
-function dimSeed(dim: string): number {
-  return dim.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-}
-function pickVariant<T>(arr: T[] | undefined, seed: number): T | undefined {
-  if (!arr || arr.length === 0) return undefined;
-  const i = ((seed % arr.length) + arr.length) % arr.length;
-  return arr[i];
-}
+// dimSeed lives in engine/voice; pickVariant is the same shape as pickByHash.
+import { dimSeed } from "@/musicdna/engine/voice";
+const pickVariant = pickByHash;
 
-// ============ Derived descriptors ============
-// Moods like nostalgic, dreamy, dark, hopeful are NOT stored and NOT scored.
-// They're a READ off the canonical 10 axes — Spotify-style: keep the signal,
-// derive the interpretation. The final synthesis prompt receives these as
-// flavor ("you may call them X if the read supports it"), never as data.
-export function deriveDescriptors(vector: Record<string, number>): string[] {
-  const v = (k: string) => vector[k] ?? 0;
-  const out: string[] = [];
-  if (v("immersion") < -25 && v("tension") < -15 && v("scale") < 0) out.push("nostalgic");
-  if (v("atmosphere") > 25 && v("immersion") > 15 && v("confidence") < 0) out.push("dreamy");
-  if (v("tension") > 25 && v("community") < 0 && v("texture") < -10) out.push("dark");
-  if (v("movement") > 15 && v("tension") < -10 && v("scale") > 0) out.push("hopeful");
-  if (v("confidence") < -15 && v("perspective") < -10 && v("atmosphere") > 0) out.push("romantic");
-  if (v("movement") > 25 && v("confidence") > 15 && v("tension") > 0) out.push("kinetic");
-  if (v("transformation") > 20 && v("scale") > 10) out.push("transporting");
-  if (v("texture") < -20 && v("confidence") < -10) out.push("raw");
-  if (v("scale") < -15 && v("atmosphere") > 10 && v("tension") < 0) out.push("intimate");
-  return out;
-}
+// Derived descriptors — pure read off the 10 axes, kept in the engine so the
+// synthesis prompt and any future client share one set of thresholds.
+export { deriveDescriptors } from "@/musicdna/engine/descriptors";
+
 
 
 
