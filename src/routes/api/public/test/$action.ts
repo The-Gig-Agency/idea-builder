@@ -23,7 +23,7 @@ import {
   getMyResultImpl,
 } from "@/lib/musicdna.functions";
 
-type Action = "opener" | "next" | "choice" | "report" | "reset" | "status";
+type Action = "opener" | "next" | "choice" | "report" | "reset" | "status" | "bearer";
 
 const PERSONA_RE = /^[a-zA-Z0-9_.\-:]{1,80}$/;
 
@@ -297,6 +297,46 @@ async function handleStatus(req: Request) {
   if (!run.data) return err(404, "unknown persona_id");
   return json({ ok: true, run: run.data });
 }
+
+// Mint a fresh Supabase access token for a persona, so agent e2e tests can
+// hit the real bearer-protected /api/v1/* routes end-to-end. Resets the
+// user's password to a known value then signs in — service-role only, gated
+// by AGENT_TEST_HARNESS_KEY.
+async function handleBearer(req: Request) {
+  const body = PersonaOnly.parse(await req.json());
+  const admin = await getAdmin();
+  const run = await admin
+    .from("test_runs")
+    .select("user_id")
+    .eq("persona_id", body.persona_id)
+    .maybeSingle();
+  if (!run.data?.user_id) {
+    return err(404, "unknown persona_id — call /opener first");
+  }
+
+  const { createClient } = await import("@supabase/supabase-js");
+  const email = `persona-${body.persona_id.toLowerCase().replace(/[^a-z0-9._-]/g, "_")}@test.musicdna.local`;
+  const password = `${body.persona_id}-Harness-${run.data.user_id.slice(0, 8)}!Aa1`;
+  const updated = await admin.auth.admin.updateUserById(run.data.user_id, { password });
+  if (updated.error) return err(500, `password reset failed: ${updated.error.message}`);
+
+  const url = process.env.SUPABASE_URL;
+  const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !anon) return err(500, "SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY missing");
+  const client = createClient(url, anon, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+  const signIn = await client.auth.signInWithPassword({ email, password });
+  if (signIn.error || !signIn.data.session) {
+    return err(500, `signInWithPassword failed: ${signIn.error?.message ?? "no session"}`);
+  }
+  return json({
+    ok: true,
+    persona_id: body.persona_id,
+    user_id: run.data.user_id,
+    access_token: signIn.data.session.access_token,
+    expires_at: signIn.data.session.expires_at ?? null,
+  });
 
 async function dispatch(req: Request, action: string) {
   if (!authorized(req)) return err(401, "invalid or missing x-test-harness-secret");
