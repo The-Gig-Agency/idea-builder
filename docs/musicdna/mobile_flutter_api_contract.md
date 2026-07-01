@@ -32,6 +32,7 @@ Mobile auth is split:
   - sign out
   - session restore
 - MusicDNA REST:
+  - commit opening three songs
   - start session
   - fetch next pairing
   - submit choice
@@ -77,7 +78,62 @@ Current codes:
 
 ## Endpoint Set
 
-### 1. Start Session
+### 1. Commit Opening Three
+
+`POST /api/v1/onboarding/opener`
+
+Purpose:
+
+- Persist the user's opening three songs after signup
+- Generate the onboarding hypothesis/analysis payload
+- Seed the later session start flow with saved profile priors
+
+Request:
+
+```json
+{
+  "songs": ["A Forest — The Cure", "Ceremony — New Order", "Blue Monday — New Order"]
+}
+```
+
+Response example:
+
+```json
+{
+  "lane": "alternative",
+  "confidence": 0.65,
+  "secondary_lanes": ["electronic"],
+  "reasoning": ["You keep rewarding propulsion over polish."],
+  "hypothesis": "Three songs in. Already a shape, not a portrait — let's keep going.",
+  "candidate_dimensions": {
+    "movement": 62,
+    "atmosphere": 48
+  },
+  "per_song": [
+    {
+      "input": "A Forest — The Cure",
+      "lane": "alternative",
+      "source": "catalog",
+      "canon_id": "uuid"
+    }
+  ],
+  "canon_matches": [
+    {
+      "input": "A Forest — The Cure",
+      "song_id": "uuid",
+      "title": "A Forest",
+      "artist": "The Cure",
+      "primary_lane": "post_punk_new_wave"
+    }
+  ],
+  "reaction": "Three songs in. Already a shape, not a portrait — let's keep going.",
+  "observation": "Three songs in. Already a shape, not a portrait — let's keep going.",
+  "fork": "",
+  "stakes": ""
+}
+```
+
+### 2. Start Session
 
 `POST /api/v1/session`
 
@@ -103,7 +159,7 @@ Response:
 }
 ```
 
-### 2. Get Next Pairing
+### 3. Get Next Pairing
 
 `GET /api/v1/session/{sessionId}/next`
 
@@ -158,7 +214,7 @@ Completed response example:
 }
 ```
 
-### 3. Submit Choice
+### 4. Submit Choice
 
 `POST /api/v1/session/{sessionId}/choice`
 
@@ -194,7 +250,7 @@ Response example:
 }
 ```
 
-### 4. Finalize Reveal
+### 5. Finalize Reveal
 
 `POST /api/v1/session/{sessionId}/reveal`
 
@@ -222,7 +278,7 @@ Response example:
 }
 ```
 
-### 5. Public Share
+### 6. Public Share
 
 `GET /api/v1/share/{token}`
 
@@ -261,7 +317,6 @@ Response example:
 
 These flows still appear to live outside the current `/api/v1` surface:
 
-- opening-song analysis submission
 - session history / resume endpoints
 
 Flutter should not assume those routes exist until they are added to the API
@@ -272,11 +327,13 @@ and documented in [`docs/musicdna/api-v1.md`](/Users/rastakit/tga-workspace/idea
 Recommended mobile layering:
 
 - data source:
-  - raw HTTP requests to `/api/v1/session*` and `/api/v1/share/*`
+  - raw HTTP requests to `/api/v1/onboarding/opener`, `/api/v1/session*`,
+    and `/api/v1/share/*`
 - repository:
   - maps response DTOs to domain entities
   - maps the shared error envelope to typed failures
 - use cases:
+  - commit opening three songs
   - start session
   - fetch next pairing
   - submit choice

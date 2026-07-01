@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const musicDnaApiV1Paths = {
+  onboardingOpener: "/api/v1/onboarding/opener",
   startSession: "/api/v1/session",
   nextPairing: (sessionId: string) => `/api/v1/session/${sessionId}/next`,
   submitChoice: (sessionId: string) => `/api/v1/session/${sessionId}/choice`,
@@ -22,6 +23,40 @@ export const musicDnaErrorEnvelopeSchema = z.object({
     code: musicDnaErrorCodeSchema,
     message: z.string(),
   }),
+});
+
+export const onboardingOpenerRequestSchema = z.object({
+  songs: z.array(z.string().trim().min(1).max(200)).length(3),
+});
+
+export const openerPerSongSchema = z.object({
+  input: z.string(),
+  lane: z.string(),
+  source: z.enum(["llm", "catalog"]),
+  canon_id: z.string().uuid().optional(),
+});
+
+export const openerCanonMatchSchema = z.object({
+  input: z.string(),
+  song_id: z.string().uuid(),
+  title: z.string(),
+  artist: z.string(),
+  primary_lane: z.string(),
+});
+
+export const onboardingOpenerResponseSchema = z.object({
+  lane: z.string(),
+  confidence: z.number(),
+  secondary_lanes: z.array(z.string()).default([]),
+  reasoning: z.array(z.string()).default([]),
+  hypothesis: z.string(),
+  candidate_dimensions: z.record(z.string(), z.number()).default({}),
+  per_song: z.array(openerPerSongSchema).default([]),
+  canon_matches: z.array(openerCanonMatchSchema).default([]),
+  reaction: z.string(),
+  observation: z.string(),
+  fork: z.string(),
+  stakes: z.string(),
 });
 
 export const startSessionRequestSchema = z.object({}).strict();
@@ -134,6 +169,8 @@ export const shareResponseSchema = z.object({
 });
 
 export type MusicDnaErrorEnvelope = z.infer<typeof musicDnaErrorEnvelopeSchema>;
+export type OnboardingOpenerRequest = z.infer<typeof onboardingOpenerRequestSchema>;
+export type OnboardingOpenerResponse = z.infer<typeof onboardingOpenerResponseSchema>;
 export type StartSessionRequest = z.infer<typeof startSessionRequestSchema>;
 export type StartSessionResponse = z.infer<typeof startSessionResponseSchema>;
 export type NextPairingResponse = z.infer<typeof nextPairingResponseSchema>;
