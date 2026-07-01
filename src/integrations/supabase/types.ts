@@ -16,32 +16,44 @@ export type Database = {
     Tables: {
       archetypes: {
         Row: {
+          commentary_keywords: string[]
+          confidence_thresholds: Json
+          core_question: string | null
           created_at: string
           description: string | null
           id: string
           name: string
           signature_axes: Json
           signature_signals: string[]
+          signature_tradeoffs: Json
           tagline: string | null
           updated_at: string
         }
         Insert: {
+          commentary_keywords?: string[]
+          confidence_thresholds?: Json
+          core_question?: string | null
           created_at?: string
           description?: string | null
           id?: string
           name: string
           signature_axes?: Json
           signature_signals?: string[]
+          signature_tradeoffs?: Json
           tagline?: string | null
           updated_at?: string
         }
         Update: {
+          commentary_keywords?: string[]
+          confidence_thresholds?: Json
+          core_question?: string | null
           created_at?: string
           description?: string | null
           id?: string
           name?: string
           signature_axes?: Json
           signature_signals?: string[]
+          signature_tradeoffs?: Json
           tagline?: string | null
           updated_at?: string
         }
