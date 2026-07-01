@@ -639,7 +639,12 @@ export type Database = {
       }
       sessions: {
         Row: {
+          archetype_flag_reason: string | null
+          archetype_flagged: boolean
           archetype_id: string | null
+          archetype_margin: number | null
+          archetype_score: number | null
+          archetype_top3: Json
           completed_at: string | null
           created_at: string
           id: string
@@ -656,7 +661,12 @@ export type Database = {
           vector: Json
         }
         Insert: {
+          archetype_flag_reason?: string | null
+          archetype_flagged?: boolean
           archetype_id?: string | null
+          archetype_margin?: number | null
+          archetype_score?: number | null
+          archetype_top3?: Json
           completed_at?: string | null
           created_at?: string
           id?: string
@@ -673,7 +683,12 @@ export type Database = {
           vector?: Json
         }
         Update: {
+          archetype_flag_reason?: string | null
+          archetype_flagged?: boolean
           archetype_id?: string | null
+          archetype_margin?: number | null
+          archetype_score?: number | null
+          archetype_top3?: Json
           completed_at?: string | null
           created_at?: string
           id?: string
