@@ -289,7 +289,6 @@ export { PRIOR_SEED_WEIGHT, seedVectorFromPriors };
 
 
 export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
-export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("opening_lane, opening_lane_confidence, opening_analysis_json")
