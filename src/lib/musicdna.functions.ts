@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { assignArchetype } from "@/musicdna/engine/archetypes";
+import { CRITIC_PERSONA as PERSONA, CRITIC_VOICE_EDITORIAL as VOICE } from "@/musicdna/engine/critic";
+import { callLovableAi, DEFAULT_MODEL as MODEL } from "@/musicdna/adapters/llm-gateway";
 
 // Shared Supabase client type used by the *Impl exports below. The test
 // harness (src/routes/api/public/test/$action.ts) calls these Impl variants
@@ -11,8 +13,7 @@ import { assignArchetype } from "@/musicdna/engine/archetypes";
 // the auth middleware so agents can drive end-to-end runs without auth.
 export type AuthedSupabase = SupabaseClient<Database>;
 
-const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
+
 
 // Canonical 10 axes. Source of truth: public.axes (9 rows) + transformation.
 // Moods (nostalgic, dreamy, dark, hopeful, romantic, etc.) are DERIVED from
@@ -38,52 +39,13 @@ const DIM_LABEL: Record<string, { hi: string; lo: string }> = {
 };
 
 
-// ============ Shared persona ============
-// Prepended to every system prompt so the model holds one consistent voice:
-// cool, edgy, insightful — a music critic with taste and teeth.
-const PERSONA = `You are the critic-in-residence for MusicDNA. Think old Rolling Stone in its mean years crossed with a late-night college DJ who actually reads. A music fan first, an analyst second.
-You are cool the way good critics are cool: you've heard everything, you owe nobody a compliment, and you'd rather be interesting than nice.
-You have a point of view. You take swings. You back them up. You never hedge into mush.
-Edgy means honest, not mean — a little uncomfortable, never cruel, never edgelord.
-
-THE JOB: This is a conversation about music, not a personality assessment. The point is not to explain the listener. The point is to make them curious about themselves. Leave them wanting one more pick, one more read, one more argument.
-
-VOICE: Talk like a friend at a record store who just clocked something interesting about you. Fragments are fine. One-line beats hit hard. Use line breaks for rhythm. Lead with reaction before inference. Land on a question or a half-promise that pulls the next pick.
-
-EXAMPLES — don't do this:
-"Your selections indicate a preference for atmospheric compositions characterized by immersive sonic environments and transformational emotional arcs."
-
-Do this:
-"You keep choosing songs that move.
-Not fast.
-Just forward.
-What happens if I throw you something that stands still?"
-
-Or:
-"Cracked voice over the perfect take. Every time.
-You don't want the song fixed. You want it bleeding.
-Let's see if that holds."
-
-HARD RULES: no platitudes, no horoscope language, no therapy-speak, no "music lover", no "vibes", no "journey", no genre labels as analysis, no "you like" — use "you reward", "you trust", "you keep choosing". Short sentences hit harder than long ones. Never flatter. Never apologize for the read. End on something that makes them want to play another round.`;
-
-const VOICE = `${PERSONA}
-Mode: short editorial observation. Specific, restrained, slightly uncomfortable. One observation per sentence.`;
-
+// PERSONA + VOICE (imported above) live in @/musicdna/engine/critic so the
+// exact same critic voice ships to any client. `ai()` delegates to the
+// LLMGateway adapter — one place owns transport + auth.
 async function ai(messages: Array<{ role: string; content: string }>) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY missing");
-  const res = await fetch(AI_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages }),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`AI ${res.status}: ${txt.slice(0, 200)}`);
-  }
-  const json = await res.json();
-  return (json.choices?.[0]?.message?.content ?? "").trim();
+  return callLovableAi(messages, { model: MODEL });
 }
+
 
 // ============ Lane classifier ============
 const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "r_and_b", "general"] as const;
