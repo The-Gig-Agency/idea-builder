@@ -139,6 +139,8 @@ function AdminPage() {
 
       {tab === "decade_prompts" ? (
         <DecadePromptsEditor />
+      ) : tab === "residuals" ? (
+        <ResidualsPanel />
       ) : (
         <EntityTable
           key={tab}
@@ -147,7 +149,7 @@ function AdminPage() {
         />
       )}
 
-      {editing && tab !== "decade_prompts" && (
+      {editing && tab !== "decade_prompts" && tab !== "residuals" && (
         <EditDrawer
           entity={tab as Exclude<Entity, "decade_prompts">}
           row={editing.row}
