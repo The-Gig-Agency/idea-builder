@@ -18,6 +18,7 @@ import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as Authenticated1980RouteImport } from './routes/_authenticated/1980'
+import { Route as ApiV1ShareTokenRouteImport } from './routes/api/v1/share.$token'
 import { Route as ApiPublicTestActionRouteImport } from './routes/api/public/test/$action'
 
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -64,6 +65,11 @@ const Authenticated1980Route = Authenticated1980RouteImport.update({
   path: '/1980',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiV1ShareTokenRoute = ApiV1ShareTokenRouteImport.update({
+  id: '/api/v1/share/$token',
+  path: '/api/v1/share/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTestActionRoute = ApiPublicTestActionRouteImport.update({
   id: '/api/public/test/$action',
   path: '/api/public/test/$action',
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
+  '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
+  '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/s/$sessionId': typeof SSessionIdRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
+  '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/s/$sessionId'
     | '/api/public/test/$action'
+    | '/api/v1/share/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/s/$sessionId'
     | '/api/public/test/$action'
+    | '/api/v1/share/$token'
   id:
     | '__root__'
     | '/'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/s/$sessionId'
     | '/api/public/test/$action'
+    | '/api/v1/share/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -150,6 +162,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   SSessionIdRoute: typeof SSessionIdRoute
   ApiPublicTestActionRoute: typeof ApiPublicTestActionRoute
+  ApiV1ShareTokenRoute: typeof ApiV1ShareTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -217,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Authenticated1980RouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/v1/share/$token': {
+      id: '/api/v1/share/$token'
+      path: '/api/v1/share/$token'
+      fullPath: '/api/v1/share/$token'
+      preLoaderRoute: typeof ApiV1ShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/test/$action': {
       id: '/api/public/test/$action'
       path: '/api/public/test/$action'
@@ -250,6 +270,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   SSessionIdRoute: SSessionIdRoute,
   ApiPublicTestActionRoute: ApiPublicTestActionRoute,
+  ApiV1ShareTokenRoute: ApiV1ShareTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

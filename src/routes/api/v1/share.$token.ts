@@ -18,7 +18,7 @@ import {
   errorResponse,
   jsonResponse,
   preflightResponse,
-} from "../_cors";
+} from "./_cors";
 
 const TokenSchema = z.string().min(8).max(64);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
