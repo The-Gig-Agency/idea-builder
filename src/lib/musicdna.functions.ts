@@ -802,47 +802,17 @@ const POLES: Record<string, { hi: Pole; lo: Pole }> = {
   },
 };
 
-// Confidence ladder — hedges the reveal by round so the engine sounds like
-// someone discovering your taste, not pretending they already know.
-const HEDGES = [
-  "Interesting.",              // round 1
-  "I think I see a pattern.",  // round 2
-  "Early read:",               // round 3
-  "Starting to believe:",      // round 4
-  "Fairly confident:",         // round 5
-  "I'm convinced:",            // round 6+
-];
+// Voice helpers — hedge ladder, hesitation copy, hash-stable variant picking
+// live in the engine so both web and any future client render the same beat.
+import {
+  FORBIDDEN_TOKENS,
+  HEDGES,
+  HESITATION_BUCKETS,
+  hedgeForRound,
+  hesitationFor,
+  pickByHash,
+} from "@/musicdna/engine/voice";
 
-// Hesitation library — timing turns into copy. Each bucket has enough
-// variants that a 20-round session never repeats a line.
-const HESITATION_BUCKETS: Array<{ max: number; lines: string[] }> = [
-  { max: 500, lines: ["Instinct.", "Reflex.", "No thought required.", "That was pre-loaded.", "Zero hesitation."] },
-  { max: 1200, lines: ["Immediate.", "Instant call.", "That wasn't a decision.", "Snap verdict.", "You didn't blink."] },
-  { max: 2500, lines: ["No debate.", "Quick call.", "Clean pick.", "You knew.", "That landed fast."] },
-  { max: 5000, lines: ["Had to think.", "You took a second there.", "Interesting pause.", "That wasn't automatic.", "You weighed it."] },
-  { max: 8000, lines: ["That one wasn't obvious.", "You weighed both.", "That was close.", "You almost changed your mind.", "No instant answer there.", "You gave that some respect."] },
-  { max: Infinity, lines: ["You really wrestled with that one.", "You stared this one down.", "That was a battle.", "You took the long look.", "That one earned its answer."] },
-];
-
-// Words that leak internal vocabulary into user copy. Dev-only guard —
-// warns if a reveal string contains any of these tokens.
-const FORBIDDEN_TOKENS = ["becoming", "witness", "posture", "axis", "dimension"];
-
-function pickByHash<T>(arr: T[] | undefined, seed: number): T | undefined {
-  if (!arr || arr.length === 0) return undefined;
-  const i = ((seed % arr.length) + arr.length) % arr.length;
-  return arr[i];
-}
-
-function hesitationFor(ms: number | null, seed: number): string {
-  if (ms == null) return "";
-  const bucket = HESITATION_BUCKETS.find((b) => ms < b.max);
-  return pickByHash(bucket?.lines, seed) ?? "";
-}
-
-function hedgeForRound(round: number): string {
-  return HEDGES[Math.min(Math.max(round, 1) - 1, HEDGES.length - 1)];
-}
 
 // Fragmented beats for the running thesis — short lines plus a hook
 // question/half-promise that pulls the next pick. Hedged on purpose.
