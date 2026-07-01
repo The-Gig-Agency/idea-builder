@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as MeRouteImport } from './routes/me'
@@ -27,6 +28,11 @@ import { Route as ApiV1SessionIdRevealRouteImport } from './routes/api/v1/sessio
 import { Route as ApiV1SessionIdNextRouteImport } from './routes/api/v1/session.$id.next'
 import { Route as ApiV1SessionIdChoiceRouteImport } from './routes/api/v1/session.$id.choice'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/me': typeof MeRoute
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/1980': typeof Authenticated1980Route
   '/admin': typeof AuthenticatedAdminRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/me': typeof MeRoute
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/1980': typeof Authenticated1980Route
   '/admin': typeof AuthenticatedAdminRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/me': typeof MeRoute
   '/onboarding': typeof OnboardingRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/_authenticated/1980': typeof Authenticated1980Route
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/me'
     | '/onboarding'
     | '/privacy'
+    | '/terms'
     | '/1980'
     | '/admin'
     | '/profile'
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/me'
     | '/onboarding'
     | '/privacy'
+    | '/terms'
     | '/1980'
     | '/admin'
     | '/profile'
@@ -213,6 +224,7 @@ export interface FileRouteTypes {
     | '/me'
     | '/onboarding'
     | '/privacy'
+    | '/terms'
     | '/_authenticated/1980'
     | '/_authenticated/admin'
     | '/_authenticated/profile'
@@ -233,6 +245,7 @@ export interface RootRouteChildren {
   MeRoute: typeof MeRoute
   OnboardingRoute: typeof OnboardingRoute
   PrivacyRoute: typeof PrivacyRoute
+  TermsRoute: typeof TermsRoute
   SSessionIdRoute: typeof SSessionIdRoute
   ApiV1SessionRoute: typeof ApiV1SessionRouteWithChildren
   ApiPublicTestActionRoute: typeof ApiPublicTestActionRoute
@@ -242,6 +255,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -402,6 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   MeRoute: MeRoute,
   OnboardingRoute: OnboardingRoute,
   PrivacyRoute: PrivacyRoute,
+  TermsRoute: TermsRoute,
   SSessionIdRoute: SSessionIdRoute,
   ApiV1SessionRoute: ApiV1SessionRouteWithChildren,
   ApiPublicTestActionRoute: ApiPublicTestActionRoute,

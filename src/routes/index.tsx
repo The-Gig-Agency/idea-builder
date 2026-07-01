@@ -262,9 +262,20 @@ function Footer() {
             MusicDNA · v0 · 2026
           </span>
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-          Music is the language. Identity is the destination.
-        </p>
+        <div className="flex items-center gap-6">
+          <Link
+            to="/privacy"
+            className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Privacy
+          </Link>
+          <Link
+            to="/terms"
+            className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Terms
+          </Link>
+        </div>
       </div>
     </footer>
   );
