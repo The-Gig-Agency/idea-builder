@@ -149,3 +149,61 @@ export const adminSetDiagnosticWeight = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// --------- Residual review queue ---------
+// Sessions where the archetype match didn't clear the confidence bar.
+// This is the "did any listener escape all current archetypes?" queue:
+// - low_score: best cosine < floor (no archetype really fit)
+// - ambiguous: top 2 within margin (the ontology can't distinguish them)
+// - no_archetypes: catalog was empty
+// Also returns a stats summary so the admin can watch the residual rate
+// trend over time — new archetypes should be born from this, not vibes.
+export const adminResidualQueue = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      limit: z.number().int().min(1).max(200).default(50),
+      reason: z.enum(["low_score", "ambiguous", "no_archetypes", "any"]).default("any"),
+      lane: z.string().max(40).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const admin = await assertAdminAndGetClient(context.userId);
+
+    // Totals for the residual rate — completed sessions vs flagged ones.
+    const totalP = admin.from("sessions").select("id", { count: "exact", head: true })
+      .not("completed_at", "is", null);
+    const flaggedP = admin.from("sessions").select("id", { count: "exact", head: true })
+      .eq("archetype_flagged", true);
+    const [totalRes, flaggedRes] = await Promise.all([totalP, flaggedP]);
+    if (totalRes.error) throw new Error(totalRes.error.message);
+    if (flaggedRes.error) throw new Error(flaggedRes.error.message);
+
+    // Per-reason counts.
+    const reasons: Record<string, number> = { low_score: 0, ambiguous: 0, no_archetypes: 0 };
+    for (const r of Object.keys(reasons)) {
+      const { count, error } = await admin.from("sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("archetype_flagged", true)
+        .eq("archetype_flag_reason", r);
+      if (error) throw new Error(error.message);
+      reasons[r] = count ?? 0;
+    }
+
+    let q = admin.from("sessions")
+      .select("id, user_id, lane, lane_confidence, completed_at, archetype_top3, archetype_score, archetype_margin, archetype_flag_reason, share_token")
+      .eq("archetype_flagged", true)
+      .order("completed_at", { ascending: false, nullsFirst: false })
+      .limit(data.limit);
+    if (data.reason !== "any") q = q.eq("archetype_flag_reason", data.reason);
+    if (data.lane) q = q.eq("lane", data.lane);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+
+    return {
+      total: totalRes.count ?? 0,
+      flagged: flaggedRes.count ?? 0,
+      reasons,
+      rows: (rows ?? []) as JsonRow[],
+    };
+  });

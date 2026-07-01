@@ -9,6 +9,7 @@ import {
   adminUpsert,
   adminDelete,
   adminSetDiagnosticWeight,
+  adminResidualQueue,
 } from "@/lib/admin.functions";
 import {
   listDecadePrompts,
@@ -27,12 +28,13 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 type Entity = "songs" | "pairings" | "archetypes";
-type Tab = Entity | "decade_prompts";
+type Tab = Entity | "decade_prompts" | "residuals";
 const ENTITIES: { key: Tab; label: string }[] = [
   { key: "songs", label: "Songs" },
   { key: "pairings", label: "Pairings" },
   { key: "archetypes", label: "Archetypes" },
   { key: "decade_prompts", label: "Decade Prompts" },
+  { key: "residuals", label: "Residuals" },
 ];
 
 type Row = Record<string, unknown> & { id: string };
@@ -109,7 +111,7 @@ function AdminPage() {
             Edit songs, pairings, and archetypes. Changes go live immediately.
           </p>
         </div>
-        {tab !== "decade_prompts" && (
+        {tab !== "decade_prompts" && tab !== "residuals" && (
           <button
             onClick={() => setEditing({ row: null })}
             className="rounded-sm bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
@@ -137,6 +139,8 @@ function AdminPage() {
 
       {tab === "decade_prompts" ? (
         <DecadePromptsEditor />
+      ) : tab === "residuals" ? (
+        <ResidualsPanel />
       ) : (
         <EntityTable
           key={tab}
@@ -145,7 +149,7 @@ function AdminPage() {
         />
       )}
 
-      {editing && tab !== "decade_prompts" && (
+      {editing && tab !== "decade_prompts" && tab !== "residuals" && (
         <EditDrawer
           entity={tab as Exclude<Entity, "decade_prompts">}
           row={editing.row}
@@ -651,6 +655,144 @@ function NewPromptInline({ onCreate }: { onCreate: (text: string) => Promise<voi
       >
         Cancel
       </button>
+    </div>
+  );
+}
+
+// ---------------- Residuals: sessions the current archetype set couldn't confidently place ----------------
+function ResidualsPanel() {
+  const load = useServerFn(adminResidualQueue);
+  const [reason, setReason] = useState<"any" | "low_score" | "ambiguous" | "no_archetypes">("any");
+  const [lane, setLane] = useState("");
+
+  const q = useQuery({
+    queryKey: ["admin", "residuals", reason, lane],
+    queryFn: () => load({ data: { limit: 100, reason, lane: lane || undefined } }),
+  });
+
+  const total = q.data?.total ?? 0;
+  const flagged = q.data?.flagged ?? 0;
+  const rate = total > 0 ? Math.round((flagged / total) * 1000) / 10 : 0;
+  const reasons = q.data?.reasons ?? { low_score: 0, ambiguous: 0, no_archetypes: 0 };
+
+  return (
+    <div>
+      <div className="mb-6 rounded-sm border hairline bg-muted/20 p-4">
+        <p className="eyebrow mb-2">Residual review</p>
+        <p className="text-sm text-muted-foreground mb-4 max-w-2xl">
+          Sessions the current archetype set couldn't confidently place. When the same shape keeps
+          showing up here — same lane, same near-tied top 3, same "no fit" — that's the signal that
+          a new archetype may need to be born. Not before.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+          <Stat label="Completed" value={total.toLocaleString()} />
+          <Stat label="Flagged" value={flagged.toLocaleString()} />
+          <Stat label="Residual rate" value={`${rate}%`} />
+          <Stat label="Low score" value={reasons.low_score.toLocaleString()} tone="warn" />
+          <Stat label="Ambiguous" value={reasons.ambiguous.toLocaleString()} tone="warn" />
+        </div>
+      </div>
+
+      <div className="flex gap-3 items-center mb-3 flex-wrap">
+        <select
+          value={reason}
+          onChange={(e) => setReason(e.target.value as typeof reason)}
+          className="border hairline rounded-sm bg-background px-3 py-1.5 text-sm"
+        >
+          <option value="any">All reasons</option>
+          <option value="low_score">Low score (best cosine below floor)</option>
+          <option value="ambiguous">Ambiguous (top 2 near-tied)</option>
+          <option value="no_archetypes">No archetypes matched</option>
+        </select>
+        <select
+          value={lane}
+          onChange={(e) => setLane(e.target.value)}
+          className="border hairline rounded-sm bg-background px-3 py-1.5 text-sm"
+        >
+          <option value="">All lanes</option>
+          {["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "r_and_b", "general"].map((l) => (
+            <option key={l} value={l}>{l}</option>
+          ))}
+        </select>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {q.data?.rows.length ?? 0} rows{q.isFetching ? " · loading…" : ""}
+        </span>
+      </div>
+
+      {q.isError && (
+        <p className="text-sm text-destructive">
+          {q.error instanceof Error ? q.error.message : "Failed to load residuals."}
+        </p>
+      )}
+
+      <div className="border hairline rounded-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="text-left px-3 py-2">Completed</th>
+              <th className="text-left px-3 py-2">Lane</th>
+              <th className="text-left px-3 py-2">Reason</th>
+              <th className="text-left px-3 py-2">Score</th>
+              <th className="text-left px-3 py-2">Margin</th>
+              <th className="text-left px-3 py-2">Top 3</th>
+              <th className="text-left px-3 py-2">Session</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(q.data?.rows ?? []).map((row) => {
+              const r = row as Record<string, unknown>;
+              const top3 = (r.archetype_top3 as Array<{ name: string; score: number }> | null) ?? [];
+              const share = r.share_token as string | null;
+              const completed = r.completed_at as string | null;
+              return (
+                <tr key={r.id as string} className="border-t hairline">
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    {completed ? new Date(completed).toLocaleString() : "—"}
+                  </td>
+                  <td className="px-3 py-2">{(r.lane as string) || "—"}</td>
+                  <td className="px-3 py-2">
+                    <span className="rounded-sm bg-amber-500/10 text-amber-500 px-2 py-0.5 text-xs font-mono">
+                      {r.archetype_flag_reason as string}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{(r.archetype_score as number | null)?.toFixed(3) ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{(r.archetype_margin as number | null)?.toFixed(3) ?? "—"}</td>
+                  <td className="px-3 py-2 text-xs">
+                    {top3.length
+                      ? top3.map((t) => `${t.name} (${t.score.toFixed(2)})`).join(" · ")
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    {share ? (
+                      <Link to="/s/$sessionId" params={{ sessionId: share }} className="underline text-xs">
+                        view
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">no share</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!q.isLoading && (q.data?.rows.length ?? 0) === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  Nothing flagged. Either every listener fit an archetype, or nobody's finished a session yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`text-2xl font-mono ${tone === "warn" ? "text-amber-500" : ""}`}>{value}</p>
     </div>
   );
 }
