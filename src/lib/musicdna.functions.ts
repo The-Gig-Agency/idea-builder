@@ -1376,8 +1376,10 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       .slice(0, 5);
 
     // -------- Archetype (cosine over vector) --------
+    // Score every archetype, keep top 3, and flag residuals so we can build
+    // the "did any listener escape all current archetypes?" review queue.
     const vector = (session.vector ?? {}) as Record<string, number>;
-    let best = { id: null as string | null, name: "", score: -Infinity };
+    const scored: { id: string; name: string; score: number }[] = [];
     for (const a of archetypes) {
       const axes = (a.signature_axes ?? {}) as Record<string, number>;
       const keys = Object.keys(axes);
@@ -1390,7 +1392,37 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
       }
       const denom = Math.sqrt(magA) * Math.sqrt(magB);
       const score = denom > 0 ? dot / denom : 0;
-      if (score > best.score) best = { id: a.id, name: a.name, score };
+      scored.push({ id: a.id, name: a.name, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const top3 = scored.slice(0, 3).map((s) => ({
+      archetype_id: s.id,
+      name: s.name,
+      score: Math.round(s.score * 1000) / 1000,
+    }));
+    const best = scored[0]
+      ? { id: scored[0].id as string | null, name: scored[0].name, score: scored[0].score }
+      : { id: null as string | null, name: "", score: -Infinity };
+    const runnerUp = scored[1]?.score ?? 0;
+    const margin = scored[0] ? Math.max(0, scored[0].score - runnerUp) : 0;
+
+    // Residual thresholds — tunable. Cosine on unit-ish vectors: ~0.7+ is a
+    // confident match, <0.5 says the current archetype set didn't really fit
+    // this listener. Flag them so we can review whether a new archetype
+    // needs to be born (vs the closest-fit silently "winning").
+    const ARCHETYPE_SCORE_FLOOR = 0.5;
+    const ARCHETYPE_MARGIN_FLOOR = 0.05;
+    let archetypeFlagged = false;
+    let archetypeFlagReason: string | null = null;
+    if (!scored.length) {
+      archetypeFlagged = true;
+      archetypeFlagReason = "no_archetypes";
+    } else if (scored[0].score < ARCHETYPE_SCORE_FLOOR) {
+      archetypeFlagged = true;
+      archetypeFlagReason = "low_score";
+    } else if (margin < ARCHETYPE_MARGIN_FLOOR) {
+      archetypeFlagged = true;
+      archetypeFlagReason = "ambiguous";
     }
 
     // -------- Log Analyst (deterministic, no model call) --------
