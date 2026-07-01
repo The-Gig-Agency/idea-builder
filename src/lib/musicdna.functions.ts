@@ -316,26 +316,12 @@ export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => startSessionImpl(context.supabase, context.userId));
 
-// Weight applied to the 3-song prior dimensions when seeding session.vector.
-// Tuning intuition (see docs/musicdna/prior-weighting.md):
-//   priors ≈ 30% of final archetype signal, pairings ≈ 70%.
-// candidate_dimensions live in [-100, 100]; pairing deltas accumulate
-// ~90–200 on the dominant axis across 6 rounds, so 0.35 keeps priors as
-// a real but overrideable nudge.
-export const PRIOR_SEED_WEIGHT = 0.35;
+// Prior seeding lives in the engine so priors weighting is testable and
+// shared by any future caller (see src/musicdna/engine/priors.ts).
+import { PRIOR_SEED_WEIGHT, seedVectorFromPriors } from "@/musicdna/engine/priors";
+export { PRIOR_SEED_WEIGHT, seedVectorFromPriors };
 
-export function seedVectorFromPriors(
-  candidateDimensions: Record<string, unknown> | null | undefined,
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (!candidateDimensions) return out;
-  for (const [k, v] of Object.entries(candidateDimensions)) {
-    if (typeof v === "number" && Number.isFinite(v)) {
-      out[k] = Math.round(v * PRIOR_SEED_WEIGHT);
-    }
-  }
-  return out;
-}
+
 
 export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
     const { data: profile } = await supabase
@@ -816,47 +802,17 @@ const POLES: Record<string, { hi: Pole; lo: Pole }> = {
   },
 };
 
-// Confidence ladder — hedges the reveal by round so the engine sounds like
-// someone discovering your taste, not pretending they already know.
-const HEDGES = [
-  "Interesting.",              // round 1
-  "I think I see a pattern.",  // round 2
-  "Early read:",               // round 3
-  "Starting to believe:",      // round 4
-  "Fairly confident:",         // round 5
-  "I'm convinced:",            // round 6+
-];
+// Voice helpers — hedge ladder, hesitation copy, hash-stable variant picking
+// live in the engine so both web and any future client render the same beat.
+import {
+  FORBIDDEN_TOKENS,
+  HEDGES,
+  HESITATION_BUCKETS,
+  hedgeForRound,
+  hesitationFor,
+  pickByHash,
+} from "@/musicdna/engine/voice";
 
-// Hesitation library — timing turns into copy. Each bucket has enough
-// variants that a 20-round session never repeats a line.
-const HESITATION_BUCKETS: Array<{ max: number; lines: string[] }> = [
-  { max: 500, lines: ["Instinct.", "Reflex.", "No thought required.", "That was pre-loaded.", "Zero hesitation."] },
-  { max: 1200, lines: ["Immediate.", "Instant call.", "That wasn't a decision.", "Snap verdict.", "You didn't blink."] },
-  { max: 2500, lines: ["No debate.", "Quick call.", "Clean pick.", "You knew.", "That landed fast."] },
-  { max: 5000, lines: ["Had to think.", "You took a second there.", "Interesting pause.", "That wasn't automatic.", "You weighed it."] },
-  { max: 8000, lines: ["That one wasn't obvious.", "You weighed both.", "That was close.", "You almost changed your mind.", "No instant answer there.", "You gave that some respect."] },
-  { max: Infinity, lines: ["You really wrestled with that one.", "You stared this one down.", "That was a battle.", "You took the long look.", "That one earned its answer."] },
-];
-
-// Words that leak internal vocabulary into user copy. Dev-only guard —
-// warns if a reveal string contains any of these tokens.
-const FORBIDDEN_TOKENS = ["becoming", "witness", "posture", "axis", "dimension"];
-
-function pickByHash<T>(arr: T[] | undefined, seed: number): T | undefined {
-  if (!arr || arr.length === 0) return undefined;
-  const i = ((seed % arr.length) + arr.length) % arr.length;
-  return arr[i];
-}
-
-function hesitationFor(ms: number | null, seed: number): string {
-  if (ms == null) return "";
-  const bucket = HESITATION_BUCKETS.find((b) => ms < b.max);
-  return pickByHash(bucket?.lines, seed) ?? "";
-}
-
-function hedgeForRound(round: number): string {
-  return HEDGES[Math.min(Math.max(round, 1) - 1, HEDGES.length - 1)];
-}
 
 // Fragmented beats for the running thesis — short lines plus a hook
 // question/half-promise that pulls the next pick. Hedged on purpose.
@@ -963,34 +919,16 @@ const BEAT: Record<string, { hi: BeatVariant[]; lo: BeatVariant[] }> = {
   },
 };
 
-function dimSeed(dim: string): number {
-  return dim.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-}
-function pickVariant<T>(arr: T[] | undefined, seed: number): T | undefined {
-  if (!arr || arr.length === 0) return undefined;
-  const i = ((seed % arr.length) + arr.length) % arr.length;
-  return arr[i];
-}
+// dimSeed lives in engine/voice; pickVariant is the same shape as pickByHash.
+import { dimSeed } from "@/musicdna/engine/voice";
+const pickVariant = pickByHash;
 
-// ============ Derived descriptors ============
-// Moods like nostalgic, dreamy, dark, hopeful are NOT stored and NOT scored.
-// They're a READ off the canonical 10 axes — Spotify-style: keep the signal,
-// derive the interpretation. The final synthesis prompt receives these as
-// flavor ("you may call them X if the read supports it"), never as data.
-export function deriveDescriptors(vector: Record<string, number>): string[] {
-  const v = (k: string) => vector[k] ?? 0;
-  const out: string[] = [];
-  if (v("immersion") < -25 && v("tension") < -15 && v("scale") < 0) out.push("nostalgic");
-  if (v("atmosphere") > 25 && v("immersion") > 15 && v("confidence") < 0) out.push("dreamy");
-  if (v("tension") > 25 && v("community") < 0 && v("texture") < -10) out.push("dark");
-  if (v("movement") > 15 && v("tension") < -10 && v("scale") > 0) out.push("hopeful");
-  if (v("confidence") < -15 && v("perspective") < -10 && v("atmosphere") > 0) out.push("romantic");
-  if (v("movement") > 25 && v("confidence") > 15 && v("tension") > 0) out.push("kinetic");
-  if (v("transformation") > 20 && v("scale") > 10) out.push("transporting");
-  if (v("texture") < -20 && v("confidence") < -10) out.push("raw");
-  if (v("scale") < -15 && v("atmosphere") > 10 && v("tension") < 0) out.push("intimate");
-  return out;
-}
+// Derived descriptors — pure read off the 10 axes, kept in the engine so the
+// synthesis prompt and any future client share one set of thresholds.
+import { deriveDescriptors } from "@/musicdna/engine/descriptors";
+export { deriveDescriptors };
+
+
 
 
 

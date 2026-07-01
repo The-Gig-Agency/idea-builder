@@ -16,7 +16,10 @@ src/musicdna/
     scoring.ts   ✅ migrated — pure vector math (dot, cosine, tiers)
     archetypes.ts ✅ migrated — assignment, margin, flag reasons, tier
     reveal.ts     ✅ migrated (public share) — buildPublicReveal DTO
-    critic.ts       TODO — prompt builder + LLM orchestration
+    priors.ts     ✅ migrated — seedVectorFromPriors (opening-3 seeding)
+    descriptors.ts ✅ migrated — deriveDescriptors (mood read off axes)
+    voice.ts      ✅ migrated — hedges, hesitation, hash-stable variant picks
+    critic.ts       TODO — full prompt builder + LLM orchestration
     pairing.ts      TODO — selectNextPairing
     session.ts      TODO — startSession / getSession
     choice.ts       TODO — submitChoice (probe alignment, lane flips, vector update)
@@ -25,6 +28,7 @@ src/musicdna/
     supabase.ts     TODO — SupabaseGateway impl (user- or admin-scoped)
     llm.ts          TODO — LLMGateway impl over Lovable AI Gateway
 ```
+
 
 ## Rules for engine code
 
@@ -49,10 +53,16 @@ src/musicdna/
    `POST /api/v1/session/:id/reveal`. Routes verify Supabase bearer via
    `_auth.ts` and delegate to the same `*Impl` helpers the web server
    functions call. Zero duplicate implementation.
-6. **Next**: extract `critic.ts` (prompt building + LLM gateway) and
+6. ✅ Extracted the deterministic reveal-time helpers into the engine:
+   `priors.ts` (seedVectorFromPriors), `descriptors.ts` (mood read),
+   `voice.ts` (hedge ladder, hesitation copy, `pickByHash`, `dimSeed`).
+   `musicdna.functions.ts` re-exports from the engine — one implementation.
+   Test count now 41 passing.
+7. **Next**: extract `critic.ts` (full prompt building + LLM gateway) and
    `pairing.ts` / `session.ts` / `choice.ts` from `musicdna.functions.ts`
    into pure engine modules behind ports. Routes/server-fns become 3-line
    wrappers, and golden-fixture tests can pin the interactive loop.
+
 
 
 ## Testing
