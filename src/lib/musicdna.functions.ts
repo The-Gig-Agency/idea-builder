@@ -88,14 +88,15 @@ async function ai(messages: Array<{ role: string; content: string }>) {
 const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "general"] as const;
 type Lane = (typeof LANES)[number];
 
-// Shared lane rules — broadened classic_rock to absorb hard rock, metal, and prog
-// until those get their own lanes (see docs/musicdna/missing-lanes.md).
+// Shared lane rules — classic_rock keeps hard rock/prog; metal now routes to its
+// own lane, but still needs canon + pairings seeding before it behaves like a full lane.
 const LANE_RULES = `Lane rules:
 - alternative = post-punk, indie, shoegaze, britpop, grunge, goth, college rock, emo, post-rock.
 - pop = mainstream chart pop, pop-rock (Swift, Eilish, Beyonce pop work).
 - hip_hop = rap, trap, boom-bap, drill, R&B-rap.
 - electronic = techno, house, IDM, drum-n-bass, EDM, ambient, trip-hop.
-- classic_rock = ANY guitar-driven rock outside the alternative bucket: 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac), hard rock and metal (Sabbath, Metallica, AC/DC, Iron Maiden), prog (Rush, Yes, Pink Floyd, King Crimson), arena rock, glam, southern rock. If it is loud guitars and not "indie/alternative" in the modern sense, it belongs here for now.
+- metal = heavy metal, thrash, doom, black metal, death metal, nu metal, metalcore, prog metal. Sabbath, Metallica, Iron Maiden, Slayer, Tool, Mastodon, Deftones, Korn, Gojira, Pantera.
+- classic_rock = 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac), hard rock, prog (Rush, Yes, Pink Floyd, King Crimson), arena rock, glam, southern rock. If it is loud guitars and not "indie/alternative" in the modern sense, it belongs here for now.
 - Use "general" ONLY when the picks genuinely scatter across lanes with no center of gravity.`;
 
 // Map catalog sub-lanes (currently all alternative sub-genres) to top-level lanes.
@@ -119,9 +120,9 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
     s.includes("prog metal") || s.includes("progressive metal")
   ) return "metal";
   if (s.includes("electronic")) return "electronic";
-  // Hard rock / metal / prog all funnel into classic_rock until they get their own lanes.
+  // Hard rock / prog funnel into classic_rock. Metal has its own lane.
   if (
-    s.includes("metal") || s.includes("hard_rock") || s.includes("hard-rock") ||
+    s.includes("hard_rock") || s.includes("hard-rock") ||
     s.includes("hardrock") || s.includes("prog") || s.includes("arena_rock") ||
     s.includes("arena-rock") || s.includes("glam") || s.includes("classic_rock") ||
     s.includes("classic-rock") || s === "rock"
