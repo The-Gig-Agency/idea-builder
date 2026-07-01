@@ -84,7 +84,7 @@ describe("engine factory — golden loop", () => {
       pairing("p4", ["immersion", "scale"], 50),
     ];
 
-    for (let round = 1; round <= 8; round++) {
+    for (let round = 1; round <= pool.length; round++) {
       const pick = engine.selectPairing({
         pool,
         vector,
