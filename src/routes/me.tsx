@@ -16,7 +16,7 @@ type ChatMsg = { role: "user" | "assistant" | "system"; content: string; created
 
 const LANE_LABEL: Record<string, string> = {
   alternative: "Alternative", pop: "Pop", hip_hop: "Hip-Hop",
-  electronic: "Electronic", classic_rock: "Classic Rock", general: "General",
+  electronic: "Electronic", classic_rock: "Classic Rock", metal: "Metal", general: "General",
 };
 
 function Me() {

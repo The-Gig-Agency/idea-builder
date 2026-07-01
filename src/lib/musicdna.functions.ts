@@ -85,7 +85,7 @@ async function ai(messages: Array<{ role: string; content: string }>) {
 }
 
 // ============ Lane classifier ============
-const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "general"] as const;
+const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "general"] as const;
 type Lane = (typeof LANES)[number];
 
 // Shared lane rules — broadened classic_rock to absorb hard rock, metal, and prog
@@ -112,6 +112,12 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
     s.includes("artrock") || s.includes("punk") || s.includes("sophistipop") ||
     s.includes("emo") || s.includes("post_rock") || s.includes("post-rock")
   ) return "alternative";
+  if (
+    s.includes("metal") || s.includes("heavy metal") || s.includes("thrash") ||
+    s.includes("death metal") || s.includes("black metal") || s.includes("doom metal") ||
+    s.includes("groove metal") || s.includes("nu metal") || s.includes("metalcore") ||
+    s.includes("prog metal") || s.includes("progressive metal")
+  ) return "metal";
   if (s.includes("electronic")) return "electronic";
   // Hard rock / metal / prog all funnel into classic_rock until they get their own lanes.
   if (

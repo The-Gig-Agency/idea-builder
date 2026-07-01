@@ -16,13 +16,13 @@ Until each lane below exists as a real top-level lane, we route them into
 the closest existing one via `LANE_RULES` (LLM prompt) and
 `catalogLaneToTopLane()` (catalog enrichment). See `src/lib/musicdna.functions.ts`.
 
-| Temporary home | Actually contains today                          |
+| Temporary home | Actually contains today |
 |----------------|--------------------------------------------------|
-| classic_rock   | hard rock, metal, prog, arena rock, glam, southern rock |
-| alternative    | emo, post-rock, math rock, screamo                |
-| hip_hop        | R&B, neo-soul, modern soul                        |
-| pop            | country-pop, latin-pop, K-pop                     |
-| electronic     | ambient, dub, drone, modular / experimental       |
+| classic_rock | hard rock, metal, prog, arena rock, glam, southern rock |
+| alternative | emo, post-rock, math rock, screamo |
+| hip_hop | R&B, neo-soul, modern soul |
+| pop | country-pop, latin-pop, K-pop |
+| electronic | ambient, dub, drone, modular / experimental |
 
 ## Lanes to add (priority order)
 
@@ -38,7 +38,7 @@ the closest existing one via `LANE_RULES` (LLM prompt) and
 ### 3. `r_and_b` / `soul`
 - Marvin Gaye, Stevie Wonder, D'Angelo, Frank Ocean, SZA, The Weeknd, Solange.
 - Currently routes to hip_hop or pop. Different dimensional center of gravity
-  (groove vs hook, restraint vs catharsis).
+ (groove vs hook, restraint vs catharsis).
 
 ### 4. `jazz`
 - Coltrane, Miles, Mingus, Robert Glasper, Kamasi Washington, BadBadNotGood.
@@ -82,8 +82,4 @@ classify users into a lane it can't actually run.
 
 ## Fallback behavior (today)
 
-When `confidence < 0.4`, instead of dumping to `general` (which fishes across
-the whole pairings catalog), we now call `dominantPerSongLane(per_song)` and
-route to the most common lane among the user's individual songs. So a user
-who lists Subdivisions + Paranoid + One — even if the LLM is unsure overall —
-will at least land in `classic_rock` pairings instead of getting served Kendrick.
+When `confidence < 0.4`, instead of dumping to `general` (which fishes across the whole pairings catalog), we now call `dominantPerSongLane(per_song)` and route to the most common lane among the user's individual songs. So a user who lists Subdivisions + Paranoid + One — even if the LLM is unsure overall — will at least land in `classic_rock` pairings instead of getting served Kendrick.

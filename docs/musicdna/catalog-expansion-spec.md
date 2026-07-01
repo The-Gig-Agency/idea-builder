@@ -8,7 +8,7 @@ Your job: expand our song catalog and our pairing catalog so users get more vari
 
 ### Active lanes (top-level routing)
 
-`alternative` | `pop` | `hip_hop` | `electronic` | `classic_rock` | `general` (fallback only — do not target)
+`alternative` | `pop` | `hip_hop` | `electronic` | `classic_rock` | `metal` | `general` (fallback only — do not target)
 
 ### Active diagnostic dimensions (the only 10 we score)
 
