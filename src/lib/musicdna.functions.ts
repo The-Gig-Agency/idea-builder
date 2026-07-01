@@ -1394,7 +1394,7 @@ export async function finalizeSessionImpl(supabase: AuthedSupabase, userId: stri
     const top3 = assignment
       ? [
           { archetype_id: assignment.id, name: assignment.name, score: assignment.score },
-          ...assignment.runners_up.map((r) => ({
+          ...assignment.runners_up.map((r: { id: string | null; name: string; score: number }) => ({
             archetype_id: r.id,
             name: r.name,
             score: r.score,
