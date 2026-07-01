@@ -318,7 +318,9 @@ export const startSession = createServerFn({ method: "POST" })
 
 // Prior seeding lives in the engine so priors weighting is testable and
 // shared by any future caller (see src/musicdna/engine/priors.ts).
-export { PRIOR_SEED_WEIGHT, seedVectorFromPriors } from "@/musicdna/engine/priors";
+import { PRIOR_SEED_WEIGHT, seedVectorFromPriors } from "@/musicdna/engine/priors";
+export { PRIOR_SEED_WEIGHT, seedVectorFromPriors };
+
 
 
 export async function startSessionImpl(supabase: AuthedSupabase, userId: string) {
