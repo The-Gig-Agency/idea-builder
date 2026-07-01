@@ -1034,31 +1034,66 @@ export async function recordChoiceImpl(supabase: AuthedSupabase, userId: string,
       if (Math.abs(delta) > Math.abs(topDelta)) { topDelta = delta; topDim = dim; }
     }
 
-    // Rotate variants so the same axis+direction doesn't repeat verbatim.
-    // Seed combines session + pairing + dim so it's stable but varies per round.
+    // Round-aware reveal builder.
+    // Rounds 1–2 stay curious (no identity claims). Round 3+ adds a hedged
+    // observation. Round 5+ with real support unlocks the confident reads.
+    // Axis label is spoken ONCE per session per pole (tracked by whether the
+    // running vector already carries meaningful weight on that dim).
     const { count: priorChoices } = await supabase
       .from("choices")
       .select("id", { count: "exact", head: true })
       .eq("session_id", data.sessionId);
-    const variantSeed = (priorChoices ?? 0) + dimSeed(topDim) + (topDelta >= 0 ? 0 : 1);
-    const phrase = REVEAL[topDim];
-    const direction = pickVariant(topDelta >= 0 ? phrase?.hi : phrase?.lo, variantSeed);
+    const round = (priorChoices ?? 0) + 1;
+    const direction: "hi" | "lo" = topDelta >= 0 ? "hi" : "lo";
+    const pole = POLES[topDim]?.[direction];
+    const priorSupport = Math.abs(priorVec[topDim] ?? 0);
+    const axisMentioned = priorSupport > 4; // one prior contribution on this pole
+    const pairingHash = data.pairingId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const seedA = (priorChoices ?? 0) * 7 + dimSeed(topDim) + (direction === "hi" ? 0 : 1) + pairingHash;
+    const seedB = seedA * 31 + 13;
     const ms = data.msToDecide ?? null;
-    // Deterministic warm opener so it varies pairing-to-pairing without feeling random.
-    const OPENERS = ["Nice.", "OK.", "Hm.", "Interesting.", "Cool pick.", "Alright.", "Noted."];
-    const hash = data.pairingId.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-    const opener = OPENERS[hash % OPENERS.length];
-    const speedBeat =
-      ms == null ? "" : ms < 2500 ? "\nSnap call. No hesitation." : ms > 12000 ? "\nYou sat with that one." : "";
-    // Conversational reaction: short opener, the pick, the inference, optional speed beat.
-    // Line-broken so the UI can render it as a beat sequence.
-    const verdict = direction
-      ? `${opener} ${winner.title} over ${loser.title}.\nThat's ${direction.verdict}.${speedBeat}`
-      : `${opener} ${winner.title} over ${loser.title}.${speedBeat}`;
-    const why = direction?.why ?? "";
-    // Kept for back-compat; the new UI folds speed into `verdict` above.
-    const hesitation =
-      ms == null ? null : ms < 2500 ? "Snap verdict." : ms > 12000 ? "You stared this one down." : null;
+    const speedBeat = hesitationFor(ms, seedA);
+    const hedge = hedgeForRound(round);
+
+    // Line 1: reaction. Round 1 skips the hedge (avoid pretending pattern).
+    const reactionCore = `${winner.title} over ${loser.title}.`;
+    const reaction = round === 1 ? reactionCore : `${hedge} ${reactionCore}`;
+
+    // Line 2: axis label (first mention) OR a fresh observation. Never both.
+    let inference = "";
+    if (pole) {
+      if (!axisMentioned) {
+        inference = `That's ${pole.axis_label}.`;
+      } else if (round >= 3) {
+        inference = pickByHash(pole.observations, seedA) ?? "";
+      }
+    }
+
+    // `why` carries a second, different observation only once we've earned it:
+    // round ≥ 5 AND at least ~3 supporting contributions on this pole.
+    const strongEnough = round >= 5 && priorSupport >= 30;
+    let why = "";
+    if (pole && strongEnough) {
+      // Pick a different observation than the inference line.
+      const pool = pole.observations.filter((o) => o !== inference);
+      why = pickByHash(pool, seedB) ?? "";
+    }
+
+    const verdict = [reaction, inference, speedBeat].filter(Boolean).join("\n");
+
+    // Dev-only guard against leaking internal vocabulary into user copy.
+    if (process.env.NODE_ENV !== "production") {
+      const bag = `${inference} ${why}`.toLowerCase();
+      for (const tok of FORBIDDEN_TOKENS) {
+        if (bag.includes(tok)) {
+          // eslint-disable-next-line no-console
+          console.warn(`[musicdna] reveal copy contains forbidden token "${tok}" on dim=${topDim} dir=${direction}`);
+        }
+      }
+    }
+
+    // Kept for back-compat with older UI paths that read `hesitation`.
+    const hesitation = speedBeat || null;
 
     const { error: cErr } = await supabase.from("choices").insert({
       session_id: data.sessionId,
