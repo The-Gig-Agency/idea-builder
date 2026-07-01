@@ -764,7 +764,7 @@ function ResidualsPanel() {
                   </td>
                   <td className="px-3 py-2">
                     {share ? (
-                      <Link to="/s/$token" params={{ token: share }} className="underline text-xs">
+                      <Link to="/s/$sessionId" params={{ sessionId: share }} className="underline text-xs">
                         view
                       </Link>
                     ) : (
