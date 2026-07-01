@@ -20,9 +20,9 @@ src/musicdna/
     descriptors.ts ✅ migrated — deriveDescriptors (mood read off axes)
     voice.ts      ✅ migrated — hedges, hesitation, hash-stable variant picks
     critic.ts     ✅ migrated (voice constants) — CRITIC_PERSONA + CRITIC_VOICE_EDITORIAL
-    pairing.ts      TODO — selectNextPairing
-    session.ts      TODO — startSession / getSession
-    choice.ts       TODO — submitChoice (probe alignment, lane flips, vector update)
+    pairing.ts    ✅ migrated — selectPairing (fork filter + weighted pick), shouldStop, assertWithinLane
+    session.ts    ✅ migrated — buildStartSessionSeed (lane + confidence + probes + seed vector)
+    choice.ts     ✅ migrated — applyChoice (vector math), evaluateProbe (cosine + flip)
     index.ts        TODO — MusicDNAEngine factory: (deps) => { ... }
   adapters/
     llm-gateway.ts ✅ migrated — LLMGateway impl over Lovable AI Gateway
