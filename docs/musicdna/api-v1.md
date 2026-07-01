@@ -27,6 +27,35 @@ Codes: `NOT_FOUND` (404), `UNAUTHORIZED` (401), `FORBIDDEN` (403),
 
 ## Endpoints
 
+### `POST /api/v1/onboarding/opener`
+
+Post-signup opening analysis. Call this once, immediately after the user
+signs up, with the 3 songs they picked. Runs the LLM analysis (lane guess,
+seed vector, secondary lanes) and persists it to the caller's `profiles`
+row. `POST /api/v1/session` requires this to have completed at least once.
+
+Body:
+
+```json
+{ "songs": ["Fake Empire - The National", "Dreams - Fleetwood Mac", "Space Song - Beach House"] }
+```
+
+- `songs`: exactly 3 free-text strings, each 1–200 chars. Format
+  `"Title - Artist"` is preferred but not required; catalog resolution is
+  server-side.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "lane": "alternative",
+  "lane_confidence": 0.62,
+  "hypothesis": "Three songs in — already a shape, not a portrait…",
+  "secondary_lanes": ["indie", "folk"]
+}
+```
+
 ### `POST /api/v1/session`
 
 Start a new MusicDNA session for the authenticated user. Uses the user's
