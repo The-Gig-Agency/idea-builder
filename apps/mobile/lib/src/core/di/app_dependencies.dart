@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/router/auth_router_notifier.dart';
 import '../../features/auth/data/datasources/auth_remote_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -23,6 +24,9 @@ class AppDependencies {
 
   late final AuthRemoteDataSource authRemoteDataSource;
   late final AuthRepository authRepository;
+  late final AuthRouterNotifier authRouterNotifier = AuthRouterNotifier(
+    authRepository,
+  );
   late final MusicDnaApiClient apiClient;
 
   AuthCubit createAuthCubit() {
