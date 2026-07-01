@@ -800,3 +800,326 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
     </div>
   );
 }
+
+// ---------------- Ontology dashboard: catalog shape, real-session heatmap, pairing/song health ----------------
+type OntologySection = "coverage" | "heatmap" | "pairings" | "songs";
+
+function OntologyPanel() {
+  const load = useServerFn(adminOntology);
+  const [section, setSection] = useState<OntologySection>("coverage");
+  const [laneFilter, setLaneFilter] = useState("");
+
+  const q = useQuery({
+    queryKey: ["admin", "ontology"],
+    queryFn: () => load(),
+    staleTime: 60_000,
+  });
+
+  if (q.isLoading) {
+    return <p className="text-sm text-muted-foreground">Aggregating catalog + sessions…</p>;
+  }
+  if (q.isError || !q.data) {
+    return (
+      <p className="text-sm text-destructive">
+        {q.error instanceof Error ? q.error.message : "Failed to load ontology."}
+      </p>
+    );
+  }
+  const d = q.data;
+
+  return (
+    <div>
+      <div className="mb-6 rounded-sm border hairline bg-muted/20 p-4">
+        <p className="eyebrow mb-2">Ontology</p>
+        <p className="text-sm text-muted-foreground max-w-3xl mb-4">
+          Not for users. For you. Catalog shape, where listeners actually land, and which pairings
+          and songs are earning their keep. Move the bottom bars.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+          <Stat label="Songs" value={`${d.totals.active_songs}/${d.totals.songs}`} />
+          <Stat label="Pairings" value={`${d.totals.active_pairings}/${d.totals.pairings}`} />
+          <Stat label="Archetypes" value={d.totals.archetypes.toLocaleString()} />
+          <Stat label="Sessions" value={d.totals.sessions_sampled.toLocaleString()} />
+          <Stat label="Choices" value={d.totals.choices_sampled.toLocaleString()} />
+          <Stat label="Unassigned" value={d.unassigned_sessions.toLocaleString()} tone={d.unassigned_sessions > 0 ? "warn" : undefined} />
+        </div>
+      </div>
+
+      <div className="flex gap-1 border-b hairline mb-4 flex-wrap">
+        {(["coverage", "heatmap", "pairings", "songs"] as OntologySection[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSection(s)}
+            className={`px-3 py-1.5 text-xs font-mono uppercase tracking-[0.18em] border-b-2 -mb-px ${
+              section === s ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+        <div className="ml-auto">
+          <select
+            value={laneFilter}
+            onChange={(e) => setLaneFilter(e.target.value)}
+            className="border hairline rounded-sm bg-background px-3 py-1.5 text-xs"
+          >
+            <option value="">All lanes</option>
+            {d.lanes.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {section === "coverage" && <CoverageView d={d} laneFilter={laneFilter} />}
+      {section === "heatmap" && <HeatmapView d={d} laneFilter={laneFilter} />}
+      {section === "pairings" && <PairingHealthView d={d} laneFilter={laneFilter} />}
+      {section === "songs" && <SongHealthView d={d} laneFilter={laneFilter} />}
+    </div>
+  );
+}
+
+type OntologyData = Awaited<ReturnType<typeof adminOntology>>;
+
+function CoverageView({ d, laneFilter }: { d: OntologyData; laneFilter: string }) {
+  const lanes = laneFilter ? [laneFilter] : d.lanes;
+  const maxLaneSongs = Math.max(1, ...Object.values(d.lane_song_count));
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="eyebrow mb-3">Songs per lane</p>
+        <div className="space-y-1.5">
+          {d.lanes.slice().sort((a, b) => (d.lane_song_count[b] ?? 0) - (d.lane_song_count[a] ?? 0)).map((lane) => {
+            const n = d.lane_song_count[lane] ?? 0;
+            return (
+              <div key={lane} className="flex items-center gap-3 text-xs">
+                <div className="w-32 font-mono text-muted-foreground">{lane}</div>
+                <div className="flex-1 bg-muted/30 rounded-sm h-4 overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${(n / maxLaneSongs) * 100}%` }} />
+                </div>
+                <div className="w-12 text-right font-mono">{n}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className="eyebrow mb-3">Coverage by archetype signal (per lane)</p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Counts songs whose <code>archetype_signals</code> tag each archetype. Empty rows show where the catalog is thin.
+        </p>
+        <div className="space-y-6">
+          {lanes.map((lane) => {
+            const buckets = d.coverage[lane] ?? {};
+            const entries = Object.entries(buckets).sort((a, b) => b[1] - a[1]);
+            const max = Math.max(1, ...entries.map(([, n]) => n));
+            return (
+              <div key={lane}>
+                <p className="text-sm font-mono uppercase tracking-wider mb-2">{lane} <span className="text-muted-foreground">· {d.lane_song_count[lane] ?? 0} songs</span></p>
+                {entries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No archetype signals tagged in this lane.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {entries.map(([name, n]) => (
+                      <div key={name} className="flex items-center gap-3 text-xs">
+                        <div className="w-40 text-muted-foreground truncate">{name}</div>
+                        <div className="flex-1 bg-muted/30 rounded-sm h-3 overflow-hidden">
+                          <div className="h-full bg-primary" style={{ width: `${(n / max) * 100}%` }} />
+                        </div>
+                        <div className="w-10 text-right font-mono">{n}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeatmapView({ d, laneFilter }: { d: OntologyData; laneFilter: string }) {
+  const lanes = (laneFilter ? [laneFilter] : d.lanes).filter((l) => d.heatmap[l]);
+  const archetypeCols = d.archetype_names;
+  // Global max for consistent shading across the table.
+  let globalMax = 1;
+  for (const l of lanes) for (const a of archetypeCols) globalMax = Math.max(globalMax, d.heatmap[l]?.[a] ?? 0);
+
+  if (lanes.length === 0) {
+    return <p className="text-sm text-muted-foreground">No completed sessions yet in {laneFilter || "any lane"}.</p>;
+  }
+
+  return (
+    <div>
+      <p className="eyebrow mb-2">Lane × winning archetype (real sessions)</p>
+      <p className="text-xs text-muted-foreground mb-3">
+        Where listeners actually land. Sparse columns are archetypes nobody's earning; dense off-lane cells hint at cross-lane taste.
+      </p>
+      <div className="overflow-x-auto border hairline rounded-sm">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/30 text-muted-foreground">
+            <tr>
+              <th className="text-left px-2 py-1.5 font-mono uppercase tracking-wider sticky left-0 bg-muted/30">Lane</th>
+              {archetypeCols.map((a) => (
+                <th key={a} className="text-left px-2 py-1.5 font-mono uppercase tracking-wider">{a}</th>
+              ))}
+              <th className="text-right px-2 py-1.5 font-mono uppercase tracking-wider">Σ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lanes.map((lane) => {
+              const row = d.heatmap[lane] ?? {};
+              const total = Object.values(row).reduce((a, b) => a + b, 0);
+              return (
+                <tr key={lane} className="border-t hairline">
+                  <td className="px-2 py-1.5 font-mono sticky left-0 bg-background">{lane}</td>
+                  {archetypeCols.map((a) => {
+                    const n = row[a] ?? 0;
+                    const intensity = n === 0 ? 0 : 0.15 + (n / globalMax) * 0.65;
+                    return (
+                      <td key={a} className="px-2 py-1.5 font-mono" style={{ backgroundColor: n ? `rgba(99, 102, 241, ${intensity})` : undefined }}>
+                        {n || "·"}
+                      </td>
+                    );
+                  })}
+                  <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{total}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PairingHealthView({ d, laneFilter }: { d: OntologyData; laneFilter: string }) {
+  const [sort, setSort] = useState<"total" | "info_gain" | "avg_ms">("total");
+  const rows = d.pairing_health
+    .filter((p) => !laneFilter || p.lane === laneFilter)
+    .slice()
+    .sort((a, b) => {
+      if (sort === "info_gain") return (b.info_gain ?? -1) - (a.info_gain ?? -1);
+      if (sort === "avg_ms") return (b.avg_ms ?? 0) - (a.avg_ms ?? 0);
+      return b.total - a.total;
+    })
+    .slice(0, 100);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="eyebrow">Pairing health</p>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border hairline rounded-sm bg-background px-3 py-1.5 text-xs"
+        >
+          <option value="total">Most tested</option>
+          <option value="info_gain">Highest info gain</option>
+          <option value="avg_ms">Longest hesitation</option>
+        </select>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Info gain rewards balanced splits (a 96/4 blowout teaches you nothing). Retire low info gain + low hesitation pairings.
+      </p>
+      <div className="border hairline rounded-sm overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/30 text-muted-foreground">
+            <tr>
+              <th className="text-left px-2 py-1.5">Pairing</th>
+              <th className="text-left px-2 py-1.5">Lane</th>
+              <th className="text-right px-2 py-1.5">Split</th>
+              <th className="text-right px-2 py-1.5">Tests</th>
+              <th className="text-right px-2 py-1.5">Avg ms</th>
+              <th className="text-right px-2 py-1.5">Info gain</th>
+              <th className="text-right px-2 py-1.5">Weight</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.id} className="border-t hairline">
+                <td className="px-2 py-1.5">
+                  <div className="truncate max-w-md">{p.a_title} <span className="text-muted-foreground">vs</span> {p.b_title}</div>
+                </td>
+                <td className="px-2 py-1.5 font-mono text-muted-foreground">{p.lane}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{p.split_a_pct != null ? `${p.split_a_pct}/${100 - p.split_a_pct}` : "—"}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{p.total}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{p.avg_ms ?? "—"}</td>
+                <td className={`px-2 py-1.5 text-right font-mono ${p.info_gain != null && p.info_gain < 30 ? "text-amber-500" : ""}`}>
+                  {p.info_gain ?? "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">{p.diagnostic_weight ?? "—"}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No pairings match.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SongHealthView({ d, laneFilter }: { d: OntologyData; laneFilter: string }) {
+  const [sort, setSort] = useState<"appearances" | "info_contribution" | "avg_ms">("appearances");
+  const rows = d.song_health
+    .filter((s) => !laneFilter || s.lane === laneFilter)
+    .slice()
+    .sort((a, b) => {
+      if (sort === "info_contribution") return (b.info_contribution ?? -1) - (a.info_contribution ?? -1);
+      if (sort === "avg_ms") return (b.avg_ms ?? 0) - (a.avg_ms ?? 0);
+      return b.appearances - a.appearances;
+    })
+    .slice(0, 150);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="eyebrow">Song health</p>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border hairline rounded-sm bg-background px-3 py-1.5 text-xs"
+        >
+          <option value="appearances">Most appearances</option>
+          <option value="info_contribution">Highest info contribution</option>
+          <option value="avg_ms">Longest hesitation</option>
+        </select>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Diagnostic superstars vs songs that never teach you anything.
+      </p>
+      <div className="border hairline rounded-sm overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/30 text-muted-foreground">
+            <tr>
+              <th className="text-left px-2 py-1.5">Song</th>
+              <th className="text-left px-2 py-1.5">Lane</th>
+              <th className="text-right px-2 py-1.5">Appearances</th>
+              <th className="text-right px-2 py-1.5">Chosen %</th>
+              <th className="text-right px-2 py-1.5">Avg ms</th>
+              <th className="text-right px-2 py-1.5">Info</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.id} className="border-t hairline">
+                <td className="px-2 py-1.5"><span className="font-medium">{s.title}</span> <span className="text-muted-foreground">— {s.artist}</span></td>
+                <td className="px-2 py-1.5 font-mono text-muted-foreground">{s.lane}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{s.appearances}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{s.chosen_pct}%</td>
+                <td className="px-2 py-1.5 text-right font-mono">{s.avg_ms ?? "—"}</td>
+                <td className="px-2 py-1.5 text-right font-mono">{s.info_contribution ?? "—"}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No songs match.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
