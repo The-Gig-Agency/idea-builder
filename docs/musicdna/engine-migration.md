@@ -59,15 +59,24 @@ src/musicdna/
    `voice.ts` (hedge ladder, hesitation copy, `pickByHash`, `dimSeed`).
    `musicdna.functions.ts` re-exports from the engine — one implementation.
    Test count now 41 passing.
-7. **Next**: extract `critic.ts` (full prompt building + LLM gateway) and
-   `pairing.ts` / `session.ts` / `choice.ts` from `musicdna.functions.ts`
-   into pure engine modules behind ports. Routes/server-fns become 3-line
-   wrappers, and golden-fixture tests can pin the interactive loop.
+7. ✅ Extracted the critic voice + LLM transport:
+   - `engine/critic.ts` owns `CRITIC_PERSONA` and `CRITIC_VOICE_EDITORIAL`
+     (the IP — the exact strings that make the app sound like the app).
+   - `adapters/llm-gateway.ts` implements the `LLMGateway` port over the
+     Lovable AI Gateway. Only place that knows the URL, model default, and
+     `LOVABLE_API_KEY`. `musicdna.functions.ts` `ai()` is a 1-liner over
+     `callLovableAi`. Test count now 48 passing.
+8. **Next**: extract `pairing.ts` / `session.ts` / `choice.ts` from
+   `musicdna.functions.ts` into pure engine modules behind the ports.
+   Server-fns / routes become 3-line wrappers, and golden-fixture tests
+   can pin the interactive loop.
 
 
 
 ## Testing
 
-`bun test` runs the engine test suite. Engine tests use in-memory
-`SupabaseGateway` and scripted `LLMGateway` fakes — no network, no DB.
+`bun test` runs the engine + adapter test suite. Engine tests use
+in-memory `SupabaseGateway` and scripted `LLMGateway` fakes — no network,
+no DB. The LLM adapter test injects `fetchImpl` to stay offline.
+
 
