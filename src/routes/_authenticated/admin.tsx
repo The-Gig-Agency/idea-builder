@@ -189,7 +189,7 @@ function EntityTable({ entity, onEdit }: { entity: Entity; onEdit: (row: Row) =>
             className="border hairline rounded-sm bg-background px-3 py-1.5 text-sm"
           >
             <option value="">All lanes</option>
-            {["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "general"].map((l) => (
+            {["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "general"].map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
@@ -433,7 +433,7 @@ function fieldsFor(e: Entity): Field[] {
       { key: "title", type: "text" },
       { key: "artist", type: "text" },
       { key: "year", type: "number", optional: true },
-      { key: "primary_lane", type: "text", hint: "alternative · pop · hip_hop · electronic · classic_rock · metal · general" },
+      { key: "primary_lane", type: "text", hint: "alternative · pop · hip_hop · electronic · classic_rock · metal · country · general" },
       { key: "lane", type: "text", hint: "granular sub-lane, e.g. post_punk_new_wave" },
       // --- Diagnostic Power Score (DPS): six components, sum = diagnostic_power ---
       { key: "polarization", type: "number", optional: true, hint: "0–25 — splits the room. 0=everyone agrees · 25=fistfight in the comments" },

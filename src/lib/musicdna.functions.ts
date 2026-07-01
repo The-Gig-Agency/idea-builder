@@ -85,7 +85,7 @@ async function ai(messages: Array<{ role: string; content: string }>) {
 }
 
 // ============ Lane classifier ============
-const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "general"] as const;
+const LANES = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country", "general"] as const;
 type Lane = (typeof LANES)[number];
 
 // Shared lane rules — classic_rock keeps hard rock/prog; metal now routes to its
@@ -97,6 +97,7 @@ const LANE_RULES = `Lane rules:
 - electronic = techno, house, IDM, drum-n-bass, EDM, ambient, trip-hop.
 - metal = heavy metal, thrash, doom, black metal, death metal, nu metal, metalcore, prog metal. Sabbath, Metallica, Iron Maiden, Slayer, Tool, Mastodon, Deftones, Korn, Gojira, Pantera.
 - classic_rock = 60s-80s mainstream rock (Stones, Zeppelin, Fleetwood Mac), hard rock, prog (Rush, Yes, Pink Floyd, King Crimson), arena rock, glam, southern rock. If it is loud guitars and not "indie/alternative" in the modern sense, it belongs here for now.
+- country = classic country, outlaw country, contemporary country, alt-country, Americana, country-pop, Nashville. Cash, Hank Williams, Willie Nelson, Sturgill Simpson, Kacey Musgraves, Chris Stapleton, Zach Bryan, Jelly Roll, Kenny Rogers, Merle Haggard, Dolly Parton, Miranda Lambert, Luke Combs, Morgan Wallen.
 - Use "general" ONLY when the picks genuinely scatter across lanes with no center of gravity.`;
 
 // Map catalog sub-lanes (currently all alternative sub-genres) to top-level lanes.
@@ -119,6 +120,11 @@ function catalogLaneToTopLane(sub: string | null | undefined): Lane | null {
     s.includes("groove metal") || s.includes("nu metal") || s.includes("metalcore") ||
     s.includes("prog metal") || s.includes("progressive metal")
   ) return "metal";
+  if (
+    s.includes("country") || s.includes("americana") || s.includes("outlaw") ||
+    s.includes("bluegrass") || s.includes("alt_country") || s.includes("alt-country") ||
+    s.includes("nashville")
+  ) return "country";
   if (s.includes("electronic")) return "electronic";
   // Hard rock / prog funnel into classic_rock. Metal has its own lane.
   if (
@@ -150,7 +156,7 @@ Mode: taste-reader. You read five songs a user named as ones they love and produ
 
 You return a JSON object with this exact shape:
 {
-  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "country" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": {
@@ -159,7 +165,7 @@ You return a JSON object with this exact shape:
     "confidence": -100..100, "tension": -100..100, "texture": -100..100,
     "transformation": -100..100
   },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|unknown"}],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|country|unknown"}],
   "reasoning": ["one short observation", "..."],
   "hypothesis": "ONE sentence, max 30 words, Rolling Stone voice. Name what these choices reveal — specific dimensions like movement, atmosphere, transformation, melody. End with 'Let's see if that holds.' or similar half-promise."
 }
@@ -295,7 +301,7 @@ export const analyzeOpeningSongs = createServerFn({ method: "POST" })
 export const generateOpeningHypothesis = analyzeOpeningSongs;
 
 // ============ Start session ============
-const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal"];
+const ALL_LANES: Lane[] = ["alternative", "pop", "hip_hop", "electronic", "classic_rock", "metal", "country"];
 
 export const startSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1545,7 +1551,7 @@ Output STRICT JSON:
   "stakes": "Leave empty.",
   "reaction": "Legacy field. Copy the observation verbatim.",
   "hypothesis_v1": "Legacy field. Copy the observation verbatim.",
-  "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
+  "lane_guess": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "country" | "general",
   "confidence": 0.0-1.0,
   "suspected_dimensions": ["movement","atmosphere","immersion","scale","community","perspective","confidence","tension","texture","transformation"]
 }
@@ -1723,11 +1729,11 @@ ${LANE_RULES}
 Return STRICT JSON:
 {
   "reaction": "ONE sentence, max 20 words. Say honestly whether the new two confirm, refine, or break your read. About the listener's CHOICES, not the songs. Good: 'Those last two confirm it — you keep picking energy over polish.' / 'Okay, that second one breaks my read. You like prettier than I thought.'",
-  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "country" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|unknown"}],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|country|unknown"}],
   "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
   "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
 }
@@ -1844,11 +1850,11 @@ ${LANE_RULES}
 Return STRICT JSON:
 {
   "observation": "ONE short paragraph, ~25–40 words, MAX 45. Conversational, present tense, speaks to the listener. Reference at least ONE song or artist from their picks. Good: 'Two dramatic choices in a row. You seem to like emotional honesty delivered through a strong artistic lens — not raw confession.' Good: 'So far you seem more interested in perspective than pure emotion.' Bad: anything that names a fork/axis/lane/pole, previews the next matchup, or opens with 'You reward…' or 'You trust…'.",
-  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "general",
+  "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "country" | "general",
   "confidence": 0.0-1.0,
   "secondary_lanes": [lane, ...],
   "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|unknown"}],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|country|unknown"}],
   "reasoning": ["one short observation about the LISTENER (not the song)", "..."]
 }
 No prose, no markdown fences. Three songs is not enough for certainty — keep confidence honest (0.3–0.6). The candidate_dimensions, lane, and secondary_lanes are for the engine; the LISTENER never sees them, so do not reference them in the observation.`;
