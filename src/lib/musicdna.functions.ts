@@ -361,20 +361,13 @@ export async function nextPairingImpl(supabase: AuthedSupabase, data: { sessionI
     const usedIds = new Set((usedRes.data ?? []).map((c) => c.pairing_id));
     const round = usedIds.size;
     const vector = (sessionRes.data?.vector ?? {}) as Record<string, number>;
-    const confidentAxes = (DIMS as readonly string[]).filter((d) => Math.abs(vector[d] ?? 0) >= 30).length;
-    const confidence = confidentAxes / DIMS.length;
-    const canStop = round >= 12 && confidence >= 0.6;
-    if (canStop) {
-      return { pairing: null, round, confidence, done: true as const };
+    const stop = shouldStop({ round, vector, dims: DIMS as readonly string[] });
+    if (stop.done) {
+      return { pairing: null, round, confidence: stop.confidence, done: true as const };
     }
 
-    // Cross-lane probes intentionally disabled: pairings stay within the user's
-    // lane. Dimensions are read inside the lane, not across lanes. See
-    // mem://product/within-lane-only.md.
+    // Cross-lane probes intentionally disabled — see mem://product/within-lane-only.md.
     void probeCandidates; void PROBE_ROUNDS;
-
-    // Invariant: nothing should ever queue a cross-lane probe. If a regression
-    // re-enables it, fail loud here instead of silently shipping the wrong UX.
     if (Object.keys(probeState.pending).length > 0) {
       throw new Error(
         `within-lane invariant violated: probe_state.pending is non-empty (${JSON.stringify(probeState.pending)}). ` +
@@ -382,82 +375,39 @@ export async function nextPairingImpl(supabase: AuthedSupabase, data: { sessionI
       );
     }
 
-
-
-    // -------- Normal lane-scoped fetch --------
+    // -------- Fetch lane-scoped pool, fall back to general when empty --------
     let pairingsRes = sessionLane === "general"
       ? await supabase.from("pairings").select(pairingSelect).eq("active", true)
       : await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", sessionLane);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
 
-    let pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id));
+    const rng = { next: () => Math.random() };
+    let picked = selectPairing({
+      pool: (pairingsRes.data ?? []) as unknown as PairingCandidate[],
+      vector,
+      used_ids: usedIds,
+      session_lane: sessionLane,
+      dims: DIMS as readonly string[],
+      rng,
+    });
 
-    // Same-artist diagnostic pairings are micro-Bowie decisions, not lane
-    // decisions. Drop them. If this empties the pool, fall back to general
-    // and re-apply the filter there.
-    const differentArtist = (p: typeof pool[number]) => {
-      const a = (p.song_a?.artist ?? "").trim().toLowerCase();
-      const b = (p.song_b?.artist ?? "").trim().toLowerCase();
-      return a !== "" && b !== "" && a !== b;
-    };
-    pool = pool.filter(differentArtist);
-
-    if (!pool.length && sessionLane !== "general") {
+    if (picked.kind === "empty" && sessionLane !== "general") {
       pairingsRes = await supabase.from("pairings").select(pairingSelect).eq("active", true).eq("lane", "general");
       if (pairingsRes.error) throw new Error(pairingsRes.error.message);
-      pool = (pairingsRes.data ?? []).filter((p) => !usedIds.has(p.id)).filter(differentArtist);
+      picked = selectPairing({
+        pool: (pairingsRes.data ?? []) as unknown as PairingCandidate[],
+        vector,
+        used_ids: usedIds,
+        session_lane: sessionLane,
+        dims: DIMS as readonly string[],
+        rng,
+      });
     }
-    if (!pool.length) {
-      return { pairing: null, round, confidence, done: true as const };
+    if (picked.kind === "empty") {
+      return { pairing: null, round, confidence: stop.confidence, done: true as const };
     }
-
-    // Hypothesis-challenging filter+boost: the next matchup should *test the
-    // fork the critic just named*, not grab any high-weight pair. We identify
-    // axes the working read leans hardest on (the live fork) and prefer pairings
-    // whose `tests` include one of them. Hard filter when possible; fall back
-    // to a 1.5x boost if filtering would empty the pool.
-    const leaningAxes = new Set(
-      (DIMS as readonly string[])
-        .map((d) => ({ d, v: Math.abs(vector[d] ?? 0) }))
-        .filter((x) => x.v >= 15)
-        .sort((a, b) => b.v - a.v)
-        .slice(0, 3)
-        .map((x) => x.d),
-    );
-    const testsFork = (p: typeof pool[number]) => {
-      const tests = ((p.tests as string[] | null) ?? []) as string[];
-      return tests.some((t) => leaningAxes.has(t));
-    };
-    if (leaningAxes.size > 0) {
-      const forkPool = pool.filter(testsFork);
-      if (forkPool.length > 0) pool = forkPool;
-    }
-    const need = (dim: string) => 1 / (1 + Math.abs(vector[dim] ?? 0));
-    const scored = pool.map((p) => {
-      const tests = ((p.tests as string[] | null) ?? (DIMS as readonly string[]).slice()) as string[];
-      const axisNeed = tests.reduce((s, d) => s + need(d), 0) / Math.max(1, tests.length);
-      const challengesHypothesis = leaningAxes.size > 0 && tests.some((t) => leaningAxes.has(t));
-      const challengeBoost = challengesHypothesis ? 1.5 : 1;
-      const w = ((p.diagnostic_weight || 50) / 100) * (0.4 + 0.6 * axisNeed) * challengeBoost;
-      return { p, w };
-    });
-    const total = scored.reduce((s, x) => s + x.w, 0);
-    let r = Math.random() * total;
-    const pick = scored.find((x) => (r -= x.w) <= 0) ?? scored[0];
-    const pickedLane = (pick.p as { lane?: string | null }).lane ?? null;
-    if (
-      sessionLane !== "general" &&
-      pickedLane &&
-      pickedLane !== sessionLane &&
-      pickedLane !== "general"
-    ) {
-      throw new Error(
-        `within-lane invariant violated: nextPairing picked lane="${pickedLane}" for session lane="${sessionLane}". ` +
-          `See mem://product/within-lane-only.md.`,
-      );
-    }
-    return { pairing: pick.p, round: round + 1, confidence, done: false as const };
-
+    assertWithinLane((picked.pairing as { lane?: string | null }).lane ?? null, sessionLane);
+    return { pairing: picked.pairing, round: round + 1, confidence: stop.confidence, done: false as const };
 }
 
 
