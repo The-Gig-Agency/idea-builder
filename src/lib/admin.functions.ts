@@ -207,3 +207,189 @@ export const adminResidualQueue = createServerFn({ method: "POST" })
       rows: (rows ?? []) as JsonRow[],
     };
   });
+
+// --------- Ontology dashboard: the "am I learning?" view ---------
+// Not for users. For us. Aggregates coverage (catalog shape), heatmap
+// (where listeners actually land), and pairing/song health (which
+// matchups + songs are earning their keep). All read-only.
+export const adminOntology = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const admin = await assertAdminAndGetClient(context.userId);
+
+    // ---- catalog ----
+    const songsRes = await admin.from("songs")
+      .select("id, title, artist, primary_lane, archetype_signals, active")
+      .limit(5000);
+    if (songsRes.error) throw new Error(songsRes.error.message);
+    const songs = songsRes.data ?? [];
+
+    const pairingsRes = await admin.from("pairings")
+      .select("id, song_a_id, song_b_id, lane, diagnostic_weight, active, expected_split")
+      .limit(5000);
+    if (pairingsRes.error) throw new Error(pairingsRes.error.message);
+    const pairings = pairingsRes.data ?? [];
+
+    const archRes = await admin.from("archetypes").select("id, name").limit(500);
+    if (archRes.error) throw new Error(archRes.error.message);
+    const archetypes = archRes.data ?? [];
+
+    // ---- session-scale data (bounded — most recent 5k choices, 2k sessions) ----
+    const sessionsRes = await admin.from("sessions")
+      .select("id, lane, archetype_id, archetype_score, completed_at")
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(2000);
+    if (sessionsRes.error) throw new Error(sessionsRes.error.message);
+    const sessions = sessionsRes.data ?? [];
+
+    const choicesRes = await admin.from("choices")
+      .select("pairing_id, chosen_song_id, rejected_song_id, ms_to_decide")
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (choicesRes.error) throw new Error(choicesRes.error.message);
+    const choices = choicesRes.data ?? [];
+
+    // ---- coverage: lane × archetype-signal from the catalog ----
+    // songs.archetype_signals is a free-form array; we count each signal
+    // that matches a known archetype name (case-insensitive slug match).
+    const archNames = archetypes.map((a) => ({ id: a.id, name: a.name, key: a.name.toLowerCase() }));
+    const laneList = new Set<string>();
+    const coverage: Record<string, Record<string, number>> = {};
+    const laneSongCount: Record<string, number> = {};
+    for (const s of songs) {
+      const lane = (s.primary_lane as string | null) || "general";
+      laneList.add(lane);
+      laneSongCount[lane] = (laneSongCount[lane] ?? 0) + 1;
+      coverage[lane] ??= {};
+      const sigs = (s.archetype_signals as string[] | null) ?? [];
+      for (const sig of sigs) {
+        const k = String(sig).toLowerCase();
+        const match = archNames.find((a) => k.includes(a.key) || a.key.includes(k));
+        const label = match?.name ?? sig;
+        coverage[lane][label] = (coverage[lane][label] ?? 0) + 1;
+      }
+    }
+
+    // ---- heatmap: lane × winning archetype from real sessions ----
+    const archById = new Map(archetypes.map((a) => [a.id, a.name]));
+    const heatmap: Record<string, Record<string, number>> = {};
+    const laneSessionCount: Record<string, number> = {};
+    let unassigned = 0;
+    for (const sess of sessions) {
+      const lane = (sess.lane as string | null) || "general";
+      laneList.add(lane);
+      laneSessionCount[lane] = (laneSessionCount[lane] ?? 0) + 1;
+      const archName = archById.get(sess.archetype_id as string) ?? null;
+      if (!archName) { unassigned++; continue; }
+      heatmap[lane] ??= {};
+      heatmap[lane][archName] = (heatmap[lane][archName] ?? 0) + 1;
+    }
+
+    // ---- pairing health ----
+    const songById = new Map(songs.map((s) => [s.id as string, s]));
+    const pairingStats = new Map<string, { picks_a: number; picks_b: number; total: number; ms_sum: number; ms_n: number }>();
+    for (const c of choices) {
+      const pid = c.pairing_id as string;
+      if (!pid) continue;
+      const p = pairings.find((pr) => pr.id === pid);
+      if (!p) continue;
+      const st = pairingStats.get(pid) ?? { picks_a: 0, picks_b: 0, total: 0, ms_sum: 0, ms_n: 0 };
+      if (c.chosen_song_id === p.song_a_id) st.picks_a++;
+      else if (c.chosen_song_id === p.song_b_id) st.picks_b++;
+      st.total++;
+      const ms = c.ms_to_decide as number | null;
+      if (typeof ms === "number" && ms > 0 && ms < 60_000) { st.ms_sum += ms; st.ms_n++; }
+      pairingStats.set(pid, st);
+    }
+
+    const pairingHealth = pairings
+      .map((p) => {
+        const st = pairingStats.get(p.id as string);
+        const total = st?.total ?? 0;
+        const splitA = total ? (st!.picks_a / total) : null;
+        // Info gain proxy: balanced splits (~50/50) are more diagnostic.
+        // Score 0..100; 50/50 → 100, 100/0 → 0. Only meaningful once we
+        // have a real sample; keep null under 5 choices.
+        const infoGain = splitA != null && total >= 5
+          ? Math.round((1 - Math.abs(splitA - 0.5) * 2) * 100)
+          : null;
+        const avgMs = st && st.ms_n ? Math.round(st.ms_sum / st.ms_n) : null;
+        const a = songById.get(p.song_a_id as string);
+        const b = songById.get(p.song_b_id as string);
+        return {
+          id: p.id as string,
+          lane: (p.lane as string | null) || "general",
+          diagnostic_weight: p.diagnostic_weight as number | null,
+          active: p.active as boolean,
+          expected_split: p.expected_split as string | null,
+          a_title: a ? `${a.title} — ${a.artist}` : "?",
+          b_title: b ? `${b.title} — ${b.artist}` : "?",
+          picks_a: st?.picks_a ?? 0,
+          picks_b: st?.picks_b ?? 0,
+          total,
+          split_a_pct: splitA != null ? Math.round(splitA * 100) : null,
+          avg_ms: avgMs,
+          info_gain: infoGain,
+        };
+      })
+      .sort((x, y) => (y.total - x.total));
+
+    // ---- song health ----
+    const songStats = new Map<string, { appearances: number; chosen: number; ms_sum: number; ms_n: number; info_sum: number; info_n: number }>();
+    for (const c of choices) {
+      const pid = c.pairing_id as string;
+      const p = pairings.find((pr) => pr.id === pid);
+      if (!p) continue;
+      const stAll = pairingStats.get(pid);
+      const infoGain = stAll && stAll.total >= 5
+        ? (1 - Math.abs(stAll.picks_a / stAll.total - 0.5) * 2) * 100
+        : null;
+      for (const sid of [p.song_a_id, p.song_b_id]) {
+        if (!sid) continue;
+        const st = songStats.get(sid as string) ?? { appearances: 0, chosen: 0, ms_sum: 0, ms_n: 0, info_sum: 0, info_n: 0 };
+        st.appearances++;
+        if (c.chosen_song_id === sid) st.chosen++;
+        const ms = c.ms_to_decide as number | null;
+        if (typeof ms === "number" && ms > 0 && ms < 60_000) { st.ms_sum += ms; st.ms_n++; }
+        if (infoGain != null) { st.info_sum += infoGain; st.info_n++; }
+        songStats.set(sid as string, st);
+      }
+    }
+    const songHealth = Array.from(songStats.entries())
+      .map(([sid, st]) => {
+        const s = songById.get(sid);
+        return {
+          id: sid,
+          title: s?.title ?? "?",
+          artist: s?.artist ?? "?",
+          lane: (s?.primary_lane as string | null) ?? "general",
+          appearances: st.appearances,
+          chosen_pct: st.appearances ? Math.round((st.chosen / st.appearances) * 100) : 0,
+          avg_ms: st.ms_n ? Math.round(st.ms_sum / st.ms_n) : null,
+          info_contribution: st.info_n ? Math.round(st.info_sum / st.info_n) : null,
+        };
+      })
+      .sort((x, y) => y.appearances - x.appearances);
+
+    return {
+      lanes: Array.from(laneList).sort(),
+      archetype_names: archetypes.map((a) => a.name).sort(),
+      lane_song_count: laneSongCount,
+      lane_session_count: laneSessionCount,
+      unassigned_sessions: unassigned,
+      totals: {
+        songs: songs.length,
+        active_songs: songs.filter((s) => s.active).length,
+        pairings: pairings.length,
+        active_pairings: pairings.filter((p) => p.active).length,
+        archetypes: archetypes.length,
+        sessions_sampled: sessions.length,
+        choices_sampled: choices.length,
+      },
+      coverage,
+      heatmap,
+      pairing_health: pairingHealth,
+      song_health: songHealth,
+    };
+  });
