@@ -507,136 +507,341 @@ export async function nextPairingImpl(supabase: AuthedSupabase, data: { sessionI
 
 
 // ============ Record choice ============
-// Each axis carries a short verdict ("immersion over immediacy") plus a
-// "why that mattered" line. Voice: smart, conversational, curious — a critic
-// thinking out loud, not delivering a verdict. Hedge where appropriate
-// ("maybe", "starting to look like", "early read"). Keep the conversation
-// going. Multiple variants per pole so repeats don't read like a script.
-type RevealVariant = { verdict: string; why: string };
+// Two-layer copy system:
+//   axis_label — the canonical "X over Y" line, spoken ONCE per session per pole.
+//   observations — 8–12 different-flavored observations of the same tradeoff.
+// The reveal builder picks by hash so no line repeats inside a session, and
+// gates identity claims behind round ≥ 3 (with real support required for the
+// stronger reads). Voice: Rolling Stone in its mean years — punchy, specific,
+// no therapy-speak, no restated axis. Every line should make the user nod.
 type BeatVariant = { thesis: string; hook: string };
+type Pole = { axis_label: string; observations: string[] };
 
-const REVEAL: Record<string, { hi: RevealVariant[]; lo: RevealVariant[] }> = {
+const POLES: Record<string, { hi: Pole; lo: Pole }> = {
   movement: {
-    hi: [
-      { verdict: "forward motion over stillness", why: "Feels like you want the song to take you somewhere. Standing still is for other people — maybe." },
-      { verdict: "motion over patience", why: "Twice in a row you picked the one that moves. Early read: you like a song with somewhere to be." },
-      { verdict: "propulsion over repose", why: "You keep nudging toward the one that won't sit down. Tell me if I'm wrong about that." },
-    ],
-    lo: [
-      { verdict: "stillness over forward motion", why: "Looks like you'd rather the song sit you down than drag you forward. Patience as taste, maybe." },
-      { verdict: "repose over propulsion", why: "You keep gravitating to the still ones. Early hypothesis: you want the song to wait with you." },
-      { verdict: "the slow lane over the fast one", why: "Not in a hurry. Are you ever, or does it depend on the day?" },
-    ],
+    hi: {
+      axis_label: "songs that move over songs that sit still",
+      observations: [
+        "You want the song going somewhere.",
+        "Stillness bores you, at least so far.",
+        "Motion is the point, not decoration.",
+        "You reward a song with somewhere to be.",
+        "The one that leans forward keeps winning.",
+        "Standing still is for other people, apparently.",
+        "You'd rather be pulled than sat down.",
+        "The forward pick, again. Not an accident.",
+      ],
+    },
+    lo: {
+      axis_label: "songs that sit still over songs that move",
+      observations: [
+        "You'd rather the song wait with you.",
+        "Not in a hurry. Ever, or just today?",
+        "Patience reads as taste, not laziness.",
+        "The still ones keep pulling you in.",
+        "You reward a song that refuses to rush.",
+        "You want the room, not the road.",
+        "The one that plants itself keeps winning.",
+        "You'd take the pause over the push.",
+      ],
+    },
   },
   atmosphere: {
-    hi: [
-      { verdict: "immersive mood over statement", why: "Starting to think you trust the room more than the lyric. The air around the song is the song?" },
-      { verdict: "atmosphere over message", why: "You keep picking the one that surrounds you. Mood as the whole point, maybe." },
-      { verdict: "haze over clarity", why: "The blurrier one keeps winning. I could be wrong, but you sound like a reverb person." },
-    ],
-    lo: [
-      { verdict: "statement over immersive mood", why: "Looks like you want the song to mean something out loud. Less hiding, more saying." },
-      { verdict: "clarity over haze", why: "You keep choosing the one that says it. Reading you as someone who wants the words to land." },
-      { verdict: "the direct one over the dreamy one", why: "Not much patience for fog so far. Or is it just these picks?" },
-    ],
+    hi: {
+      axis_label: "atmosphere over statement",
+      observations: [
+        "The room around the song is doing the work.",
+        "You trust mood more than the lyric.",
+        "The blurrier one keeps winning your vote.",
+        "You want to be surrounded, not addressed.",
+        "Reverb reads as meaning, at least so far.",
+        "You reward the song that hides its edges.",
+        "The one that soaks the room keeps landing.",
+        "You'd rather feel it than be told.",
+      ],
+    },
+    lo: {
+      axis_label: "statement over atmosphere",
+      observations: [
+        "You want the words to land.",
+        "Not much patience for fog so far.",
+        "You reward a song that says the thing.",
+        "The direct one keeps winning.",
+        "Clarity beats haze on your card.",
+        "You'd rather be addressed than surrounded.",
+        "The song that means it out loud keeps landing.",
+        "You want the lyric doing real work.",
+      ],
+    },
   },
   immersion: {
-    hi: [
-      { verdict: "slow reveal over immediacy", why: "Early read: you don't need the hook on contact. The third listen is where the song actually lives, maybe." },
-      { verdict: "patience over payoff", why: "You keep picking the grower. Sounds like you trust a song to earn it." },
-      { verdict: "the long burn over the quick hit", why: "Not chasing the chorus. Curious if a true sleeper does it for you too." },
-    ],
-    lo: [
-      { verdict: "immediacy over slow reveal", why: "If the song doesn't grab you in eight bars, looks like it doesn't get a second chance." },
-      { verdict: "hook over patience", why: "You keep rewarding the one that lands fast. Reading you as a first-impression voter." },
-      { verdict: "the quick hit over the long burn", why: "Not waiting around. Is that always you, or just the mood right now?" },
-    ],
+    hi: {
+      axis_label: "the slow burn over the quick hit",
+      observations: [
+        "You don't need the hook on contact.",
+        "You're patient with a slow fuse.",
+        "The payoff matters more than the opening.",
+        "You reward ambition over efficiency.",
+        "You don't mind waiting for the song to arrive.",
+        "The third-listen songs keep winning.",
+        "The ending changes how you hear the beginning.",
+        "You trust a song to earn it.",
+      ],
+    },
+    lo: {
+      axis_label: "the quick hit over the slow burn",
+      observations: [
+        "If it doesn't grab you fast, it doesn't grab you.",
+        "You vote on first impression and stick.",
+        "Eight bars or out.",
+        "The opener has to do real work.",
+        "You reward the song that lands immediately.",
+        "The hook better arrive on time.",
+        "First bar is the audition.",
+        "The slow reveal loses, at least so far.",
+      ],
+    },
   },
   scale: {
-    hi: [
-      { verdict: "vast over intimate", why: "Starting to think you want the song bigger than the room. Cathedral over kitchen — early read." },
-      { verdict: "wide over close", why: "You keep picking the one with more air. Room for the sound to stretch." },
-      { verdict: "the panorama over the close-up", why: "You like a song that opens up. I could be wrong but this looks consistent." },
-    ],
-    lo: [
-      { verdict: "intimate over vast", why: "Looks like you want the song breathing on your neck. No stadiums, no fog machines." },
-      { verdict: "close over wide", why: "You keep choosing the smaller room. Reading you as someone who wants the song one inch away." },
-      { verdict: "the close-up over the panorama", why: "Private over public, so far. Tell me if that flips on a different mood." },
-    ],
+    hi: {
+      axis_label: "vast over intimate",
+      observations: [
+        "You want the song bigger than the room.",
+        "The one with more air keeps winning.",
+        "Panorama beats close-up on your card.",
+        "You reward a song that opens up.",
+        "You want space to move around in the song.",
+        "The wider one keeps landing.",
+        "You'd rather the song stretch than lean in.",
+        "Big rooms, apparently.",
+      ],
+    },
+    lo: {
+      axis_label: "intimate over vast",
+      observations: [
+        "You want the song one inch away.",
+        "No stadiums, no fog machines.",
+        "The close pick keeps winning.",
+        "You reward a song breathing on your neck.",
+        "You'd take the whisper over the wall.",
+        "Private over public, so far.",
+        "The small room keeps landing.",
+        "You want it in the ear, not in the sky.",
+      ],
+    },
   },
   community: {
-    hi: [
-      { verdict: "communal over solitary", why: "Early read: you hear songs in rooms full of people. The singalong is the meaning, maybe." },
-      { verdict: "shared over private", why: "You keep picking the one built for a crowd. Music as gathering." },
-      { verdict: "the room over the headphones", why: "Looks like you'd rather hear it together than alone." },
-    ],
-    lo: [
-      { verdict: "solitary over communal", why: "Headphones, alone, on purpose. Reading you as someone who wants the signal undiluted." },
-      { verdict: "private over shared", why: "You keep choosing the song that's between you and it. Crowds optional." },
-      { verdict: "the headphones over the room", why: "Solo listener so far. Curious if a great singalong still pulls you in." },
-    ],
+    hi: {
+      axis_label: "songs built to be shared over songs built for headphones",
+      observations: [
+        "You're drawn to songs that invite people in.",
+        "The one built for a crowd keeps winning.",
+        "You reward a song that wants company.",
+        "You'd rather hear it together than alone.",
+        "The singalong is doing something for you.",
+        "You keep picking the one with room for more voices.",
+        "The shared pick keeps landing.",
+        "Music as gathering, apparently.",
+      ],
+    },
+    lo: {
+      axis_label: "songs built for headphones over songs built to be shared",
+      observations: [
+        "Headphones. Alone. On purpose.",
+        "You want the signal undiluted.",
+        "The song is between you and it.",
+        "You reward a song that doesn't need a crowd.",
+        "The private pick keeps winning.",
+        "Group hugs need not apply.",
+        "You'd rather listen than participate.",
+        "Solo listener, so far.",
+      ],
+    },
   },
   perspective: {
-    hi: [
-      { verdict: "witness over feeling", why: "Looks like you want the song to show you something, not become you. Narrator over screamer — early read." },
-      { verdict: "story over confession", why: "You keep picking the one telling you about it instead of bleeding on you." },
-      { verdict: "the camera over the mirror", why: "Distance is doing something for you. I could be wrong, but the pattern's there." },
-    ],
-    lo: [
-      { verdict: "feeling over witness", why: "You don't want a report from the scene. You want to be inside it." },
-      { verdict: "confession over story", why: "Keep picking the one that puts you in the song. No glass between you and it." },
-      { verdict: "the mirror over the camera", why: "First-person, no distance. Reading you as someone who wants to feel it, not hear about it." },
-    ],
+    hi: {
+      axis_label: "the narrator over the confessor",
+      observations: [
+        "You want the song to show you something.",
+        "You reward a song that tells you about it.",
+        "Distance is doing something for you.",
+        "The camera keeps beating the mirror.",
+        "You'd rather watch than bleed.",
+        "The storyteller keeps winning.",
+        "You want the frame around the feeling.",
+        "You're here for the report, not the ride.",
+      ],
+    },
+    lo: {
+      axis_label: "the confessor over the narrator",
+      observations: [
+        "You want to be inside the song.",
+        "No glass between you and the feeling.",
+        "The first-person pick keeps winning.",
+        "You reward a song that admits something.",
+        "You'd rather feel it than hear about it.",
+        "No distance, on purpose.",
+        "You want the singer in the same room as the feeling.",
+        "The mirror beats the camera, at least so far.",
+      ],
+    },
   },
   confidence: {
-    hi: [
-      { verdict: "command over vulnerability", why: "Early read: you like a singer who isn't asking. Posture as music." },
-      { verdict: "swagger over flinch", why: "You keep picking the one that walks in like it owns the place. Tell me if that's wrong." },
-      { verdict: "the assertion over the admission", why: "Confidence keeps winning your vote. Curious how a vulnerable one lands." },
-    ],
-    lo: [
-      { verdict: "vulnerability over command", why: "Looks like you'd take the cracked admission over the swagger. The flinch is the point, maybe." },
-      { verdict: "flinch over swagger", why: "You keep choosing the one that admits something. Reading you as allergic to posing." },
-      { verdict: "the admission over the assertion", why: "Honesty over heat. I could be wrong, but the picks keep saying so." },
-    ],
+    hi: {
+      axis_label: "swagger over vulnerability",
+      observations: [
+        "You reward a song that walks in like it owns the place.",
+        "The certain one keeps winning.",
+        "You want the singer sure of it.",
+        "You'd take the assertion over the apology.",
+        "No apology takes on your card, so far.",
+        "You keep rewarding conviction.",
+        "The one that plants a flag keeps landing.",
+        "You want the song to mean it out loud.",
+      ],
+    },
+    lo: {
+      axis_label: "vulnerability over swagger",
+      observations: [
+        "You reward the cracked admission.",
+        "You'd take the flinch over the flex.",
+        "Honesty beats heat on your card.",
+        "You want the singer risking something.",
+        "The one that admits it keeps winning.",
+        "You're allergic to posing, so far.",
+        "The one with a lump in the throat keeps landing.",
+        "You want the song exposed, not armored.",
+      ],
+    },
   },
   tension: {
-    hi: [
-      { verdict: "danger over release", why: "Looks like you don't want the song to let you off. Pressure all the way." },
-      { verdict: "pressure over relief", why: "You keep picking the one that won't resolve. Early read: you trust the squeeze." },
-      { verdict: "the held breath over the exhale", why: "Tension is doing the work for you. Curious if a real release ever beats it." },
-    ],
-    lo: [
-      { verdict: "release over danger", why: "You want the song to let you breathe. The exhale is the payoff — at least so far." },
-      { verdict: "relief over pressure", why: "You keep choosing the one that opens up. Reading you as a resolution person." },
-      { verdict: "the exhale over the held breath", why: "Air over anxiety. Maybe always, maybe just today — tell me." },
-    ],
+    hi: {
+      axis_label: "pressure over release",
+      observations: [
+        "You don't want the song to let you off.",
+        "You reward a song that won't resolve.",
+        "You trust the squeeze.",
+        "The held breath keeps beating the exhale.",
+        "You want the song to keep you tight.",
+        "The unsettled one keeps winning.",
+        "You'd rather be pinned than freed.",
+        "Resolution can wait, apparently.",
+      ],
+    },
+    lo: {
+      axis_label: "release over pressure",
+      observations: [
+        "You want the song to let you breathe.",
+        "The exhale is the payoff.",
+        "You reward a song that opens the door.",
+        "The one that lets go keeps winning.",
+        "You'd take the resolution over the standoff.",
+        "You want air, not anxiety.",
+        "The one that finds daylight keeps landing.",
+        "You want the song to give something back.",
+      ],
+    },
   },
   texture: {
-    hi: [
-      { verdict: "refinement over rawness", why: "Looks like you don't romanticize the mess. Craft as the delivery system, not the enemy of feeling." },
-      { verdict: "polish over grit", why: "You keep picking the one with the seams hidden. Reading you as someone who hears the work." },
-      { verdict: "the clean take over the cracked one", why: "Production matters to you. I could be wrong — but the pattern's pretty clear." },
-    ],
-    lo: [
-      { verdict: "rawness over refinement", why: "You'd take the cracked voice over the perfect take. Sincerity has a sound and you hear it." },
-      { verdict: "grit over polish", why: "You keep choosing the one with dirt on it. Early read: you want it human, not fixed." },
-      { verdict: "the cracked take over the clean one", why: "Mess wins your vote so far. Does a flawless one ever sneak through?" },
-    ],
+    hi: {
+      axis_label: "the clean take over the cracked one",
+      observations: [
+        "You reward a song that hides its seams.",
+        "You hear the work and vote for it.",
+        "The polished one keeps winning.",
+        "You don't romanticize the mess.",
+        "Craft is doing the delivering.",
+        "The invisible-seam song keeps landing.",
+        "You want the production doing real work.",
+        "You'd take the fixed one over the flawed one.",
+      ],
+    },
+    lo: {
+      axis_label: "the cracked take over the clean one",
+      observations: [
+        "You'd take the cracked voice over the perfect one.",
+        "You want it human, not fixed.",
+        "The one with dirt on it keeps winning.",
+        "You trust the mess.",
+        "Polish reads suspicious, apparently.",
+        "The imperfect take keeps landing.",
+        "You want to hear the hands on the instrument.",
+        "Sincerity has a sound and you hear it.",
+      ],
+    },
   },
   transformation: {
-    hi: [
-      { verdict: "songs that go somewhere over songs that hold their shape", why: "Looks like you want the song to become something it wasn't. Becoming is the bet, maybe." },
-      { verdict: "evolution over identity", why: "You keep picking the one that shifts on you. Reading you as someone who wants the surprise." },
-      { verdict: "the journey over the snapshot", why: "Static doesn't do it. I could be wrong, but you sound like a builder-listener." },
-    ],
-    lo: [
-      { verdict: "songs that hold their shape over songs that wander", why: "You want the song to know what it is from the first bar. No identity crisis." },
-      { verdict: "identity over evolution", why: "You keep choosing the one that stays itself. Form as the whole point, maybe." },
-      { verdict: "the snapshot over the journey", why: "Conviction over becoming, so far. Tell me if a true morpher ever cracks that." },
-    ],
+    hi: {
+      axis_label: "songs that go somewhere over songs that hold their shape",
+      observations: [
+        "You like songs that reveal themselves.",
+        "You reward ambition over efficiency.",
+        "The payoff matters more than the hook.",
+        "You don't need the chorus in the first minute.",
+        "The song that keeps renegotiating itself keeps winning.",
+        "You're listening for evolution, not impact.",
+        "The one that travels somewhere keeps landing.",
+        "You want the ending to change how you hear the start.",
+        "You reward motion inside the song itself.",
+      ],
+    },
+    lo: {
+      axis_label: "songs that hold their shape over songs that wander",
+      observations: [
+        "You want the song to know what it is from bar one.",
+        "No identity crisis on your card.",
+        "The formed one keeps winning.",
+        "You reward a song that arrives whole.",
+        "You'd take the statement over the sketch.",
+        "The one that commits keeps landing.",
+        "You want conviction, not exploration.",
+        "The song doesn't need to change to mean something.",
+      ],
+    },
   },
 };
+
+// Confidence ladder — hedges the reveal by round so the engine sounds like
+// someone discovering your taste, not pretending they already know.
+const HEDGES = [
+  "Interesting.",              // round 1
+  "I think I see a pattern.",  // round 2
+  "Early read:",               // round 3
+  "Starting to believe:",      // round 4
+  "Fairly confident:",         // round 5
+  "I'm convinced:",            // round 6+
+];
+
+// Hesitation library — timing turns into copy. Each bucket has enough
+// variants that a 20-round session never repeats a line.
+const HESITATION_BUCKETS: Array<{ max: number; lines: string[] }> = [
+  { max: 500, lines: ["Instinct.", "Reflex.", "No thought required.", "That was pre-loaded.", "Zero hesitation."] },
+  { max: 1200, lines: ["Immediate.", "Instant call.", "That wasn't a decision.", "Snap verdict.", "You didn't blink."] },
+  { max: 2500, lines: ["No debate.", "Quick call.", "Clean pick.", "You knew.", "That landed fast."] },
+  { max: 5000, lines: ["Had to think.", "You took a second there.", "Interesting pause.", "That wasn't automatic.", "You weighed it."] },
+  { max: 8000, lines: ["That one wasn't obvious.", "You weighed both.", "That was close.", "You almost changed your mind.", "No instant answer there.", "You gave that some respect."] },
+  { max: Infinity, lines: ["You really wrestled with that one.", "You stared this one down.", "That was a battle.", "You took the long look.", "That one earned its answer."] },
+];
+
+// Words that leak internal vocabulary into user copy. Dev-only guard —
+// warns if a reveal string contains any of these tokens.
+const FORBIDDEN_TOKENS = ["becoming", "witness", "posture", "axis", "dimension"];
+
+function pickByHash<T>(arr: T[] | undefined, seed: number): T | undefined {
+  if (!arr || arr.length === 0) return undefined;
+  const i = ((seed % arr.length) + arr.length) % arr.length;
+  return arr[i];
+}
+
+function hesitationFor(ms: number | null, seed: number): string {
+  if (ms == null) return "";
+  const bucket = HESITATION_BUCKETS.find((b) => ms < b.max);
+  return pickByHash(bucket?.lines, seed) ?? "";
+}
+
+function hedgeForRound(round: number): string {
+  return HEDGES[Math.min(Math.max(round, 1) - 1, HEDGES.length - 1)];
+}
 
 // Fragmented beats for the running thesis — short lines plus a hook
 // question/half-promise that pulls the next pick. Hedged on purpose.
