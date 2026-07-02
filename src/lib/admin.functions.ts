@@ -229,7 +229,7 @@ export const adminOntology = createServerFn({ method: "GET" })
     const songs = songsRes.data ?? [];
 
     const pairingsRes = await admin.from("pairings")
-      .select("id, song_a_id, song_b_id, lane, diagnostic_weight, active, expected_split")
+      .select("id, song_a_id, song_b_id, lane, diagnostic_weight, active, expected_split, user_facing_tradeoff, hypothesis, difficulty")
       .limit(5000);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
     const pairings = pairingsRes.data ?? [];
