@@ -814,6 +814,7 @@ export type Database = {
           routing_power: number | null
           scale: number | null
           sub_lane: string | null
+          subculture: string[]
           tension: number | null
           texture: number | null
           title: string
@@ -850,6 +851,7 @@ export type Database = {
           routing_power?: number | null
           scale?: number | null
           sub_lane?: string | null
+          subculture?: string[]
           tension?: number | null
           texture?: number | null
           title: string
@@ -886,6 +888,7 @@ export type Database = {
           routing_power?: number | null
           scale?: number | null
           sub_lane?: string | null
+          subculture?: string[]
           tension?: number | null
           texture?: number | null
           title?: string
@@ -893,6 +896,30 @@ export type Database = {
           transformation?: number
           updated_at?: string
           year?: number | null
+        }
+        Relationships: []
+      }
+      subcultures: {
+        Row: {
+          created_at: string
+          family: string
+          label: string
+          notes: string | null
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          family: string
+          label: string
+          notes?: string | null
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          family?: string
+          label?: string
+          notes?: string | null
+          slug?: string
         }
         Relationships: []
       }
