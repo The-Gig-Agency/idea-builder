@@ -483,9 +483,10 @@ function Onboarding() {
 
       {/* Post-3 read — one short conversational observation. No fork, no stakes, no axis talk. */}
       {refined && (
-        <section className="space-y-4 animate-in fade-in duration-500">
+        <section className="space-y-3 animate-in fade-in duration-500">
           {r5Step >= 2 && (
             <>
+              <p className="eyebrow text-primary">working theory</p>
               <p className="font-serif text-2xl md:text-3xl leading-snug text-foreground animate-in fade-in duration-700">
                 {refined.observation || refined.hypothesis}
               </p>
