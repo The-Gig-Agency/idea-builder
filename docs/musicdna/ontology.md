@@ -6,6 +6,37 @@ MusicDNA uses music as the input layer for self-discovery. The diagnostic unit i
 
 We are not building a catalog of songs. We are building a catalog of revealing decisions.
 
+## What We're Actually Measuring
+
+Read this before touching the dimension set below.
+
+MusicDNA dimensions are **latent listening preferences**, not human traits. They describe tendencies in how someone chooses music under constraint. They do not describe who the person is.
+
+This is a small wording gap with a large consequence.
+
+Don't say:
+
+> You value hope.
+
+Say:
+
+> You consistently choose songs that build toward emotional release.
+
+Don't say:
+
+> You are a seeker.
+
+Say:
+
+> Your picks reward slow reveals over instant payoff.
+
+The first form is a personality claim we cannot defend. The second form is a behavioral pattern the choices actually support. Every dimension in the table below should be read as "a tendency observable in this user's picks," never as a permanent property of the user.
+
+**Claim discipline for every dimension:**
+- describe the choice, not the chooser
+- name what the songs did, not what the person is
+- allow the reader to disagree with the read without feeling diagnosed
+
 ## Inverted Architecture
 
 Most teams would start from songs and work upward. MusicDNA starts from identity and works downward:
@@ -39,7 +70,7 @@ If that question cannot be answered clearly, the matchup should not exist.
 
 ## Dimension Set
 
-All song vectors use a 0-100 scale.
+Each dimension captures a **listening-choice tendency**, expressed on a 0-100 scale. Low and high poles describe the kind of song a user's picks lean toward — not a verdict about the user. See "What We're Actually Measuring" above for the wording rules any surface reading these values must follow.
 
 | Dimension | Low Means | High Means |
 |---|---|---|
