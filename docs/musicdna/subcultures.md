@@ -41,13 +41,17 @@ Curated for the 1980s MVP and the currently seeded catalog. Additions are welcom
 | `noise_pop` | Noise pop | Melody under distortion. Jesus and Mary Chain. |
 | `britpop` | Britpop | Oasis, Blur, Pulp. Mid-90s UK guitar pop. |
 | `indie_pop` | Indie pop | Smiths lineage, jangly, small-label sensibility. |
-| `indie` | Indie | Broader umbrella when a song is indie-scene but not clearly one sub-tag. |
-| `college_rock` | College rock | US 80s alternative before "alternative" was a format. R.E.M., Pixies. |
+| `college_rock` | College rock | US 80s alternative before "alternative" was a format. R.E.M., early Pixies. |
 | `grunge` | Grunge | Nirvana, Soundgarden, Mudhoney. |
 | `alternative_rock` | Alternative rock | 90s mainstream alt when nothing more specific fits. |
 | `punk` | Punk | Ramones, Clash, Sex Pistols era + descendants. |
-| `art_rock` | Art rock | Roxy Music, Bowie's Berlin, Talk Talk. |
-| `experimental` | Experimental | Genuinely non-idiomatic; use sparingly. |
+| `hardcore` | Hardcore | Faster, harder, more disciplined than punk. Minor Threat, Black Flag, Fugazi. |
+| `no_wave` | No wave | Late-70s NYC anti-rock. DNA, Teenage Jesus, Lydia Lunch. |
+| `post_rock` | Post-rock | Guitars used for texture, not riffs. Slint, Mogwai, Godspeed You! Black Emperor. |
+| `art_rock` | Art rock | Roxy Music, Bowie's Berlin trilogy, Talk Talk. |
+
+Cut from v1 draft: bare `indie` (too vague — use `indie_pop`, `indie_dance`, or `indie_rock` if we add it) and `experimental` (a descriptor, not a scene — no journalist writes "this experimental song from the experimental scene").
+
 
 ### Dance / electronic family
 | slug | label | notes |
@@ -56,6 +60,7 @@ Curated for the 1980s MVP and the currently seeded catalog. Additions are welcom
 | `club` | Club | Made for the floor. House, techno, garage in a DJ context. |
 | `dance` | Dance | Pop-facing dance music. Pet Shop Boys, early Madonna, Erasure. |
 | `madchester` | Madchester | Stone Roses, Happy Mondays. Guitars meet the acid house floor. |
+| `baggy` | Baggy | Loose-limbed groove cousin of madchester. Charlatans, Inspiral Carpets. Often overlaps but journalists distinguish. |
 | `indie_dance` | Indie dance | Post-Madchester crossover. Primal Scream *Screamadelica*. |
 | `trip_hop` | Trip-hop | Portishead, Massive Attack, Tricky. |
 | `synth_pop` | Synth-pop | Depeche Mode, OMD, Human League. |
@@ -64,7 +69,9 @@ Curated for the 1980s MVP and the currently seeded catalog. Additions are welcom
 | slug | label | notes |
 |---|---|---|
 | `sophisti_pop` | Sophisti-pop | Prefab Sprout, Style Council, Sade. Jazz-inflected 80s pop. |
-| `crossover` | Crossover | Song deliberately straddles two scenes; pair with a second tag that names the second scene. |
+
+Cut from v1 draft: `crossover` — industry marketing word, not a scene. No journalist writes "this crossover song." A song that straddles scenes gets both scene tags (e.g. `["madchester","club"]`), not a `crossover` label.
+
 
 ## Backfill mapping (one-time, from legacy `lane`)
 
@@ -79,8 +86,9 @@ Applied by the split migration. Preserved here so we can reconstruct intent if t
 | `grunge_altrock` | `["grunge","alternative_rock"]` |
 | `manchester_indie_dance` | `["madchester","indie_dance"]` |
 | `electronic_crossover` | `["electronica","club"]` |
-| `artrock_experimental` | `["art_rock","experimental"]` |
-| `sophistipop_lyric_indie` | `["sophisti_pop","indie"]` |
+| `artrock_experimental` | `["art_rock"]` (dropped `experimental` — not a scene) |
+| `sophistipop_lyric_indie` | `["sophisti_pop","indie_pop"]` |
+
 | `punk_noise_edge` | `["punk","noise_pop"]` |
 | `post-punk` | `["post_punk"]` |
 | `madchester` | `["madchester"]` |
