@@ -1006,22 +1006,73 @@ function PairingHealthView({ d, laneFilter }: { d: OntologyData; laneFilter: str
     })
     .slice(0, 100);
 
+  const [copied, setCopied] = useState(false);
+
+  const exportRows = d.pairing_health
+    .filter((p) => !laneFilter || p.lane === laneFilter);
+
+  const buildJson = () => JSON.stringify(exportRows, null, 2);
+  const buildCsv = () => {
+    const cols = [
+      "id", "lane", "difficulty", "user_facing_tradeoff", "hypothesis",
+      "a_title", "b_title", "picks_a", "picks_b", "total", "split_a_pct",
+      "avg_ms", "info_gain", "diagnostic_weight", "expected_split", "active",
+    ] as const;
+    const esc = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const header = cols.join(",");
+    const body = exportRows.map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(",")).join("\n");
+    return `${header}\n${body}`;
+  };
+
+  const copyJson = async () => {
+    await navigator.clipboard.writeText(buildJson());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  const downloadCsv = () => {
+    const blob = new Blob([buildCsv()], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pairings-${laneFilter || "all"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <p className="eyebrow">Pairing health</p>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as typeof sort)}
-          className="border hairline rounded-sm bg-background px-3 py-1.5 text-xs"
-        >
-          <option value="total">Most tested</option>
-          <option value="info_gain">Highest info gain</option>
-          <option value="avg_ms">Longest hesitation</option>
-        </select>
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <p className="eyebrow">Pairing health · {exportRows.length} pairings{laneFilter ? ` in ${laneFilter}` : ""}</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyJson}
+            className="border hairline rounded-sm px-3 py-1.5 text-xs hover:bg-muted transition"
+          >
+            {copied ? "Copied" : "Copy JSON"}
+          </button>
+          <button
+            onClick={downloadCsv}
+            className="border hairline rounded-sm px-3 py-1.5 text-xs hover:bg-muted transition"
+          >
+            Download CSV
+          </button>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="border hairline rounded-sm bg-background px-3 py-1.5 text-xs"
+          >
+            <option value="total">Most tested</option>
+            <option value="info_gain">Highest info gain</option>
+            <option value="avg_ms">Longest hesitation</option>
+          </select>
+        </div>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Info gain rewards balanced splits (a 96/4 blowout teaches you nothing). Retire low info gain + low hesitation pairings.
+        Info gain rewards balanced splits (a 96/4 blowout teaches you nothing). Retire low info gain + low hesitation pairings. Export includes tradeoff copy, hypothesis, and difficulty for every pairing (respects lane filter).
       </p>
       <div className="border hairline rounded-sm overflow-x-auto">
         <table className="w-full text-xs">
