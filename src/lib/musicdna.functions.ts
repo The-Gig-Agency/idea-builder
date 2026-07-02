@@ -1846,24 +1846,51 @@ export const reactToOne = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => reactToOneImpl(context.supabase, data));
 
 
-// Step B: 5 songs total + the prior hypothesis. The AI either confirms,
-// refines, or breaks its own guess. Writes to profile. This is the lock-in.
+// Step B: 5 songs total + the prior hypothesis. The AI produces an EVIDENCE
+// LEDGER, not a verdict. The threshold rule (≥3 supporting picks AND 0 strong
+// contradictions) is enforced HERE in code — the model does not get to decide
+// what ships. Max one claim. If nothing clears, we say "still learning."
 const REFINE_VOICE = `${PERSONA}
-Mode: lock in the read. You gave a hypothesis off three songs. They threw two more — often to test you. Either CONFIRM, REFINE, or BREAK your own guess, then commit. Still about the LISTENER, not the catalog.
-${ONBOARDING_RULES}
-${LANE_RULES}
-Return STRICT JSON:
+Mode: evidence ledger. Five songs. Do NOT deliver a personality verdict. Produce an evidence sketch that the app will filter.
+
+You may propose UP TO TWO candidate claims about the LISTENER. For each, list which specific picks support it, which contradict it, and at least one competing explanation ("or they just really like The Cure", "or they came up on 4AD", "or three picks isn't enough yet"). Also give ONE short, curious reaction line — the equivalent of "That's enough. I've got a working theory. Or two, and one alternative."
+
+HARD RULES:
+- Never claim more than the picks support. A claim needs at least 3 of the 5 songs behind it.
+- Every claim carries an alternative explanation. Not optional.
+- No horoscope language. No axis names. No "you reward…" openers.
+- reaction: 6–18 words, curious not diagnostic.
+- claim.text: 8–20 words. Plain English. No genre labels, no scoring language.
+- competing_explanations: short phrases, 3–12 words each.
+
+Return STRICT JSON, no fences:
 {
-  "reaction": "ONE sentence, max 20 words. Say honestly whether the new two confirm, refine, or break your read. About the listener's CHOICES, not the songs. Good: 'Those last two confirm it — you keep picking energy over polish.' / 'Okay, that second one breaks my read. You like prettier than I thought.'",
+  "reaction": "short curious line, 6–18 words",
   "lane": "alternative" | "pop" | "hip_hop" | "electronic" | "classic_rock" | "metal" | "country" | "r_and_b" | "general",
-  "confidence": 0.0-1.0,
-  "secondary_lanes": [lane, ...],
-  "candidate_dimensions": { "movement": -100..100, "atmosphere": -100..100, "immersion": -100..100, "scale": -100..100, "community": -100..100, "perspective": -100..100, "confidence": -100..100, "tension": -100..100, "texture": -100..100, "transformation": -100..100 },
-  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|country|r_and_b|unknown"}],
-  "reasoning": ["one short observation about the LISTENER (not the song)", "..."],
-  "hypothesis": "ONE sentence, max 24 words. Your committed read on the LISTENER — what they reward, what they reject. Plain words. End with 'Let's test it.' or 'Now let's see if the matchups hold.' No genre/scene/era/artist/production talk."
-}
-No prose, no markdown fences.`;
+  "candidate_claims": [
+    {
+      "text": "one plain-English observation about the listener's pattern",
+      "supporting_songs": ["song 1 title as given", "song 3 title as given", "..."],
+      "contradicting_songs": ["song 4 title as given", "..."],
+      "competing_explanations": ["or they just really like The Cure", "or three picks isn't enough"]
+    }
+  ],
+  "per_song": [{"input": "...", "lane": "alternative|pop|hip_hop|electronic|classic_rock|metal|country|r_and_b|unknown"}]
+}`;
+
+type EvidenceClaim = {
+  text: string;
+  supporting_songs: string[];
+  contradicting_songs: string[];
+  competing_explanations: string[];
+};
+
+type ShippedClaim = {
+  text: string;
+  status: "tentative" | "strengthening" | "stable";
+  competing_explanation: string;
+  supporting_count: number;
+};
 
 export const refineWithTwoMore = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1877,49 +1904,83 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const allFive = [...data.firstThree, ...data.twoMore];
-    let llm: OpeningAnalysis & { reaction: string } = {
-      ...FALLBACK,
-      reaction: "Couldn't quite read those — but the matchups don't need me to.",
-      per_song: allFive.map((s) => ({ input: s, lane: "unknown", source: "llm" })),
-    };
+
+    // Defaults: still-learning state. Nothing shipped unless evidence clears.
+    let reaction = "That's enough for now. Still forming a read.";
+    let lane: Lane = "general";
+    let candidateClaims: EvidenceClaim[] = [];
+    let perSong: Array<{ input: string; lane: Lane | "unknown"; source: "llm" | "catalog"; canon_id?: string }> =
+      allFive.map((s) => ({ input: s, lane: "unknown", source: "llm" }));
+
     try {
       const txt = await ai([
         { role: "system", content: REFINE_VOICE },
-        { role: "user", content: `Working hypothesis after the first three:\n"${data.hypothesis_v1 ?? "(none)"}"\n\nThe first three:\n${data.firstThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nThe new two:\n${data.twoMore.map((s, i) => `${i + 4}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
+        { role: "user", content: `Working note after three picks:\n"${data.hypothesis_v1 ?? "(none)"}"\n\nFirst three:\n${data.firstThree.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nNew two:\n${data.twoMore.map((s, i) => `${i + 4}. ${s}`).join("\n")}\n\nReturn the JSON now.` },
       ]);
       const cleaned = txt.replace(/```json\s*|```/g, "").trim();
-      const parsed = JSON.parse(cleaned) as Partial<OpeningAnalysis & { reaction: string }>;
-      const lane = (LANES as readonly string[]).includes(parsed.lane as string) ? (parsed.lane as Lane) : "general";
-      const confidence = Math.max(0, Math.min(1, Number(parsed.confidence ?? 0)));
-      const secondary = Array.isArray(parsed.secondary_lanes)
-        ? parsed.secondary_lanes.filter((l): l is Lane => (LANES as readonly string[]).includes(l as string) && l !== lane && l !== "general")
-        : [];
-      const dims: LlmDimensions = {};
-      if (parsed.candidate_dimensions && typeof parsed.candidate_dimensions === "object") {
-        for (const d of DIMS) {
-          const v = (parsed.candidate_dimensions as Record<string, unknown>)[d];
-          if (typeof v === "number" && Number.isFinite(v)) dims[d] = Math.max(-100, Math.min(100, Math.round(v)));
-        }
-      }
-      const perSong = allFive.map((input) => {
-        const match = Array.isArray(parsed.per_song) ? parsed.per_song.find((p) => p?.input === input) : null;
-        const songLane = match && (LANES as readonly string[]).includes(match.lane as string) ? (match.lane as Lane) : "unknown";
-        return { input, lane: songLane as Lane | "unknown", source: "llm" as const };
-      });
-      llm = {
-        lane: confidence < 0.4 ? (dominantPerSongLane(perSong) ?? "general") : lane,
-        confidence,
-        secondary_lanes: secondary,
-        reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.slice(0, 4).map(String) : [],
-        hypothesis: typeof parsed.hypothesis === "string" && parsed.hypothesis.trim() ? parsed.hypothesis.trim() : FALLBACK.hypothesis,
-        candidate_dimensions: dims,
-        per_song: perSong,
-        canon_matches: [],
-        reaction: typeof parsed.reaction === "string" && parsed.reaction.trim() ? parsed.reaction.trim() : "Locked in.",
+      const parsed = JSON.parse(cleaned) as {
+        reaction?: unknown;
+        lane?: unknown;
+        candidate_claims?: unknown;
+        per_song?: unknown;
       };
-    } catch { /* keep fallback */ }
+      if (typeof parsed.reaction === "string" && parsed.reaction.trim()) reaction = parsed.reaction.trim();
+      if (typeof parsed.lane === "string" && (LANES as readonly string[]).includes(parsed.lane)) lane = parsed.lane as Lane;
+      if (Array.isArray(parsed.candidate_claims)) {
+        candidateClaims = parsed.candidate_claims
+          .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+          .slice(0, 2)
+          .map((c) => ({
+            text: typeof c.text === "string" ? c.text.trim() : "",
+            supporting_songs: Array.isArray(c.supporting_songs) ? c.supporting_songs.filter((s): s is string => typeof s === "string") : [],
+            contradicting_songs: Array.isArray(c.contradicting_songs) ? c.contradicting_songs.filter((s): s is string => typeof s === "string") : [],
+            competing_explanations: Array.isArray(c.competing_explanations) ? c.competing_explanations.filter((s): s is string => typeof s === "string").slice(0, 3) : [],
+          }))
+          .filter((c) => c.text.length > 0);
+      }
+      if (Array.isArray(parsed.per_song)) {
+        perSong = allFive.map((input) => {
+          const match = (parsed.per_song as Array<{ input?: unknown; lane?: unknown }>).find((p) => p?.input === input);
+          const l = match && typeof match.lane === "string" && (LANES as readonly string[]).includes(match.lane)
+            ? (match.lane as Lane)
+            : "unknown" as const;
+          return { input, lane: l, source: "llm" as const };
+        });
+      }
+    } catch { /* keep still-learning defaults */ }
 
-    // Hidden canon enrichment — same shape as analyzeOpeningSongs.
+    // Threshold rule (enforced in code, not by the model):
+    //   ship a claim only if ≥3 supporting picks AND 0 contradictions.
+    //   ship at most one.
+    const shipped: ShippedClaim[] = [];
+    for (const c of candidateClaims) {
+      if (shipped.length >= 1) break;
+      const supports = c.supporting_songs.length;
+      const contradicts = c.contradicting_songs.length;
+      if (supports < 3 || contradicts !== 0) continue;
+      const status: ShippedClaim["status"] =
+        supports >= 5 ? "stable" : supports === 4 ? "strengthening" : "tentative";
+      shipped.push({
+        text: c.text,
+        status,
+        competing_explanation: c.competing_explanations[0] ?? "Or the sample is still too small.",
+        supporting_count: supports,
+      });
+    }
+
+    const stillLearning = shipped.length === 0;
+    // For back-compat with older consumers of this function.
+    const hypothesis = shipped[0]?.text ?? "Not enough evidence yet — still listening.";
+    const confidence = shipped[0] ? (shipped[0].status === "stable" ? 0.8 : shipped[0].status === "strengthening" ? 0.6 : 0.4) : 0.2;
+
+    // Fallback lane from per_song majority if the model went "general" but the picks agree.
+    if (lane === "general") {
+      const dominant = dominantPerSongLane(perSong);
+      if (dominant) lane = dominant;
+    }
+
+    // Hidden canon enrichment — silent, best-effort.
+    const canonMatches: Array<{ input: string; song_id: string; title: string; artist: string; primary_lane: string }> = [];
     for (let i = 0; i < allFive.length; i++) {
       const raw = allFive[i];
       const [titlePart, artistPart] = raw.split(/—|–|-/).map((s) => s.trim());
@@ -1936,31 +1997,39 @@ export const refineWithTwoMore = createServerFn({ method: "POST" })
           ? rows.find((r: { artist?: string | null }) => r.artist?.toLowerCase().includes(artistPart.toLowerCase())) ?? rows[0]
           : rows[0];
         const topLane = catalogLaneToTopLane(best.primary_lane ?? best.lane);
-        llm.canon_matches.push({
-          input: raw,
-          song_id: best.id,
-          title: best.title,
-          artist: best.artist,
+        canonMatches.push({
+          input: raw, song_id: best.id, title: best.title, artist: best.artist,
           primary_lane: best.primary_lane ?? best.lane,
         });
-        if (llm.per_song[i]) {
-          llm.per_song[i] = { ...llm.per_song[i], source: "catalog", canon_id: best.id, lane: topLane ?? llm.per_song[i].lane };
-        }
+        if (perSong[i]) perSong[i] = { ...perSong[i], source: "catalog", canon_id: best.id, lane: topLane ?? perSong[i].lane };
       } catch { /* swallow */ }
     }
+
+    const artifact = {
+      reaction, lane, confidence, hypothesis,
+      claims: shipped,
+      stillLearning,
+      candidate_claims: candidateClaims,
+      per_song: perSong,
+      canon_matches: canonMatches,
+      // legacy shape retained so older callers don't blow up
+      secondary_lanes: [] as Lane[],
+      reasoning: shipped.map((c) => c.text),
+      candidate_dimensions: {} as LlmDimensions,
+    };
 
     await supabase
       .from("profiles")
       .update({
         opening_songs: allFive,
-        opening_hypothesis: llm.hypothesis,
-        opening_lane: llm.lane,
-        opening_lane_confidence: llm.confidence,
-        opening_analysis_json: JSON.parse(JSON.stringify(llm)),
+        opening_hypothesis: hypothesis,
+        opening_lane: lane,
+        opening_lane_confidence: confidence,
+        opening_analysis_json: JSON.parse(JSON.stringify(artifact)),
       })
       .eq("user_id", userId);
 
-    return llm;
+    return artifact;
   });
 
 
