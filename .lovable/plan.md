@@ -1,56 +1,50 @@
-## Add `POST /api/v1/onboarding/opener` + document mobile signup flow
+## Goal
 
-### Why
+Get song titles/artists visible alongside pairings — in the admin UI and in any CSV export — without denormalizing data onto the `pairings` table. This unblocks a CGPT review of lane assignments before we touch the June 6 backfill.
 
-`/api/v1/session` requires the caller's `profiles` row to already have opening-song analysis (seed vector, primary lane, probe candidates). Today that's produced only by the web onboarding server fn (`analyzeOpenersImpl` in `src/lib/onboarding-openers.functions.ts`), which Flutter can't call. This adds the missing REST verb so a mobile client can complete onboarding end-to-end using only `/api/v1/*` + Supabase Auth.
+## Steps
 
-Signup itself is NOT part of this route — Flutter uses `supabase_flutter` against Supabase Auth directly, same as web. This route runs *after* signup, using the fresh bearer.
+### 1. Create a read-only view `public.pairings_with_songs`
 
-### Scope
+Migration adds a view that joins `pairings` → `songs` twice (once per side). All original `pairings` columns pass through unchanged, plus:
 
-**New route** — `src/routes/api/v1/onboarding.opener.ts`
-- `POST /api/v1/onboarding/opener`
-- `OPTIONS` preflight (reuses `_cors.ts`)
-- Auth: bearer via `verifyBearer` (reuses `_auth.ts`)
-- Body (Zod-validated):
-  ```json
-  { "songs": ["Fake Empire - The National", "Dreams - Fleetwood Mac", "Space Song - Beach House"] }
-  ```
-  - `songs`: array of 3 strings, each 1–200 chars.
-- Delegates to the existing `analyzeOpenersImpl` helper in `src/lib/onboarding-openers.functions.ts` (same code path web uses — no logic duplication).
-- Response mirrors what web already gets back: `{ ok: true, lane, lane_confidence, seeded }` (final shape confirmed by reading the impl).
-- Errors use the uniform envelope: `INVALID_INPUT` (400), `UNAUTHORIZED` (401), `UPSTREAM` (502) for LLM failures, `INTERNAL` (500).
-- If `analyzeOpenersImpl` isn't already exported as a plain helper (only wrapped in a server fn), refactor it into an exported `Impl` function the same way `startSessionImpl` / `nextPairingImpl` are structured, and rewire the existing server fn to call it. No behavior change for web.
+- `song_a_title`, `song_a_artist`, `song_a_primary_lane`, `song_a_year`
+- `song_b_title`, `song_b_artist`, `song_b_primary_lane`, `song_b_year`
 
-**No auth changes.** Signup, password reset, OAuth all stay on Supabase Auth's SDK — Flutter uses `supabase_flutter`, web uses `@supabase/supabase-js`. Nothing in `/api/v1/*` handles credentials.
+Grants:
+- `GRANT SELECT ON public.pairings_with_songs TO authenticated, service_role;`
+- No `anon` grant (admin-only surface).
 
-**No DB changes.** Writes go to the existing `profiles` row via the user-scoped Supabase client (RLS enforced).
+View inherits the underlying tables' RLS. Since only admins currently read pairings via `adminList` (service-role client), this is effectively admin-only.
 
-### Tests
+No changes to the `pairings` table itself. No triggers, no new columns. If a song title changes in `songs`, the view reflects it on next query — zero drift risk.
 
-- Extend `src/routes/api/v1/e2e.test.ts` with a second scenario that skips the harness `opener` action and instead:
-  1. `POST /api/public/test/bearer` for a fresh persona (no priming)
-  2. `POST /api/v1/onboarding/opener` with 3 songs — expect 200
-  3. `POST /api/v1/session` — expect 200 and a valid `session_id`
-  This proves the mobile signup → play path works over pure REST.
-- Add a negative test: `POST /api/v1/onboarding/opener` with `songs: []` → 400 `INVALID_INPUT`.
+### 2. Update admin UI list query
 
-### Docs
+In `src/lib/admin.functions.ts`, `adminList` handler, the `pairings` branch:
 
-**Update `docs/musicdna/api-v1.md`:**
-- Add `POST /api/v1/onboarding/opener` section with request/response/errors.
-- Add a **"Mobile signup flow"** section spelling out the three-step sequence: `supabase_flutter.signUp()` → `POST /api/v1/onboarding/opener` → `POST /api/v1/session`. Make explicit that auth (signup, login, password reset, OAuth) lives in Supabase Auth's client SDKs, not in `/api/v1/*`.
-- Note that `/api/v1/session` returns `INVALID_INPUT` / `CONFLICT` (whichever the impl already throws) if the caller hasn't completed the opener step yet.
+- Change `admin.from("pairings").select("*")` → `admin.from("pairings_with_songs").select("*")`.
+- Keep existing `.order("diagnostic_weight", { ascending: false })` and optional `.eq("lane", data.lane)` filter — both columns exist on the view.
 
-**Update `docs/musicdna/engine-integration.md`** only if the impl gets refactored — one line noting `analyzeOpenersImpl` is now the shared helper.
+`adminUpsert`, `adminDelete`, and `adminSetDiagnosticWeight` continue to write against the base `pairings` table (views aren't writable here, and we don't want writes hitting a join anyway). Only the read path changes.
 
-### Out of scope
+The admin table renderer already renders whatever columns come back, so the new `song_a_title` / `song_b_title` / etc. columns will just appear. No UI component changes needed.
 
-- Flutter code.
-- Rate limiting on the opener route (LLM call — worth adding later, but the harness key + Supabase Auth signup rate limits give reasonable protection for now).
-- Changing the opener song format (still free-text `"Title - Artist"`, resolved server-side).
-- Any changes to `/share/:token`, `/session`, `/next`, `/choice`, `/reveal`.
+### 3. Verify
 
-### Deliverable
+- Reload `/admin` → Pairings tab → confirm titles/artists render next to the IDs.
+- Export path: once this lands, a joined CSV for CGPT is `select * from pairings_with_songs` (I can produce it in a follow-up turn).
 
-One new route file, one impl refactor if needed, two new e2e test cases, docs updated. Web path unchanged and still passing existing tests.
+## Explicitly out of scope (saved for the next round)
+
+- Backfilling the June 6 `lane='alternative'` damage.
+- Guardrail trigger rejecting `lane='unassigned'`.
+- `docs/musicdna/product_gotchas.md` note about DEFAULT choices on lane/genre columns.
+
+We'll tackle those after you've reviewed the exported pairings with CGPT and confirmed which rows actually need re-laning.
+
+## Technical notes
+
+- View definition uses `LEFT JOIN` on both sides so a pairing with a dangling `song_a_id`/`song_b_id` still shows up (with nulls) rather than silently disappearing — matters for the CGPT review.
+- Types regenerate after the migration runs; `adminList` returns `JsonRow[]` so the TS surface doesn't need updating.
+- `src/integrations/supabase/types.ts` will pick up `pairings_with_songs` as a Views entry automatically.
