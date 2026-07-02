@@ -1742,34 +1742,38 @@ export const reactToThree = createServerFn({ method: "POST" })
 // song 1–2 = casual friend, song 3 = music-loving friend, song 4 = sharper
 // critic-friend, song 5+ = niche expert. Heavy critic flourishes are saved
 // for the final synthesis (refineWithTwoMore).
-const MICRO_REACT_BASE = `Mode: micro-reaction. The listener just named ONE song. React in ONE sentence — record-store-friend who knows music, punchy, on their side.
+// PRINCIPLE (see docs/musicdna/intelligence_layer.md): confidence tracks evidence.
+// One song is not enough to claim a trait. Three is barely enough to name one, and
+// only if the alternative is stated out loud. The AI's job is not to sound clever;
+// it is to become progressively less wrong.
+const MICRO_REACT_BASE = `Mode: micro-reaction. The listener just named ONE song. React in ONE sentence — curious, not clever. A friend at a record store who just clocked something and is still listening.
 
 VOICE RULES (HARD):
-- Punch WITH the listener, never AT them. A wink, not a grade. Never imply the pick was safe, obvious, lazy, shallow, predictable, a gateway, a starter pack, basic, or that some other song would've been better.
+- Punch WITH the listener, never AT them. Never imply the pick was safe, obvious, lazy, shallow, predictable, a gateway, a starter pack, basic, or that some other song would've been better.
 - BANNED WORDS (case-insensitive): gateway, shallow, deep cut, obvious, predictable, safe, basic, surface, starter, expected, instead, rather than, should've, could've, lazy.
-- BANNED APHORISM OPENERS: "the moment when", "the performer who", "you reward …", "you trust …", "secret becomes", "survives their own", "refuses to blink".
-- Lead with a CONCRETE HOOK about the actual song or artist when you genuinely know one: a year, a producer, a peer record, a scene, a small fact ("Quincy fought MJ to cut Billie Jean. Lost. Good call."). If you don't truly know a fact, don't invent one — riff on the mood or instinct the pick implies. NEVER hallucinate years, producers, labels, or chart history.
-- One sentence, 10–22 words. Sentence case. No emojis, no hashtags, no quotes around the reaction.`;
+- BANNED APHORISM OPENERS: "the moment when", "the performer who", "secret becomes", "survives their own", "refuses to blink".
+- If you name a real fact (year, producer, scene), be certain of it. Otherwise riff on the mood. Never invent chart history, producers, or labels.
+- One sentence, 10–18 words. Sentence case. No emojis, no hashtags, no quotes around the reaction.`;
 
 function microReactVoice(index: number): string {
   if (index === 0) {
     return `${MICRO_REACT_BASE}
-Tier: SONG 1 — first move. Name what the pick reveals about THEM with a wink. Good: "Dancing Horses out the gate — you like your melancholy with a backbeat." / "Strobe first? You're a 4am person and we both know it." / "Opening with the loudest room in the building. Bold." Bad: "You picked a well-known gateway instead of digging deep." (grades them — forbidden)`;
+Tier: SONG 1 — first move. DO NOT name a trait about the listener yet. You have one data point. Note the pick, hint you're paying attention, stop. Good: "Interesting place to start." / "Ceremony out the gate — noted." / "Okay. Still listening." Bad: "You like your melancholy with a backbeat." (that's a trait claim — forbidden after one song)`;
   }
   if (index === 1) {
     return `${MICRO_REACT_BASE}
-Tier: SONG 2 — tiny hunch. Offer ONE hedged read on the LISTENER. Hedge with "maybe", "I'd guess", "starting to think". Good: "Maybe you go for songs that don't try too hard to be liked." / "Starting to think you pick attitude over polish."`;
+Tier: SONG 2 — still watching. DO NOT name a trait yet. Two points don't make a line. Notice what the two picks share OR don't share, and keep listening. Good: "Two very different rooms. Interesting." / "Those two share less than people think." / "Still listening." Bad: "You like attitude over polish." (still a trait claim — forbidden)`;
   }
   if (index === 2) {
     return `${MICRO_REACT_BASE}
-Tier: SONG 3 — working theory. State a small theory about THEM and invite them to break it. Good: "Working theory: you trust songs that earn their payoff slowly. Prove me wrong."`;
+Tier: SONG 3 — first working theory allowed. If (and only if) the three picks share a real thread, name it TENTATIVELY and END WITH A COMPETING EXPLANATION so the theory is falsifiable. Good: "Working theory: you keep picking songs that ask for patience. Or you just really like The Cure. Let's see." Bad: "You trust slow reveal." (no alternative — pretends certainty)`;
   }
   if (index === 3) {
     return `${MICRO_REACT_BASE}
-Tier: SONG 4 — sharper read. Confirm, refine, or break your earlier hunch about THEM. Invite pushback. Good: "That fits — you keep choosing feel over flash. One more and I commit." / "Okay, that breaks my read. You like prettier than I thought."`;
+Tier: SONG 4 — pressure test. Say whether the new pick strengthens the theory, breaks it, or leaves it unchanged. If it strengthens, still hedge. Good: "That fits — patience again. Getting more confident." / "Okay, that breaks my read. Back to listening." / "Doesn't tell me much either way."`;
   }
   return `${MICRO_REACT_BASE}
-Tier: SONG 5+ — landed read. One specific, slightly pointed read on the LISTENER's pattern. Still falsifiable. Still on their side.`;
+Tier: SONG 5+ — landed read. One short, specific observation. Still falsifiable. If evidence is thin, say so.`;
 }
 
 
