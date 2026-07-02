@@ -1,50 +1,84 @@
-## Goal
+# Evidence-First Onboarding — Trimmed MVP
 
-Get song titles/artists visible alongside pairings — in the admin UI and in any CSV export — without denormalizing data onto the `pairings` table. This unblocks a CGPT review of lane assignments before we touch the June 6 backfill.
+**Filter for every change in this ticket:**
+Every architectural change must improve one sentence the user reads. If we can't point to the exact sentence that gets better, cut it.
 
-## Steps
+## What we're keeping
 
-### 1. Create a read-only view `public.pairings_with_songs`
+1. **Structured output** for per-song reactions. Model returns reasoning fields; we render the small ones.
+2. **Evidence rule** — no trait claim unless ≥3 supporting choices AND 0 strong contradictions. No confidence thresholds, no `.65` magic number.
+3. **Competing explanations** — every hypothesis carries alternatives (artist bias, era bias, "three choices isn't enough yet").
+4. **Kill forced four-axis final read** — max one claim ships. If none clear, we show the "still learning" state.
+5. **Claim status labels** instead of percentages. UI renders one of: `tentative` → "Working theory…", `strengthening` → "Starting to think…", `stable` → "Pretty confident…". No `%` anywhere in the user-facing copy.
+6. **Cheap reasoning log** — persist the structured artifact in a `reasoning` jsonb column, but nothing in the app depends on it yet. Pure optionality for later.
 
-Migration adds a view that joins `pairings` → `songs` twice (once per side). All original `pairings` columns pass through unchanged, plus:
+## What we're explicitly NOT doing this pass
 
-- `song_a_title`, `song_a_artist`, `song_a_primary_lane`, `song_a_year`
-- `song_b_title`, `song_b_artist`, `song_b_primary_lane`, `song_b_year`
+- No swap to `gemini-2.5-pro` for the Critic. Flash everywhere. We haven't proven Flash is the bottleneck; the prompt contract probably is.
+- No two-pass Detective/Critic split. One structured call per turn.
+- No confidence percentages in the UI.
+- No "Convince me" button.
+- No pairings/songs/admin changes.
+- No voice rewrite in `critic.ts` beyond tightening the "curious not clever" defaults.
 
-Grants:
-- `GRANT SELECT ON public.pairings_with_songs TO authenticated, service_role;`
-- No `anon` grant (admin-only surface).
+## Per-song contract (songs 1–4)
 
-View inherits the underlying tables' RLS. Since only admins currently read pairings via `adminList` (service-role client), this is effectively admin-only.
+`reactToOne` and `reactToThree` in `src/lib/musicdna.functions.ts` switch to structured output via AI SDK `Output.object`. Model stays `google/gemini-3-flash-preview`.
 
-No changes to the `pairings` table itself. No triggers, no new columns. If a song title changes in `songs`, the view reflects it on next query — zero drift risk.
+Returned + persisted per turn:
 
-### 2. Update admin UI list query
+```
+{
+  observation: string,
+  supports: string[],
+  contradicts: string[],
+  competing_explanations: string[],
+  hypothesis: string | null,       // only allowed from song 3
+  status: "tentative" | "strengthening" | "stable",
+  public_line: string              // ≤18 words, curious not diagnostic
+}
+```
 
-In `src/lib/admin.functions.ts`, `adminList` handler, the `pairings` branch:
+Rules enforced in the prompt AND clamped in code after the call:
 
-- Change `admin.from("pairings").select("*")` → `admin.from("pairings_with_songs").select("*")`.
-- Keep existing `.order("diagnostic_weight", { ascending: false })` and optional `.eq("lane", data.lane)` filter — both columns exist on the view.
+- **Song 1:** no `hypothesis`, no trait claim in `public_line`. Bias toward "Noted." / "Interesting place to start." / "Still listening."
+- **Song 2:** no `hypothesis`. Still no trait claims.
+- **Song 3:** `hypothesis` allowed only if `supports.length ≥ 3` across turns AND `competing_explanations.length ≥ 1`. Status starts at `tentative`.
+- **Song 4:** hypothesis may strengthen (`strengthening`) or flip. If it flips, `public_line` acknowledges it.
 
-`adminUpsert`, `adminDelete`, and `adminSetDiagnosticWeight` continue to write against the base `pairings` table (views aren't writable here, and we don't want writes hitting a join anyway). Only the read path changes.
+## Final read (song 5)
 
-The admin table renderer already renders whatever columns come back, so the new `song_a_title` / `song_b_title` / etc. columns will just appear. No UI component changes needed.
+`refineWithTwoMore` — single structured call on Flash. Returns the same ledger shape aggregated across all 5 songs. Threshold check in code, not in the model:
 
-### 3. Verify
+- Ship a claim only when `supporting_choices.length ≥ 3` AND `contradicting_choices.length === 0`.
+- Ship **at most one** claim.
+- If zero clear, return `{ claims: [], stillLearning: true }`.
+- Lane is still returned for downstream use.
 
-- Reload `/admin` → Pairings tab → confirm titles/artists render next to the IDs.
-- Export path: once this lands, a joined CSV for CGPT is `select * from pairings_with_songs` (I can produce it in a follow-up turn).
+## UI changes (presentation only)
 
-## Explicitly out of scope (saved for the next round)
+`src/routes/_authenticated/1980.tsx` and `src/routes/onboarding.tsx`:
 
-- Backfilling the June 6 `lane='alternative'` damage.
-- Guardrail trigger rejecting `lane='unassigned'`.
-- `docs/musicdna/product_gotchas.md` note about DEFAULT choices on lane/genre columns.
+- "Working hypothesis" block only appears from song 3 onward, only when server returns one, and shows the status label ("Working theory…" / "Starting to think…" / "Pretty confident…") — no percentages.
+- Final payoff renders **one claim or the still-learning state**. Removes the hardcoded 4-axis layout. Keeps the lane chip. Removes the `%` confidence readout.
+- Copy defaults tightened toward "Still listening." between turns.
 
-We'll tackle those after you've reviewed the exported pairings with CGPT and confirmed which rows actually need re-laning.
+## Storage
 
-## Technical notes
+Add a `reasoning` jsonb column (migration) to whatever table `recordEvent` writes to, and persist the full structured artifact per turn. Nothing else reads it yet — this is cheap optionality for the "Convince me" flow and admin review later.
 
-- View definition uses `LEFT JOIN` on both sides so a pairing with a dangling `song_a_id`/`song_b_id` still shows up (with nulls) rather than silently disappearing — matters for the CGPT review.
-- Types regenerate after the migration runs; `adminList` returns `JsonRow[]` so the TS surface doesn't need updating.
-- `src/integrations/supabase/types.ts` will pick up `pairings_with_songs` as a Views entry automatically.
+## The sentences that should measurably improve
+
+Before shipping, we should be able to point at these and say "this is the sentence that got better":
+
+1. **Song 1 reveal** — from "Starting with the ultimate bridge between two eras…" → "Interesting place to start. Still listening."
+2. **Song 3 reveal** — from a confident trait claim → "Working theory: you keep picking songs that ask for patience. Or you just really like The Cure. Let's see."
+3. **Final read (thin evidence run)** — from four forced axes → "Today I only trust one thing: you reward songs that unfold. Everything else I'm still learning."
+
+If any of the three above doesn't clearly improve after the change, we back it out.
+
+## Verification before shipping
+
+1. Run the 80s flow with 5 known picks. Confirm songs 1–2 never produce a trait claim and no `%` appears in the UI.
+2. Force a thin-evidence run (5 songs by the same artist). Confirm the final read shows the still-learning state, not a forced claim.
+3. Confirm every stored `hypothesis` in the `reasoning` payload has ≥1 competing explanation.
