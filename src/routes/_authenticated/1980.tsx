@@ -373,37 +373,63 @@ function NineteenEighty() {
         </section>
       )}
 
-      {/* FINAL PAYOFF */}
-      {done && (
-        <section className="space-y-8 animate-in fade-in duration-700">
-          <p className="eyebrow">that's enough</p>
-          {done.reaction && (
-            <p className="font-serif text-2xl md:text-3xl leading-snug">{done.reaction}</p>
-          )}
-          <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary">
-            "{done.hypothesis}"
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-              Lane
-            </span>
-            <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
-              {LANE_LABEL[done.lane] ?? done.lane}
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-              {Math.round(done.confidence * 100)}% confidence
-            </span>
-          </div>
-          <div className="pt-4">
-            <button
-              onClick={() => navigate({ to: "/onboarding" })}
-              className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
-            >
-              Let's test that →
-            </button>
-          </div>
-        </section>
-      )}
+      {/* FINAL PAYOFF — one claim or the still-learning state. No percentages. */}
+      {done && (() => {
+        const claim = done.claims[0];
+        const statusLabel =
+          !claim ? "still learning" :
+          claim.status === "stable" ? "pretty confident" :
+          claim.status === "strengthening" ? "starting to think" :
+          "working theory";
+        return (
+          <section className="space-y-8 animate-in fade-in duration-700">
+            <p className="eyebrow">that's enough</p>
+            {done.reaction && (
+              <p className="font-serif text-2xl md:text-3xl leading-snug">{done.reaction}</p>
+            )}
+
+            {claim ? (
+              <div className="space-y-3">
+                <p className="eyebrow text-primary">{statusLabel}</p>
+                <p className="display text-3xl md:text-4xl leading-[1.1] italic text-primary">
+                  "{claim.text}"
+                </p>
+                <p className="font-serif text-base md:text-lg italic text-muted-foreground leading-snug">
+                  {claim.competing_explanation}. Let's see if that survives.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="eyebrow text-muted-foreground">{statusLabel}</p>
+                <p className="display text-2xl md:text-3xl leading-[1.15] italic text-foreground">
+                  Not enough to call it yet.
+                </p>
+                <p className="font-serif text-base md:text-lg italic text-muted-foreground leading-snug">
+                  Five picks, no thread I trust. The matchups will do the work.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                Lane
+              </span>
+              <span className="border hairline-strong rounded-sm px-3 py-1 text-sm font-medium">
+                {LANE_LABEL[done.lane] ?? done.lane}
+              </span>
+            </div>
+
+            <div className="pt-4">
+              <button
+                onClick={() => navigate({ to: "/onboarding" })}
+                className="bg-primary text-primary-foreground rounded-sm px-6 py-3 text-sm font-medium hover:opacity-90"
+              >
+                Let's test that →
+              </button>
+            </div>
+          </section>
+        );
+      })()}
     </main>
   );
 }
