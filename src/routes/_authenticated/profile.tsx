@@ -176,6 +176,9 @@ function ProfilePage() {
 
           </div>
 
+          <ClaimDnaBanner />
+
+
           {latest.interpretation && (
             <blockquote className="border-l-2 border-primary pl-6 my-12 max-w-2xl">
               <p className="font-serif text-2xl leading-snug text-foreground">{latest.interpretation}</p>
