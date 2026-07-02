@@ -174,6 +174,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "choices_pairing_id_fkey"
+            columns: ["pairing_id"]
+            isOneToOne: false
+            referencedRelation: "pairings_with_songs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "choices_rejected_song_id_fkey"
             columns: ["rejected_song_id"]
             isOneToOne: false
@@ -314,6 +321,13 @@ export type Database = {
             columns: ["pairing_id"]
             isOneToOne: false
             referencedRelation: "pairings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_log_pairing_id_fkey"
+            columns: ["pairing_id"]
+            isOneToOne: false
+            referencedRelation: "pairings_with_songs"
             referencedColumns: ["id"]
           },
           {
@@ -956,7 +970,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      pairings_with_songs: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          diagnostic_weight: number | null
+          difficulty: number | null
+          expected_split: string | null
+          hypothesis: string | null
+          id: string | null
+          lane: string | null
+          song_a_artist: string | null
+          song_a_id: string | null
+          song_a_primary_lane: string | null
+          song_a_title: string | null
+          song_a_year: number | null
+          song_b_artist: string | null
+          song_b_id: string | null
+          song_b_primary_lane: string | null
+          song_b_title: string | null
+          song_b_year: number | null
+          tests: string[] | null
+          updated_at: string | null
+          user_facing_tradeoff: string | null
+          why_good: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pairings_song_a_id_fkey"
+            columns: ["song_a_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pairings_song_b_id_fkey"
+            columns: ["song_b_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
