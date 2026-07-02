@@ -60,6 +60,7 @@ Cut from v1 draft: bare `indie` (too vague — use `indie_pop`, `indie_dance`, o
 | `club` | Club | Made for the floor. House, techno, garage in a DJ context. |
 | `dance` | Dance | Pop-facing dance music. Pet Shop Boys, early Madonna, Erasure. |
 | `madchester` | Madchester | Stone Roses, Happy Mondays. Guitars meet the acid house floor. |
+| `baggy` | Baggy | Loose-limbed groove cousin of madchester. Charlatans, Inspiral Carpets. Often overlaps but journalists distinguish. |
 | `indie_dance` | Indie dance | Post-Madchester crossover. Primal Scream *Screamadelica*. |
 | `trip_hop` | Trip-hop | Portishead, Massive Attack, Tricky. |
 | `synth_pop` | Synth-pop | Depeche Mode, OMD, Human League. |
@@ -68,7 +69,9 @@ Cut from v1 draft: bare `indie` (too vague — use `indie_pop`, `indie_dance`, o
 | slug | label | notes |
 |---|---|---|
 | `sophisti_pop` | Sophisti-pop | Prefab Sprout, Style Council, Sade. Jazz-inflected 80s pop. |
-| `crossover` | Crossover | Song deliberately straddles two scenes; pair with a second tag that names the second scene. |
+
+Cut from v1 draft: `crossover` — industry marketing word, not a scene. No journalist writes "this crossover song." A song that straddles scenes gets both scene tags (e.g. `["madchester","club"]`), not a `crossover` label.
+
 
 ## Backfill mapping (one-time, from legacy `lane`)
 
