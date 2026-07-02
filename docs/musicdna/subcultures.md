@@ -41,7 +41,6 @@ Curated for the 1980s MVP and the currently seeded catalog. Additions are welcom
 | `noise_pop` | Noise pop | Melody under distortion. Jesus and Mary Chain. |
 | `britpop` | Britpop | Oasis, Blur, Pulp. Mid-90s UK guitar pop. |
 | `indie_pop` | Indie pop | Smiths lineage, jangly, small-label sensibility. |
-| `indie_pop` | Indie pop | Smiths lineage, jangly, small-label sensibility. |
 | `college_rock` | College rock | US 80s alternative before "alternative" was a format. R.E.M., early Pixies. |
 | `grunge` | Grunge | Nirvana, Soundgarden, Mudhoney. |
 | `alternative_rock` | Alternative rock | 90s mainstream alt when nothing more specific fits. |
