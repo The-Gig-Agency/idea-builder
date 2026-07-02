@@ -229,12 +229,7 @@ function NineteenEighty() {
     setPending(null);
   }
 
-  const [done, setDone] = useState<{
-    lane: string;
-    confidence: number;
-    hypothesis: string;
-    reaction?: string;
-  } | null>(null);
+  const [done, setDone] = useState<FinalRead | null>(null);
 
   const showingQuestion = !done && !pending;
   const activePrompt = showingQuestion ? PROMPTS[idx] : null;
