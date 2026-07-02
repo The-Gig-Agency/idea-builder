@@ -299,3 +299,29 @@ The MVP should prove or disprove these assumptions:
 4. Lane-native pairings work better than broad genre-spanning pairings.
 5. Users trust the product more when it cites evidence and expresses uncertainty.
 6. Choice-under-constraint data becomes more useful than passive listening data.
+
+## Major Discovery 13: Listening Preferences, Not Human Traits
+
+An early framing accidentally treated dimensions like `hope`, `community`, and `dreaminess` as latent human preferences.
+
+They are not.
+
+They are latent **listening preferences**. Small distinction, large consequence.
+
+Bad:
+
+> You value hope.
+
+Good:
+
+> You consistently choose songs that build toward emotional release.
+
+The first form is a personality claim we cannot defend. The second form is a behavioral pattern the choices actually support.
+
+Rule going forward:
+
+- describe the choice, not the chooser
+- name what the songs did, not what the person is
+- a good read is one the user can disagree with without feeling diagnosed
+
+This is the wording discipline that keeps MusicDNA out of horoscope territory even when the underlying pattern is real.
