@@ -53,8 +53,12 @@ export const adminList = createServerFn({ method: "POST" })
     const table = data.table as AdminTable;
 
     // Build query dynamically; cast through any because table is a runtime union.
+    // Pairings read from the pairings_with_songs view so titles/artists are
+    // joined in — the base pairings table only stores UUIDs. Writes still hit
+    // the base table via adminUpsert/adminDelete/adminSetDiagnosticWeight.
+    const readSource = table === "pairings" ? "pairings_with_songs" : table;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q: any = (admin as any).from(table).select("*").limit(500);
+    let q: any = (admin as any).from(readSource).select("*").limit(500);
     if (table === "songs") {
       q = q.order("artist", { ascending: true }).order("title", { ascending: true });
       if (data.search) {
