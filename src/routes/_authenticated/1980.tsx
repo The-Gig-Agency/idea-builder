@@ -85,13 +85,21 @@ function NineteenEighty() {
   const [busy, setBusy] = useState(false);
 
   type RevealStage = "thinking" | "preamble" | "observation";
+  type ShippedClaim = { text: string; status: "tentative" | "strengthening" | "stable"; competing_explanation: string };
+  type FinalRead = {
+    lane: string;
+    hypothesis: string;
+    reaction?: string;
+    claims: ShippedClaim[];
+    stillLearning: boolean;
+  };
   type Pending = {
     prompt: string;
     song: string;
     reaction?: string;
     hypothesis?: string;
     stage: RevealStage;
-    final?: { lane: string; confidence: number; hypothesis: string; reaction?: string };
+    final?: FinalRead;
   };
   const [pending, setPending] = useState<Pending | null>(null);
 
