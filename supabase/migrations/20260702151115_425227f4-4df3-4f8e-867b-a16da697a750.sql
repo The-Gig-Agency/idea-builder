@@ -1,0 +1,1 @@
+ALTER VIEW public.pairings_with_songs SET (security_invoker = true);
