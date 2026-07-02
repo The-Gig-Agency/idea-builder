@@ -86,8 +86,9 @@ Applied by the split migration. Preserved here so we can reconstruct intent if t
 | `grunge_altrock` | `["grunge","alternative_rock"]` |
 | `manchester_indie_dance` | `["madchester","indie_dance"]` |
 | `electronic_crossover` | `["electronica","club"]` |
-| `artrock_experimental` | `["art_rock","experimental"]` |
-| `sophistipop_lyric_indie` | `["sophisti_pop","indie"]` |
+| `artrock_experimental` | `["art_rock"]` (dropped `experimental` — not a scene) |
+| `sophistipop_lyric_indie` | `["sophisti_pop","indie_pop"]` |
+
 | `punk_noise_edge` | `["punk","noise_pop"]` |
 | `post-punk` | `["post_punk"]` |
 | `madchester` | `["madchester"]` |
