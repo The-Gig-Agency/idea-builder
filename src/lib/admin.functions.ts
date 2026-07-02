@@ -229,7 +229,7 @@ export const adminOntology = createServerFn({ method: "GET" })
     const songs = songsRes.data ?? [];
 
     const pairingsRes = await admin.from("pairings")
-      .select("id, song_a_id, song_b_id, lane, diagnostic_weight, active, expected_split")
+      .select("id, song_a_id, song_b_id, lane, diagnostic_weight, active, expected_split, user_facing_tradeoff, hypothesis, difficulty")
       .limit(5000);
     if (pairingsRes.error) throw new Error(pairingsRes.error.message);
     const pairings = pairingsRes.data ?? [];
@@ -327,8 +327,13 @@ export const adminOntology = createServerFn({ method: "GET" })
           diagnostic_weight: p.diagnostic_weight as number | null,
           active: p.active as boolean,
           expected_split: p.expected_split as string | null,
+          user_facing_tradeoff: (p.user_facing_tradeoff as string | null) ?? null,
+          hypothesis: (p.hypothesis as string | null) ?? null,
+          difficulty: (p.difficulty as string | null) ?? null,
           a_title: a ? `${a.title} — ${a.artist}` : "?",
           b_title: b ? `${b.title} — ${b.artist}` : "?",
+          a_song: a ? { title: a.title, artist: a.artist } : null,
+          b_song: b ? { title: b.title, artist: b.artist } : null,
           picks_a: st?.picks_a ?? 0,
           picks_b: st?.picks_b ?? 0,
           total,
