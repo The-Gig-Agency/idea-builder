@@ -42,12 +42,17 @@ Curated for the 1980s MVP and the currently seeded catalog. Additions are welcom
 | `britpop` | Britpop | Oasis, Blur, Pulp. Mid-90s UK guitar pop. |
 | `indie_pop` | Indie pop | Smiths lineage, jangly, small-label sensibility. |
 | `indie` | Indie | Broader umbrella when a song is indie-scene but not clearly one sub-tag. |
-| `college_rock` | College rock | US 80s alternative before "alternative" was a format. R.E.M., Pixies. |
+| `college_rock` | College rock | US 80s alternative before "alternative" was a format. R.E.M., early Pixies. |
 | `grunge` | Grunge | Nirvana, Soundgarden, Mudhoney. |
 | `alternative_rock` | Alternative rock | 90s mainstream alt when nothing more specific fits. |
 | `punk` | Punk | Ramones, Clash, Sex Pistols era + descendants. |
-| `art_rock` | Art rock | Roxy Music, Bowie's Berlin, Talk Talk. |
-| `experimental` | Experimental | Genuinely non-idiomatic; use sparingly. |
+| `hardcore` | Hardcore | Faster, harder, more disciplined than punk. Minor Threat, Black Flag, Fugazi. |
+| `no_wave` | No wave | Late-70s NYC anti-rock. DNA, Teenage Jesus, Lydia Lunch. |
+| `post_rock` | Post-rock | Guitars used for texture, not riffs. Slint, Mogwai, Godspeed You! Black Emperor. |
+| `art_rock` | Art rock | Roxy Music, Bowie's Berlin trilogy, Talk Talk. |
+
+Cut from v1 draft: bare `indie` (too vague — use `indie_pop`, `indie_dance`, or `indie_rock` if we add it) and `experimental` (a descriptor, not a scene — no journalist writes "this experimental song from the experimental scene").
+
 
 ### Dance / electronic family
 | slug | label | notes |
