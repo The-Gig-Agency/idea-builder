@@ -70,7 +70,7 @@ If that question cannot be answered clearly, the matchup should not exist.
 
 ## Dimension Set
 
-All song vectors use a 0-100 scale.
+Each dimension captures a **listening-choice tendency**, expressed on a 0-100 scale. Low and high poles describe the kind of song a user's picks lean toward — not a verdict about the user. See "What We're Actually Measuring" above for the wording rules any surface reading these values must follow.
 
 | Dimension | Low Means | High Means |
 |---|---|---|
