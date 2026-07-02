@@ -132,6 +132,10 @@ Avoid:
 - trauma
 - secretly
 - you are the kind of person who
+- you value X
+- you are drawn to X
+- deep down you
+- what this says about you
 
 Prefer:
 
@@ -139,9 +143,34 @@ Prefer:
 - this suggests
 - this may indicate
 - you repeatedly favored
+- you consistently choose songs that
+- your picks reward
+- you keep passing on
 - the evidence is strongest around
 - a weaker alternative explanation is
 - this reading should remain tentative because
+
+### Trait vs Tendency (worked example)
+
+The dimensions are **latent listening preferences**, not human traits. Rewrite any claim that describes the chooser instead of the choice.
+
+Before:
+
+> You value hope.
+
+After:
+
+> Across these picks, you consistently chose songs that build toward emotional release over songs that stay resigned.
+
+Before:
+
+> You are drawn to transformation.
+
+After:
+
+> Your picks reward songs that move somewhere over songs that arrive already formed.
+
+If a claim survives losing the words "you value / you are / you love," it was probably a trait statement — rewrite it as a tendency the choices actually support.
 
 ## Durable Storage
 
