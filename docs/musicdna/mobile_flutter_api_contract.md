@@ -78,7 +78,44 @@ Current codes:
 
 ## Endpoint Set
 
-### 1. Commit Opening Three
+### 1a. Per-Song Reaction (conversational opening)
+
+`POST /api/v1/onboarding/react`
+
+Purpose:
+
+- Mirror the web opening's one-song-at-a-time cadence
+- Return a short critic reaction the UI shows after each of the first two songs
+- Return a personalized `next_label` the UI uses as the placeholder/prompt for the next slot
+
+Request:
+
+```json
+{
+  "song": "A Forest — The Cure",
+  "index": 0,
+  "priorSongs": []
+}
+```
+
+- `index` is the 0-based position of the song just named. Call this at `index: 0` after song 1, `index: 1` after song 2. Song 3 goes straight to `/onboarding/opener`.
+- `priorSongs` is the list of songs already named earlier in this opening (empty for song 1, one entry for song 2).
+
+Response:
+
+```json
+{
+  "ok": true,
+  "reaction": "The Cure at the top — okay, we're doing goth kids grown up.",
+  "next_label": "who's on deck after Robert Smith?"
+}
+```
+
+`next_label` may be `null`; render your default slot label when it is.
+
+Optional. A client that wants the legacy three-at-once flow can skip this and call `/onboarding/opener` directly with all three songs.
+
+### 1b. Commit Opening Three
 
 `POST /api/v1/onboarding/opener`
 
@@ -87,6 +124,7 @@ Purpose:
 - Persist the user's opening three songs after signup
 - Generate the onboarding hypothesis/analysis payload
 - Seed the later session start flow with saved profile priors
+
 
 Request:
 

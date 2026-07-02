@@ -1774,33 +1774,29 @@ Tier: SONG 5+ — landed read. One specific, slightly pointed read on the LISTEN
 
 
 
-export const reactToOne = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
-    z.object({
-      song: z.string().trim().min(1).max(200),
-      index: z.number().int().min(0).max(20),
-      priorSongs: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
-    }).parse(d),
-  )
-  .handler(async ({ data, context }): Promise<{ text: string; nextLabel: string | null }> => {
-    const { supabase } = context;
-    const fallbacks = ["Interesting.", "Noted.", "Mm.", "Okay.", "Now we're talking."];
-    const nextRank = data.index + 2; // index 0 → asking for #2, etc.
-    try {
-      const prior = data.priorSongs.length
-        ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
-        : "";
+export const ReactToOneInput = z.object({
+  song: z.string().trim().min(1).max(200),
+  index: z.number().int().min(0).max(20),
+  priorSongs: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+});
 
-      // Hidden context: anything the catalog knows about this song. Passed as
-      // "facts the critic happens to know" — never quoted verbatim, never
-      // invented when absent.
-      const ctx = await lookupSongContext(supabase as never, data.song);
-      const ctxBlock = ctx
-        ? `Catalog knows: ${ctx.title} — ${ctx.artist}${ctx.year ? ` (${ctx.year})` : ""}${ctx.primary_lane ? ` · ${ctx.primary_lane}` : ""}. You may use this. Do not invent anything beyond it.`
-        : `Catalog has no match for this song. Don't invent facts — riff on instinct or mood.`;
+export async function reactToOneImpl(
+  supabase: AuthedSupabase,
+  data: { song: string; index: number; priorSongs: string[] },
+): Promise<{ text: string; nextLabel: string | null }> {
+  const fallbacks = ["Interesting.", "Noted.", "Mm.", "Okay.", "Now we're talking."];
+  const nextRank = data.index + 2;
+  try {
+    const prior = data.priorSongs.length
+      ? `Already named: ${data.priorSongs.map((s, i) => `${i + 1}. ${s}`).join("; ")}.\n`
+      : "";
 
-      const nextPromptRules = `
+    const ctx = await lookupSongContext(supabase as never, data.song);
+    const ctxBlock = ctx
+      ? `Catalog knows: ${ctx.title} — ${ctx.artist}${ctx.year ? ` (${ctx.year})` : ""}${ctx.primary_lane ? ` · ${ctx.primary_lane}` : ""}. You may use this. Do not invent anything beyond it.`
+      : `Catalog has no match for this song. Don't invent facts — riff on instinct or mood.`;
+
+    const nextPromptRules = `
 Also write a SHORT, CONVERSATIONAL prompt for the next slot (#${nextRank}). This is the critic talking to a friend across a table — NOT a quiz question. Show you were listening to what they just said.
 
 Riff on ONE distinctive angle of what's been named so far — pick whichever fits best:
@@ -1815,30 +1811,36 @@ Rules for nextLabel:
 - Voice: warm — punching WITH them, never at them. Never grade the pick.
 - If you can't pin a distinctive angle, return nextLabel as "" (empty string).`;
 
-      const txt = await ai([
-        { role: "system", content: `${microReactVoice(data.index)}\n${nextPromptRules}\n\nReturn STRICT JSON: {"reaction": "...", "nextLabel": "..."}. No markdown fences.` },
-        { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n${ctxBlock}\n\nReturn the JSON now.` },
-      ]);
-      const cleaned = txt.replace(/```json\s*|```/g, "").trim();
-      let reaction = "";
-      let nextLabel: string | null = null;
-      try {
-        const parsed = JSON.parse(cleaned) as { reaction?: unknown; nextLabel?: unknown };
-        if (typeof parsed.reaction === "string") reaction = parsed.reaction.trim();
-        if (typeof parsed.nextLabel === "string") {
-          const nl = parsed.nextLabel.replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
-          if (nl && nl.length <= 120 && nl.split(/\s+/).length <= 14) nextLabel = nl;
-        }
-      } catch {
-        reaction = cleaned.split("\n")[0].replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
+    const txt = await ai([
+      { role: "system", content: `${microReactVoice(data.index)}\n${nextPromptRules}\n\nReturn STRICT JSON: {"reaction": "...", "nextLabel": "..."}. No markdown fences.` },
+      { role: "user", content: `${prior}Just named (#${data.index + 1}): ${data.song}\n${ctxBlock}\n\nReturn the JSON now.` },
+    ]);
+    const cleaned = txt.replace(/```json\s*|```/g, "").trim();
+    let reaction = "";
+    let nextLabel: string | null = null;
+    try {
+      const parsed = JSON.parse(cleaned) as { reaction?: unknown; nextLabel?: unknown };
+      if (typeof parsed.reaction === "string") reaction = parsed.reaction.trim();
+      if (typeof parsed.nextLabel === "string") {
+        const nl = parsed.nextLabel.replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
+        if (nl && nl.length <= 120 && nl.split(/\s+/).length <= 14) nextLabel = nl;
       }
-      if (!reaction) reaction = fallbacks[data.index % fallbacks.length];
-      const capped = reaction.length > 200 ? reaction.slice(0, 197) + "…" : reaction;
-      return { text: capped, nextLabel };
     } catch {
-      return { text: fallbacks[data.index % fallbacks.length], nextLabel: null };
+      reaction = cleaned.split("\n")[0].replace(/^["'`\s]+|["'`\s]+$/g, "").trim();
     }
-  });
+    if (!reaction) reaction = fallbacks[data.index % fallbacks.length];
+    const capped = reaction.length > 200 ? reaction.slice(0, 197) + "…" : reaction;
+    return { text: capped, nextLabel };
+  } catch {
+    return { text: fallbacks[data.index % fallbacks.length], nextLabel: null };
+  }
+}
+
+export const reactToOne = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ReactToOneInput.parse(d))
+  .handler(async ({ data, context }) => reactToOneImpl(context.supabase, data));
+
 
 // Step B: 5 songs total + the prior hypothesis. The AI either confirms,
 // refines, or breaks its own guess. Writes to profile. This is the lock-in.

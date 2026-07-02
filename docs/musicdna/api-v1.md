@@ -27,12 +27,47 @@ Codes: `NOT_FOUND` (404), `UNAUTHORIZED` (401), `FORBIDDEN` (403),
 
 ## Endpoints
 
+### `POST /api/v1/onboarding/react`
+
+Per-song conversational reaction. Call this after each of the first two
+opening songs to get the critic's running reaction plus a personalized
+label/prompt for the next slot. This is what makes the mobile opening
+feel one-question-at-a-time instead of a bulk form. Optional — you can
+skip straight to `/opener` for the legacy three-at-once flow.
+
+Body:
+
+```json
+{
+  "song": "Fake Empire - The National",
+  "index": 0,
+  "priorSongs": []
+}
+```
+
+- `song`: the song just named (1–200 chars).
+- `index`: 0-based index of this song in the opening sequence (0, 1).
+- `priorSongs`: songs already named earlier in this opening (max 20).
+
+Response:
+
+```json
+{
+  "ok": true,
+  "reaction": "The National as your #1 — okay, we're doing feelings.",
+  "next_label": "who's on deck after the sadboys?"
+}
+```
+
+`next_label` is nullable; render your default slot label when it's empty.
+
 ### `POST /api/v1/onboarding/opener`
 
 Post-signup opening analysis. Call this once, immediately after the user
-signs up, with the 3 songs they picked. Runs the LLM analysis (lane guess,
-seed vector, secondary lanes) and persists it to the caller's `profiles`
-row. `POST /api/v1/session` requires this to have completed at least once.
+signs up (and after the optional per-song `/react` calls), with the 3
+songs they picked. Runs the LLM analysis (lane guess, seed vector,
+secondary lanes) and persists it to the caller's `profiles` row.
+`POST /api/v1/session` requires this to have completed at least once.
 
 Body:
 
@@ -55,6 +90,7 @@ Response:
   "secondary_lanes": ["indie", "folk"]
 }
 ```
+
 
 ### `POST /api/v1/session`
 

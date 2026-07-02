@@ -25,6 +25,7 @@ import { Route as ApiV1SessionRouteImport } from './routes/api/v1/session'
 import { Route as ApiV1AccountRouteImport } from './routes/api/v1/account'
 import { Route as ApiV1ShareTokenRouteImport } from './routes/api/v1/share.$token'
 import { Route as ApiV1SessionIdRouteImport } from './routes/api/v1/session.$id'
+import { Route as ApiV1OnboardingReactRouteImport } from './routes/api/v1/onboarding.react'
 import { Route as ApiV1OnboardingOpenerRouteImport } from './routes/api/v1/onboarding.opener'
 import { Route as ApiPublicTestActionRouteImport } from './routes/api/public/test/$action'
 import { Route as ApiV1SessionIdRevealRouteImport } from './routes/api/v1/session.$id.reveal'
@@ -110,6 +111,11 @@ const ApiV1SessionIdRoute = ApiV1SessionIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiV1SessionRoute,
 } as any)
+const ApiV1OnboardingReactRoute = ApiV1OnboardingReactRouteImport.update({
+  id: '/api/v1/onboarding/react',
+  path: '/api/v1/onboarding/react',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiV1OnboardingOpenerRoute = ApiV1OnboardingOpenerRouteImport.update({
   id: '/api/v1/onboarding/opener',
   path: '/api/v1/onboarding/opener',
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/sessions': typeof ApiV1SessionsRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
   '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
+  '/api/v1/onboarding/react': typeof ApiV1OnboardingReactRoute
   '/api/v1/session/$id': typeof ApiV1SessionIdRouteWithChildren
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/api/v1/sessions': typeof ApiV1SessionsRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
   '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
+  '/api/v1/onboarding/react': typeof ApiV1OnboardingReactRoute
   '/api/v1/session/$id': typeof ApiV1SessionIdRouteWithChildren
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/api/v1/sessions': typeof ApiV1SessionsRoute
   '/api/public/test/$action': typeof ApiPublicTestActionRoute
   '/api/v1/onboarding/opener': typeof ApiV1OnboardingOpenerRoute
+  '/api/v1/onboarding/react': typeof ApiV1OnboardingReactRoute
   '/api/v1/session/$id': typeof ApiV1SessionIdRouteWithChildren
   '/api/v1/share/$token': typeof ApiV1ShareTokenRoute
   '/api/v1/session/$id/choice': typeof ApiV1SessionIdChoiceRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/api/v1/sessions'
     | '/api/public/test/$action'
     | '/api/v1/onboarding/opener'
+    | '/api/v1/onboarding/react'
     | '/api/v1/session/$id'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
@@ -244,6 +254,7 @@ export interface FileRouteTypes {
     | '/api/v1/sessions'
     | '/api/public/test/$action'
     | '/api/v1/onboarding/opener'
+    | '/api/v1/onboarding/react'
     | '/api/v1/session/$id'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
@@ -267,6 +278,7 @@ export interface FileRouteTypes {
     | '/api/v1/sessions'
     | '/api/public/test/$action'
     | '/api/v1/onboarding/opener'
+    | '/api/v1/onboarding/react'
     | '/api/v1/session/$id'
     | '/api/v1/share/$token'
     | '/api/v1/session/$id/choice'
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   ApiV1SessionsRoute: typeof ApiV1SessionsRoute
   ApiPublicTestActionRoute: typeof ApiPublicTestActionRoute
   ApiV1OnboardingOpenerRoute: typeof ApiV1OnboardingOpenerRoute
+  ApiV1OnboardingReactRoute: typeof ApiV1OnboardingReactRoute
   ApiV1ShareTokenRoute: typeof ApiV1ShareTokenRoute
 }
 
@@ -405,6 +418,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SessionIdRouteImport
       parentRoute: typeof ApiV1SessionRoute
     }
+    '/api/v1/onboarding/react': {
+      id: '/api/v1/onboarding/react'
+      path: '/api/v1/onboarding/react'
+      fullPath: '/api/v1/onboarding/react'
+      preLoaderRoute: typeof ApiV1OnboardingReactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/onboarding/opener': {
       id: '/api/v1/onboarding/opener'
       path: '/api/v1/onboarding/opener'
@@ -500,18 +520,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1SessionsRoute: ApiV1SessionsRoute,
   ApiPublicTestActionRoute: ApiPublicTestActionRoute,
   ApiV1OnboardingOpenerRoute: ApiV1OnboardingOpenerRoute,
+  ApiV1OnboardingReactRoute: ApiV1OnboardingReactRoute,
   ApiV1ShareTokenRoute: ApiV1ShareTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
