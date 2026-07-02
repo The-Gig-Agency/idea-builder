@@ -148,20 +148,44 @@ function NineteenEighty() {
         setPending((p) => (p ? { ...p, reaction: r.text } : p));
       } else {
         const allSongs = [...history.map((h) => h.song), value];
+        type ShippedClaim = { text: string; status: "tentative" | "strengthening" | "stable"; competing_explanation: string };
         const r = (await refineFn({
           data: {
             firstThree: allSongs.slice(0, 3),
             twoMore: allSongs.slice(3, 5),
           },
-        } as never)) as { reaction?: string; hypothesis: string; lane: string; confidence: number };
-        const reaction = r.reaction ?? "That's enough. I've got a read.";
+        } as never)) as {
+          reaction?: string;
+          hypothesis: string;
+          lane: string;
+          confidence: number;
+          claims?: ShippedClaim[];
+          stillLearning?: boolean;
+        };
+        const reaction = r.reaction ?? "That's enough. Here's where I've landed.";
         setPending((p) =>
-          p ? { ...p, reaction, final: { lane: r.lane, confidence: r.confidence, hypothesis: r.hypothesis, reaction: r.reaction } } : p,
+          p ? {
+            ...p,
+            reaction,
+            final: {
+              lane: r.lane,
+              hypothesis: r.hypothesis,
+              reaction: r.reaction,
+              claims: r.claims ?? [],
+              stillLearning: r.stillLearning ?? true,
+            },
+          } : p,
         );
         logEvent({
           data: {
             event_type: "onboarding_classified",
-            props: { lane: r.lane, confidence: r.confidence, song_count: 5, decade: DECADE },
+            props: {
+              lane: r.lane,
+              confidence: r.confidence,
+              song_count: 5,
+              decade: DECADE,
+              reasoning: { claims: r.claims ?? [], stillLearning: r.stillLearning ?? true },
+            },
           },
         } as never).catch(() => {});
       }
